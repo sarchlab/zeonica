@@ -2,7 +2,7 @@
 package config
 
 import (
-	"github.com/kaustubhcs/cgra_sim/core"
+	"github.com/sarchlab/zeonica/core"
 	"gitlab.com/akita/akita/v2/sim"
 	"gitlab.com/akita/mem/v2/idealmemcontroller"
 	"gitlab.com/akita/mem/v2/mem"

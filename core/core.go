@@ -1,22 +1,13 @@
 package core
 
 import (
-	"encoding/binary"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"gitlab.com/akita/akita/v2/sim"
 	"gitlab.com/akita/mem/v2/mem"
-	"gitlab.com/akita/util/v2/buffering"
 )
-
-type threadState struct {
-	PC           uint32
-	TileX, TileY uint32
-	Registers    []uint32
-	Code         []string
-}
 
 type Core struct {
 	*sim.TickingComponent
@@ -27,38 +18,13 @@ type Core struct {
 
 	Code []string
 
-	State threadState
+	State state
 
 	Waiting     bool
 	WaitingInst []string
 }
 
 func (c *Core) Tick(now sim.VTimeInSec) (madeProgress bool) {
-	if c.Waiting {
-		msg := c.MemPort.Peek()
-		if msg == nil {
-			return false
-		}
-
-		switch msg := msg.(type) {
-		case *mem.DataReadyRsp:
-			data := msg.Data
-			value := binary.LittleEndian.Uint32(data)
-			c.writeOperand(c.WaitingInst[1], value)
-
-			c.MemPort.Retrieve(now)
-			c.Waiting = false
-			c.PC++
-
-			fmt.Printf("%+v\n", c.Registers)
-
-			return true
-		}
-	}
-
-	if c.PC == len(c.Code) {
-		return false
-	}
 
 	instStr := c.Code[c.PC]
 	tokens := strings.Split(instStr, ",")
@@ -109,19 +75,21 @@ func (c *Core) Tick(now sim.VTimeInSec) (madeProgress bool) {
 	return true
 }
 
-func (c *Core) readOperand(operand string) uint32 {
+func (c *Core) readOperand(operand string, state threadState) uint32 {
 	if operand[0] == '$' {
-		return c.Registers[operand]
-	}
+		regIndex, err := strconv.Atoi(operand[1:])
+		if err != nil {
+			panic(err)
+		}
 
-	if operand[0] == '@' {
-		return c.Arguments[operand[1:]]
+		return state.Registers[regIndex]
 	}
 
 	imm, err := strconv.ParseUint(operand, 10, 32)
 	if err != nil {
 		panic(err)
 	}
+
 	return uint32(imm)
 }
 
@@ -142,10 +110,8 @@ func (c *Core) writeOperand(operand string, value uint32) {
 func NewCore(name string, engine sim.Engine) *Core {
 	c := &Core{
 		State: threadState{
-			PC:          0,
-			Registers:   make([]uint32, 256),
-			RecvBuffers: make([]buffering.Buffer, 4),
-			SendBuffers: make([]buffering.Buffer, 4),
+			PC:        0,
+			Registers: make([]uint32, 256),
 		},
 	}
 
