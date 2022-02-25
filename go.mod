@@ -1,4 +1,4 @@
-module github.com/kaustubhcs/cgra_sim
+module github.com/sarchlab/zeonica
 
 go 1.16
 

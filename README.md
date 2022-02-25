@@ -1,5 +1,5 @@
-# CGRASim
-CGRA Simulator
+# Zeonica
+Zeonica is a simulator for CGRA and wafer-scale accelerators.
 
 ## ISA Definition
 
