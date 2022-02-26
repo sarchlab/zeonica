@@ -37,27 +37,25 @@ Here is the instruction list
 * JEQ: Jump if equal.
 * JMP: Jump unconditionally.
 
-### Example: ReLU
-
-```
-Input: x, y
-Output: val
-tid = get_thread_id(0)
-if (x[tid] > 0)
-    y[tid] = x[tid]
-else
-    y[tid] = 0
-```
+### Example: Pass-through left to right
 
 ```assembly
-	WAIT $0, NET_RECV_3
-	F_CMD_EQ $1, $0, 0
-	JEQ ELSE, $1, 1
+	WAIT, $0, NET_RECV_3
+	SEND, $0, NET_SEND_1
+```
+
+### Example: ReLU
+
+
+```assembly
+	WAIT, $0, NET_RECV_3
+	F_CMD_EQ, $1, $0, 0
+	JEQ, ELSE, $1, 1
 IF:
-	SEND NET_SEND_1, $0
-	JMP END
+	SEND, NET_SEND_1, $0
+	JMP, END
 ELSE:
-	SEND NET_SEND_1, 0
+	SEND, NET_SEND_1, 0
 END:
-	DONE
+	DONE,
 ```

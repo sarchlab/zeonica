@@ -1,0 +1,2 @@
+WAIT, $0, NET_RECV_3
+SEND, $0, NET_SEND_1

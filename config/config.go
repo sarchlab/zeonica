@@ -38,8 +38,6 @@ func CreateDevice(engine sim.Engine) *Device {
 			t := &Tile{}
 
 			t.Core = core.NewCore("core", engine)
-			t.Core.TileX = x
-			t.Core.TileY = y
 			t.Core.MemTable = memTable
 
 			t.Mem = idealmemcontroller.New("mem", engine, 40*mem.KB)

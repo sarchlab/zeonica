@@ -9,7 +9,7 @@ import (
 	"gitlab.com/akita/akita/v2/sim"
 )
 
-//go:embed relu.cgraasm
+//go:embed passthrough.cgraasm
 var program string
 
 func main() {
