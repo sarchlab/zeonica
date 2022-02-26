@@ -9,15 +9,6 @@ import (
 	"gitlab.com/akita/noc/v2/networking/mesh"
 )
 
-type Tile struct {
-	Core *core.Core
-	Mem  *idealmemcontroller.Comp
-}
-
-type Device struct {
-	Tiles []*Tile
-}
-
 func CreateDevice(engine sim.Engine) *Device {
 	d := &Device{}
 
