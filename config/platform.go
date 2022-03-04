@@ -1,36 +1,51 @@
-// Package config defines the hardware platform.
 package config
 
 import (
-	"github.com/sarchlab/zeonica/core"
+	"github.com/sarchlab/zeonica/cgra"
 	"gitlab.com/akita/akita/v2/sim"
 )
 
-// Side defines the side of a tile.
-type Side int
-
-const (
-	North Side = iota
-	West
-	South
-	East
-)
-
-// Tile defines a tile in the CGRA.
-type Tile struct {
-	Core *core.Core
+// A Device is a CGRA device that includes a large number of tiles. Tiles can be
+// retrieved using d.Tiles[y][x].
+type device struct {
+	Width, Height int
+	Tiles         [][]*cgra.Tile
 }
 
-type Device struct {
-	Tiles [][]*Tile
+// GetSize returns the width and height of the device.
+func (d *device) GetSize() (int, int) {
+	return d.Width, d.Height
 }
 
-// GetPort returns the of the tile by the side.
-func (t Tile) GetPort(side string) sim.Port {
-	return t.Core.GetPortByName(side)
+// GetTile returns the tile at the given coordinates.
+func (d *device) GetTile(x, y int) *cgra.Tile {
+	return d.Tiles[y][x]
 }
 
-// Platform is the hardware platform.
-type Platform struct {
-	Tiles [][]Tile
+// GetSidePorts returns the ports on the given side of the device.
+func (d *device) GetSidePorts(side cgra.Side, portRange [2]int) []sim.Port {
+	ports := make([]sim.Port, 0)
+
+	switch side {
+	case cgra.North:
+		for x := portRange[0]; x < portRange[1]; x++ {
+			ports = append(ports, d.Tiles[0][x].GetPort(side))
+		}
+	case cgra.West:
+		for y := portRange[0]; y < portRange[1]; y++ {
+			ports = append(ports, d.Tiles[y][0].GetPort(side))
+		}
+	case cgra.South:
+		for x := portRange[0]; x < portRange[1]; x++ {
+			ports = append(ports, d.Tiles[d.Height-1][x].GetPort(side))
+		}
+	case cgra.East:
+		for y := portRange[0]; y < portRange[1]; y++ {
+			ports = append(ports, d.Tiles[y][d.Width-1].GetPort(side))
+		}
+	default:
+		panic("invalid side")
+	}
+
+	return ports
 }
