@@ -16,6 +16,22 @@ const (
 	East
 )
 
+// Name returns the name of the side.
+func (s Side) Name() string {
+	switch s {
+	case North:
+		return "North"
+	case West:
+		return "West"
+	case South:
+		return "South"
+	case East:
+		return "East"
+	default:
+		panic("invalid side")
+	}
+}
+
 // Tile defines a tile in the CGRA.
 type Tile struct {
 	Core *core.Core

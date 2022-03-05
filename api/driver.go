@@ -2,12 +2,18 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/sarchlab/zeonica/cgra"
 	"gitlab.com/akita/akita/v2/sim"
 )
 
 // Driver provides the interface to control an accelerator.
 type Driver interface {
+	// RegisterDevice registers a device to the driver. The driver will
+	// establish connections to the device.
+	RegisterDevice(device cgra.Device)
+
 	// FeedIn provides the data to the accelerator. The data is fed into the
 	// provides ports. The stride is the difference between the indices of
 	// the data that is sent to adjacent ports in the same cycle.
@@ -26,10 +32,15 @@ type Driver interface {
 	Run()
 }
 
+type portFactory interface {
+	make(c sim.Component, name string) sim.Port
+}
+
 type driverImpl struct {
 	*sim.TickingComponent
 
-	device cgra.Device
+	device      cgra.Device
+	portFactory portFactory
 
 	feedInTasks  []*feedInTask
 	collectTasks []*collectTask
@@ -66,9 +77,10 @@ func (d *driverImpl) removeFinishedFeedInTasks() {
 func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 	madeProgress := false
 
-	for i, port := range task.ports {
+	for i, port := range task.localPorts {
 		msg := cgra.MoveMsgBuilder{}.
-			WithDst(port).
+			WithSrc(port).
+			WithDst(task.remotePorts[i]).
 			WithData(task.data[task.round*task.stride+i]).
 			Build()
 		err := port.Send(msg)
@@ -84,9 +96,60 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 	return madeProgress
 }
 
+// RegisterDevice registers a device to the driver. The driver will
+// establish connections to the device.
+func (d *driverImpl) RegisterDevice(device cgra.Device) {
+	d.device = device
+
+	d.establishConnectionOneSide(d.device, cgra.North)
+	d.establishConnectionOneSide(d.device, cgra.South)
+	d.establishConnectionOneSide(d.device, cgra.East)
+	d.establishConnectionOneSide(d.device, cgra.West)
+}
+
+func (d *driverImpl) establishConnectionOneSide(
+	device cgra.Device,
+	side cgra.Side,
+) {
+	width, height := device.GetSize()
+	maxIndex := 0
+	switch side {
+	case cgra.North, cgra.South:
+		maxIndex = width - 1
+	case cgra.East, cgra.West:
+		maxIndex = height - 1
+	}
+
+	ports := device.GetSidePorts(side, [2]int{0, maxIndex + 1})
+	for i, port := range ports {
+		d.connectOnePort(side, i, port)
+	}
+}
+
+func (d *driverImpl) localPortName(side cgra.Side, index int) string {
+	return fmt.Sprintf("Device_%s_%d", side.Name(), index)
+}
+
+func (d *driverImpl) connectOnePort(side cgra.Side, index int, port sim.Port) {
+	portName := d.localPortName(side, index)
+	localPort := d.portFactory.make(d, d.Name()+"."+portName)
+	d.AddPort(portName, localPort)
+
+	conn := sim.NewDirectConnection(
+		localPort.Name()+"-"+port.Name(),
+		d.Engine,
+		d.Freq,
+	)
+	conn.PlugIn(localPort, 1)
+	conn.PlugIn(port, 1)
+}
+
 type feedInTask struct {
-	data   []uint32
-	ports  []sim.Port
+	data []uint32
+
+	localPorts  []sim.Port
+	remotePorts []sim.Port
+
 	stride int
 	round  int
 }
@@ -102,12 +165,26 @@ func (d *driverImpl) FeedIn(
 	stride int,
 ) {
 	task := &feedInTask{
-		data:   data,
-		ports:  d.device.GetSidePorts(side, portRange),
-		stride: stride,
+		data:        data,
+		localPorts:  d.getLocalPorts(side, portRange),
+		remotePorts: d.device.GetSidePorts(side, portRange),
+		stride:      stride,
 	}
 
 	d.feedInTasks = append(d.feedInTasks, task)
+}
+
+func (d *driverImpl) getLocalPorts(
+	side cgra.Side,
+	portRange [2]int,
+) []sim.Port {
+	ports := make([]sim.Port, 0, portRange[1]-portRange[0]+1)
+
+	for i := portRange[0]; i < portRange[1]; i++ {
+		ports = append(ports, d.GetPortByName(d.localPortName(side, i)))
+	}
+
+	return ports
 }
 
 type collectTask struct {

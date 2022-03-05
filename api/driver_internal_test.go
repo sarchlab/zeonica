@@ -8,23 +8,59 @@ import (
 	"gitlab.com/akita/akita/v2/sim"
 )
 
+type mockPortFactory struct {
+	mockCtrl *gomock.Controller
+
+	ports map[string]*MockPort
+}
+
+func (f *mockPortFactory) make(c sim.Component, name string) sim.Port {
+	port := NewMockPort(f.mockCtrl)
+	port.EXPECT().Name().Return("DriverSidePort").AnyTimes()
+	port.EXPECT().SetConnection(gomock.Any()).AnyTimes()
+	f.ports[name] = port
+	return port
+}
+
 var _ = Describe("Driver", func() {
 	var (
-		mockCtrl   *gomock.Controller
-		mockDevice *MockDevice
-		driver     *driverImpl
+		mockCtrl           *gomock.Controller
+		mockDevice         *MockDevice
+		mockDeviceSidePort *MockPort
+		portFactory        *mockPortFactory
+		driver             *driverImpl
 	)
 
 	BeforeEach(func() {
 		mockCtrl = gomock.NewController(GinkgoT())
 
-		mockDevice = NewMockDevice(mockCtrl)
+		mockDeviceSidePort = NewMockPort(mockCtrl)
+		mockDeviceSidePort.EXPECT().Name().Return("DevicePort").AnyTimes()
+		mockDeviceSidePort.EXPECT().SetConnection(gomock.Any()).AnyTimes()
 
+		mockDevice = NewMockDevice(mockCtrl)
+		mockDevice.EXPECT().GetSize().Return(4, 4).AnyTimes()
+		mockDevice.EXPECT().
+			GetSidePorts(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(side cgra.Side, portRange [2]int) []sim.Port {
+				ports := make([]sim.Port, portRange[1]-portRange[0])
+				for i := range ports {
+					ports[i] = mockDeviceSidePort
+				}
+				return ports
+			}).AnyTimes()
+
+		portFactory = &mockPortFactory{
+			mockCtrl: mockCtrl,
+			ports:    make(map[string]*MockPort),
+		}
 		driver = &driverImpl{
-			device: mockDevice,
+			device:      mockDevice,
+			portFactory: portFactory,
 		}
 		driver.TickingComponent =
 			sim.NewTickingComponent("driver", nil, 1, driver)
+		driver.RegisterDevice(mockDevice)
 	})
 
 	AfterEach(func() {
@@ -32,48 +68,57 @@ var _ = Describe("Driver", func() {
 	})
 
 	It("should handle FeedIn API", func() {
-		port1 := NewMockPort(mockCtrl)
-		port2 := NewMockPort(mockCtrl)
-		port3 := NewMockPort(mockCtrl)
-		mockDevice.EXPECT().
-			GetSidePorts(cgra.North, [2]int{0, 2}).
-			Return([]sim.Port{port1, port2, port3})
-
 		data := []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
 
-		driver.FeedIn(data, cgra.North, [2]int{0, 2}, 3)
+		driver.FeedIn(data, cgra.North, [2]int{0, 3}, 3)
 
 		Expect(driver.feedInTasks).To(HaveLen(1))
 		Expect(driver.feedInTasks[0].data).To(Equal(data))
-		Expect(driver.feedInTasks[0].ports).
-			To(Equal([]sim.Port{port1, port2, port3}))
+		Expect(driver.feedInTasks[0].localPorts).
+			To(Equal([]sim.Port{
+				portFactory.ports["driver.Device_North_0"],
+				portFactory.ports["driver.Device_North_1"],
+				portFactory.ports["driver.Device_North_2"],
+			}))
+		Expect(driver.feedInTasks[0].remotePorts).
+			To(Equal([]sim.Port{
+				mockDeviceSidePort,
+				mockDeviceSidePort,
+				mockDeviceSidePort,
+			}))
 		Expect(driver.feedInTasks[0].stride).To(Equal(3))
 	})
 
 	It("should do feed in", func() {
-		port1 := NewMockPort(mockCtrl)
-		port2 := NewMockPort(mockCtrl)
-		port3 := NewMockPort(mockCtrl)
+		remotePort1 := NewMockPort(mockCtrl)
+		remotePort2 := NewMockPort(mockCtrl)
+		remotePort3 := NewMockPort(mockCtrl)
+		localPort1 := portFactory.ports["driver.Device_North_0"]
+		localPort2 := portFactory.ports["driver.Device_North_1"]
+		localPort3 := portFactory.ports["driver.Device_North_2"]
 
 		data := []uint32{1, 2, 3, 4, 5, 6}
 
 		driver.feedInTasks = []*feedInTask{
 			{
-				data:   data,
-				ports:  []sim.Port{port1, port2, port3},
-				stride: 3,
+				data:        data,
+				localPorts:  []sim.Port{localPort1, localPort2, localPort3},
+				remotePorts: []sim.Port{remotePort1, remotePort2, remotePort3},
+				stride:      3,
 			},
 		}
 
-		expectPortsToReceive(
-			[]*MockPort{port1, port2, port3},
+		expectPortsToSend(
+			[]*MockPort{localPort1, localPort2, localPort3},
+			[]*MockPort{remotePort1, remotePort2, remotePort3},
 			[]uint32{1, 2, 3},
 		)
 
 		driver.Tick(0)
 
-		expectPortsToReceive(
-			[]*MockPort{port1, port2, port3},
+		expectPortsToSend(
+			[]*MockPort{localPort1, localPort2, localPort3},
+			[]*MockPort{remotePort1, remotePort2, remotePort3},
 			[]uint32{4, 5, 6},
 		)
 
@@ -83,14 +128,20 @@ var _ = Describe("Driver", func() {
 	})
 })
 
-func expectPortsToReceive(ports []*MockPort, data []uint32) {
-	for i, port := range ports {
-		func(port *MockPort, data uint32) {
+func expectPortsToSend(
+	localPorts []*MockPort,
+	remotePorts []*MockPort,
+	data []uint32,
+) {
+	for i, port := range localPorts {
+		func(port *MockPort, data uint32, i int) {
 			port.EXPECT().
 				Send(gomock.Any()).
 				Do(func(msg *cgra.MoveMsg) {
+					Expect(msg.Src).To(Equal(port))
+					Expect(msg.Dst).To(Equal(remotePorts[i]))
 					Expect(msg.Data).To(Equal(data))
 				})
-		}(port, data[i])
+		}(port, data[i], i)
 	}
 }
