@@ -2,7 +2,6 @@
 package cgra
 
 import (
-	"github.com/sarchlab/zeonica/core"
 	"gitlab.com/akita/akita/v2/sim"
 )
 
@@ -33,30 +32,16 @@ func (s Side) Name() string {
 }
 
 // Tile defines a tile in the CGRA.
-type Tile struct {
-	Core *core.Core
-}
-
-// GetPort returns the of the tile by the side.
-func (t Tile) GetPort(side Side) sim.Port {
-	switch side {
-	case North:
-		return t.Core.GetPortByName("North")
-	case West:
-		return t.Core.GetPortByName("West")
-	case South:
-		return t.Core.GetPortByName("South")
-	case East:
-		return t.Core.GetPortByName("East")
-	default:
-		panic("invalid side")
-	}
+type Tile interface {
+	GetPort(side Side) sim.Port
+	SetRemotePort(side Side, port sim.Port)
+	MapProgram(program []string)
 }
 
 // A Device is a CGRA device.
 type Device interface {
 	GetSize() (width, height int)
-	GetTile(x, y int) *Tile
+	GetTile(x, y int) Tile
 	GetSidePorts(side Side, portRange [2]int) []sim.Port
 }
 

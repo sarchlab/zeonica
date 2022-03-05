@@ -5,12 +5,48 @@ import (
 	"gitlab.com/akita/akita/v2/sim"
 )
 
+type tileCore interface {
+	sim.Component
+	MapProgram(program []string)
+	SetRemotePort(side cgra.Side, port sim.Port)
+}
+
+type tile struct {
+	Core tileCore
+}
+
+// GetPort returns the of the tile by the side.
+func (t tile) GetPort(side cgra.Side) sim.Port {
+	switch side {
+	case cgra.North:
+		return t.Core.GetPortByName("North")
+	case cgra.West:
+		return t.Core.GetPortByName("West")
+	case cgra.South:
+		return t.Core.GetPortByName("South")
+	case cgra.East:
+		return t.Core.GetPortByName("East")
+	default:
+		panic("invalid side")
+	}
+}
+
+// SetRemotePort sets the port that the core can send data to.
+func (t tile) SetRemotePort(side cgra.Side, port sim.Port) {
+	t.Core.SetRemotePort(side, port)
+}
+
+// MapProgram sets the program that the tile needs to run.
+func (t tile) MapProgram(program []string) {
+	t.Core.MapProgram(program)
+}
+
 // A Device is a CGRA device that includes a large number of tiles. Tiles can be
 // retrieved using d.Tiles[y][x].
 type device struct {
 	Name          string
 	Width, Height int
-	Tiles         [][]*cgra.Tile
+	Tiles         [][]*tile
 }
 
 // GetSize returns the width and height of the device.
@@ -19,7 +55,7 @@ func (d *device) GetSize() (int, int) {
 }
 
 // GetTile returns the tile at the given coordinates.
-func (d *device) GetTile(x, y int) *cgra.Tile {
+func (d *device) GetTile(x, y int) cgra.Tile {
 	return d.Tiles[y][x]
 }
 

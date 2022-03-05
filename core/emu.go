@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-type state struct {
+type coreState struct {
 	PC               uint32
 	TileX, TileY     uint32
 	Registers        []uint32
@@ -19,7 +19,7 @@ type state struct {
 type instEmulator struct {
 }
 
-func (i instEmulator) RunInst(inst string, state *state) {
+func (i instEmulator) RunInst(inst string, state *coreState) {
 	tokens := strings.Split(inst, ",")
 	for i := range tokens {
 		tokens[i] = strings.TrimSpace(tokens[i])
@@ -35,7 +35,7 @@ func (i instEmulator) RunInst(inst string, state *state) {
 
 }
 
-func (i instEmulator) runWait(inst []string, state *state) {
+func (i instEmulator) runWait(inst []string, state *coreState) {
 	dst := inst[1]
 	src := inst[2]
 
@@ -60,7 +60,7 @@ func (i instEmulator) waitSrcMustBeNetRecvReg(src string) {
 	}
 }
 
-func (i instEmulator) runSend(inst []string, state *state) {
+func (i instEmulator) runSend(inst []string, state *coreState) {
 	dst := inst[1]
 	src := inst[2]
 
@@ -86,7 +86,7 @@ func (i instEmulator) sendDstMustBeNetSendReg(src string) {
 	}
 }
 
-func (i instEmulator) readOperand(operand string, state *state) (value uint32) {
+func (i instEmulator) readOperand(operand string, state *coreState) (value uint32) {
 	if strings.HasPrefix(operand, "$") {
 		registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
 		if err != nil {
@@ -99,7 +99,7 @@ func (i instEmulator) readOperand(operand string, state *state) (value uint32) {
 	return
 }
 
-func (i instEmulator) writeOperand(operand string, value uint32, state *state) {
+func (i instEmulator) writeOperand(operand string, value uint32, state *coreState) {
 	if strings.HasPrefix(operand, "$") {
 		registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
 		if err != nil {

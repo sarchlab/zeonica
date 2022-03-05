@@ -3,6 +3,7 @@ package api
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/sarchlab/zeonica/cgra"
 	"gitlab.com/akita/akita/v2/sim"
@@ -190,6 +191,28 @@ func (d *driverImpl) connectOnePort(side cgra.Side, index int, port sim.Port) {
 	)
 	conn.PlugIn(localPort, 1)
 	conn.PlugIn(port, 1)
+
+	d.setTileRemovePort(side, index, localPort)
+}
+
+func (d *driverImpl) setTileRemovePort(
+	side cgra.Side,
+	index int,
+	localPort sim.Port,
+) {
+	width, height := d.device.GetSize()
+	var tile cgra.Tile
+	switch side {
+	case cgra.North:
+		tile = d.device.GetTile(index, 0)
+	case cgra.South:
+		tile = d.device.GetTile(index, height-1)
+	case cgra.East:
+		tile = d.device.GetTile(width-1, index)
+	case cgra.West:
+		tile = d.device.GetTile(0, index)
+	}
+	tile.SetRemotePort(side, localPort)
 }
 
 type feedInTask struct {
@@ -263,8 +286,12 @@ func (d *driverImpl) Collect(
 
 // MapProgram dispatches a program to a core.
 func (d *driverImpl) MapProgram(program string, core [2]int) {
-
+	tile := d.device.GetTile(core[0], core[1])
+	tile.MapProgram(strings.Split(program, "\n"))
 }
 
 // Run runs all the tasks in the driver.
-func (d *driverImpl) Run() {}
+func (d *driverImpl) Run() {
+	d.TickNow(d.Engine.CurrentTime())
+	d.Engine.Run()
+}

@@ -8,12 +8,12 @@ import (
 var _ = Describe("InstEmulator", func() {
 	var (
 		ie instEmulator
-		s  state
+		s  coreState
 	)
 
 	BeforeEach(func() {
 		ie = instEmulator{}
-		s = state{
+		s = coreState{
 			PC:               0,
 			TileX:            0,
 			TileY:            0,

@@ -14,8 +14,13 @@ import (
 var passThroughKernel string
 
 func passThrough(driver api.Driver) {
-	src := make([]uint32, 1024)
-	dst := make([]uint32, 1024)
+	length := 1024
+	src := make([]uint32, length)
+	dst := make([]uint32, length)
+
+	for i := 0; i < length; i++ {
+		src[i] = uint32(i)
+	}
 
 	driver.FeedIn(src, cgra.East, [2]int{0, 4}, 4)
 	driver.Collect(dst, cgra.West, [2]int{0, 4}, 4)
@@ -27,6 +32,12 @@ func passThrough(driver api.Driver) {
 	}
 
 	driver.Run()
+
+	for i := 0; i < length; i++ {
+		if src[i] != dst[i] {
+			panic("data mismatch")
+		}
+	}
 }
 
 func main() {

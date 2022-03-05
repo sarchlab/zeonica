@@ -26,6 +26,7 @@ var _ = Describe("Driver", func() {
 	var (
 		mockCtrl           *gomock.Controller
 		mockEngine         *MockEngine
+		mockTile           *MockTile
 		mockDevice         *MockDevice
 		mockDeviceSidePort *MockPort
 		portFactory        *mockPortFactory
@@ -42,8 +43,15 @@ var _ = Describe("Driver", func() {
 		mockDeviceSidePort.EXPECT().Name().Return("DevicePort").AnyTimes()
 		mockDeviceSidePort.EXPECT().SetConnection(gomock.Any()).AnyTimes()
 
+		mockTile = NewMockTile(mockCtrl)
+		mockTile.EXPECT().SetRemotePort(gomock.Any(), gomock.Any()).AnyTimes()
+
 		mockDevice = NewMockDevice(mockCtrl)
 		mockDevice.EXPECT().GetSize().Return(4, 4).AnyTimes()
+		mockDevice.EXPECT().
+			GetTile(gomock.Any(), gomock.Any()).
+			Return(mockTile).
+			AnyTimes()
 		mockDevice.EXPECT().
 			GetSidePorts(gomock.Any(), gomock.Any()).
 			DoAndReturn(func(side cgra.Side, portRange [2]int) []sim.Port {

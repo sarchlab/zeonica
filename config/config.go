@@ -47,7 +47,7 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 		Name:   name,
 		Width:  d.width,
 		Height: d.height,
-		Tiles:  make([][]*cgra.Tile, d.height),
+		Tiles:  make([][]*tile, d.height),
 	}
 
 	nocConnector := mesh.NewConnector().
@@ -57,12 +57,29 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 		WithBandwidth(1)
 	nocConnector.CreateNetwork(name + ".Mesh")
 
+	d.createTiles(dev, name, nocConnector)
+	d.setRemovePorts(dev)
+
+	nocConnector.EstablishNetwork()
+
+	return dev
+}
+
+func (d DeviceBuilder) createTiles(
+	dev *device,
+	name string,
+	nocConnector *mesh.Connector,
+) {
 	for y := 0; y < d.height; y++ {
-		dev.Tiles[y] = make([]*cgra.Tile, d.width)
+		dev.Tiles[y] = make([]*tile, d.width)
 		for x := 0; x < d.width; x++ {
-			tile := &cgra.Tile{}
-			tile.Core = core.NewCore(
-				fmt.Sprintf("%s.Tile_%d_%d.Core", name, x, y), d.engine)
+			tile := &tile{}
+			coreName := fmt.Sprintf("%s.Tile_%d_%d.Core", name, x, y)
+			tile.Core = core.Builder{}.
+				WithEngine(d.engine).
+				WithFreq(d.freq).
+				Build(coreName)
+
 			dev.Tiles[y][x] = tile
 
 			nocConnector.AddTile(
@@ -75,8 +92,36 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 				})
 		}
 	}
+}
 
-	nocConnector.EstablishNetwork()
+func (d DeviceBuilder) setRemovePorts(dev *device) {
+	for y := 0; y < d.height; y++ {
+		for x := 0; x < d.width; x++ {
+			tile := dev.Tiles[y][x]
 
-	return dev
+			if x > 0 {
+				westTile := dev.Tiles[y][x-1]
+				tile.SetRemotePort(cgra.West,
+					westTile.Core.GetPortByName(cgra.East.Name()))
+			}
+
+			if y > 0 {
+				northTile := dev.Tiles[y-1][x]
+				tile.SetRemotePort(cgra.North,
+					northTile.Core.GetPortByName(cgra.South.Name()))
+			}
+
+			if x < d.width-1 {
+				eastTile := dev.Tiles[y][x+1]
+				tile.SetRemotePort(cgra.East,
+					eastTile.Core.GetPortByName(cgra.West.Name()))
+			}
+
+			if y < d.height-1 {
+				southTile := dev.Tiles[y+1][x]
+				tile.SetRemotePort(cgra.South,
+					southTile.Core.GetPortByName(cgra.North.Name()))
+			}
+		}
+	}
 }
