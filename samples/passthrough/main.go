@@ -11,8 +11,8 @@ import (
 	"gitlab.com/akita/akita/v2/sim"
 )
 
-var width = 2
-var height = 1
+var width = 16
+var height = 16
 
 //go:embed passthrough.cgraasm
 var passThroughKernel string
