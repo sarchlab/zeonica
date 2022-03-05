@@ -260,3 +260,11 @@ func (d *driverImpl) Collect(
 
 	d.collectTasks = append(d.collectTasks, task)
 }
+
+// MapProgram dispatches a program to a core.
+func (d *driverImpl) MapProgram(program string, core [2]int) {
+
+}
+
+// Run runs all the tasks in the driver.
+func (d *driverImpl) Run() {}

@@ -2,52 +2,81 @@
 package config
 
 import (
+	"fmt"
+
+	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/core"
 	"gitlab.com/akita/akita/v2/sim"
-	"gitlab.com/akita/mem/v2/idealmemcontroller"
-	"gitlab.com/akita/mem/v2/mem"
 	"gitlab.com/akita/noc/v2/networking/mesh"
 )
 
-func CreateDevice(engine sim.Engine) *Device {
-	d := &Device{}
+// DeviceBuilder can build CGRA devices.
+type DeviceBuilder struct {
+	engine        sim.Engine
+	freq          sim.Freq
+	width, height int
+}
 
-	nocConnector := mesh.NewConnector().
-		WithEngine(engine).
-		WithFreq(1 * sim.GHz).
-		WithSwitchLatency(1).
-		WithBandwidth(1)
-	nocConnector.CreateNetwork("Mesh")
+// WithEngine sets the engine that drives the device simulation.
+func (d DeviceBuilder) WithEngine(engine sim.Engine) DeviceBuilder {
+	d.engine = engine
+	return d
+}
 
-	memTable := &mem.InterleavedLowModuleFinder{
-		InterleavingSize: 64,
+// WithFreq sets the frequency of the device.
+func (d DeviceBuilder) WithFreq(freq sim.Freq) DeviceBuilder {
+	d.freq = freq
+	return d
+}
+
+// WithWidth sets the width of CGRA mesh.
+func (d DeviceBuilder) WithWidth(width int) DeviceBuilder {
+	d.width = width
+	return d
+}
+
+// WithHeight sets the height of CGRA mesh.
+func (d DeviceBuilder) WithHeight(height int) DeviceBuilder {
+	d.height = height
+	return d
+}
+
+// Build creates a CGRA device.
+func (d DeviceBuilder) Build(name string) cgra.Device {
+	dev := &device{
+		Name:   name,
+		Width:  d.width,
+		Height: d.height,
+		Tiles:  make([][]*cgra.Tile, d.height),
 	}
 
-	d.Tiles = make([]*Tile, 0)
-	for y := 0; y < 2; y++ {
-		for x := 0; x < 2; x++ {
-			t := &Tile{}
+	nocConnector := mesh.NewConnector().
+		WithEngine(d.engine).
+		WithFreq(d.freq).
+		WithSwitchLatency(1).
+		WithBandwidth(1)
+	nocConnector.CreateNetwork(name + ".Mesh")
 
-			t.Core = core.NewCore("core", engine)
-			t.Core.MemTable = memTable
-
-			t.Mem = idealmemcontroller.New("mem", engine, 40*mem.KB)
-			memTable.LowModules = append(memTable.LowModules,
-				t.Mem.GetPortByName("Top"))
-
-			d.Tiles = append(d.Tiles, t)
+	for y := 0; y < d.height; y++ {
+		dev.Tiles[y] = make([]*cgra.Tile, d.width)
+		for x := 0; x < d.width; x++ {
+			tile := &cgra.Tile{}
+			tile.Core = core.NewCore(
+				fmt.Sprintf("%s.Tile_%d_%d.Core", name, x, y), d.engine)
+			dev.Tiles[y][x] = tile
 
 			nocConnector.AddTile(
 				[3]int{x, y, 0},
 				[]sim.Port{
-					t.Core.GetPortByName("Mem"),
-					t.Mem.GetPortByName("Top"),
-				},
-			)
+					tile.Core.GetPortByName(cgra.East.Name()),
+					tile.Core.GetPortByName(cgra.West.Name()),
+					tile.Core.GetPortByName(cgra.North.Name()),
+					tile.Core.GetPortByName(cgra.South.Name()),
+				})
 		}
 	}
 
 	nocConnector.EstablishNetwork()
 
-	return d
+	return dev
 }

@@ -56,7 +56,7 @@ func (t Tile) GetPort(side Side) sim.Port {
 // A Device is a CGRA device.
 type Device interface {
 	GetSize() (width, height int)
-	GetTile(x, y int) Tile
+	GetTile(x, y int) *Tile
 	GetSidePorts(side Side, portRange [2]int) []sim.Port
 }
 

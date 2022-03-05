@@ -8,6 +8,7 @@ import (
 // A Device is a CGRA device that includes a large number of tiles. Tiles can be
 // retrieved using d.Tiles[y][x].
 type device struct {
+	Name          string
 	Width, Height int
 	Tiles         [][]*cgra.Tile
 }

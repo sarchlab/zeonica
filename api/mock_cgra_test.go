@@ -64,10 +64,10 @@ func (mr *MockDeviceMockRecorder) GetSize() *gomock.Call {
 }
 
 // GetTile mocks base method.
-func (m *MockDevice) GetTile(arg0, arg1 int) cgra.Tile {
+func (m *MockDevice) GetTile(arg0, arg1 int) *cgra.Tile {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetTile", arg0, arg1)
-	ret0, _ := ret[0].(cgra.Tile)
+	ret0, _ := ret[0].(*cgra.Tile)
 	return ret0
 }
 
