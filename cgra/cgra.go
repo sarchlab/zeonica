@@ -10,9 +10,9 @@ type Side int
 
 const (
 	North Side = iota
-	West
-	South
 	East
+	South
+	West
 )
 
 // Name returns the name of the side.

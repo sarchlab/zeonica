@@ -79,6 +79,18 @@ func (d *driverImpl) removeFinishedFeedInTasks() {
 func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 	madeProgress := false
 
+	canSendAll := true
+	for _, port := range task.localPorts {
+		if !port.CanSend() {
+			canSendAll = false
+			break
+		}
+	}
+
+	if !canSendAll {
+		return false
+	}
+
 	for i, port := range task.localPorts {
 		msg := cgra.MoveMsgBuilder{}.
 			WithSrc(port).

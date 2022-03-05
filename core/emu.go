@@ -80,8 +80,8 @@ func (i instEmulator) runSend(inst []string, state *coreState) {
 	state.PC++
 }
 
-func (i instEmulator) sendDstMustBeNetSendReg(src string) {
-	if !strings.HasPrefix(src, "NET_SEND_") {
+func (i instEmulator) sendDstMustBeNetSendReg(dst string) {
+	if !strings.HasPrefix(dst, "NET_SEND_") {
 		panic("the destination of a SEND instruction must be NET_SEND registers")
 	}
 }

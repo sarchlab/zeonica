@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"fmt"
 
 	"github.com/sarchlab/zeonica/api"
 	"github.com/sarchlab/zeonica/cgra"
@@ -14,7 +15,7 @@ import (
 var passThroughKernel string
 
 func passThrough(driver api.Driver) {
-	length := 1024
+	length := 8
 	src := make([]uint32, length)
 	dst := make([]uint32, length)
 
@@ -22,10 +23,10 @@ func passThrough(driver api.Driver) {
 		src[i] = uint32(i)
 	}
 
-	driver.FeedIn(src, cgra.East, [2]int{0, 4}, 4)
-	driver.Collect(dst, cgra.West, [2]int{0, 4}, 4)
+	driver.FeedIn(src, cgra.West, [2]int{0, 4}, 4)
+	driver.Collect(dst, cgra.East, [2]int{0, 4}, 4)
 
-	for x := 0; x < 4; x++ {
+	for x := 0; x < 1; x++ {
 		for y := 0; y < 4; y++ {
 			driver.MapProgram(passThroughKernel, [2]int{x, y})
 		}
@@ -33,11 +34,8 @@ func passThrough(driver api.Driver) {
 
 	driver.Run()
 
-	for i := 0; i < length; i++ {
-		if src[i] != dst[i] {
-			panic("data mismatch")
-		}
-	}
+	fmt.Println(src)
+	fmt.Println(dst)
 }
 
 func main() {
@@ -51,7 +49,7 @@ func main() {
 	device := config.DeviceBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
-		WithWidth(4).
+		WithWidth(1).
 		WithHeight(4).
 		Build("Device")
 
