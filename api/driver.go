@@ -49,6 +49,7 @@ type driverImpl struct {
 // Tick runs the driver for one cycle.
 func (d *driverImpl) Tick(now sim.VTimeInSec) (madeProgress bool) {
 	madeProgress = d.doFeedIn() || madeProgress
+	madeProgress = d.doCollect() || madeProgress
 
 	return madeProgress
 }
@@ -94,6 +95,53 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 	task.round++
 
 	return madeProgress
+}
+
+func (d *driverImpl) doCollect() bool {
+	madeProgress := false
+
+	for _, task := range d.collectTasks {
+		madeProgress = d.doOneCollectTask(task) || madeProgress
+	}
+
+	d.removeFinishedCollectTasks()
+
+	return madeProgress
+}
+
+func (d *driverImpl) doOneCollectTask(task *collectTask) bool {
+	if !d.allDataReady(task) {
+		return false
+	}
+
+	for i, port := range task.ports {
+		msg := port.Retrieve(d.Engine.CurrentTime()).(*cgra.MoveMsg)
+		task.data[task.round*task.stride+i] = msg.Data
+	}
+
+	task.round++
+
+	return true
+}
+
+func (*driverImpl) allDataReady(task *collectTask) bool {
+	for _, port := range task.ports {
+		item := port.Peek()
+		if item == nil {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (d *driverImpl) removeFinishedCollectTasks() {
+	for i := len(d.collectTasks) - 1; i >= 0; i-- {
+		if d.collectTasks[i].isFinished() {
+			d.collectTasks = append(
+				d.collectTasks[:i], d.collectTasks[i+1:]...)
+		}
+	}
 }
 
 // RegisterDevice registers a device to the driver. The driver will
@@ -191,6 +239,11 @@ type collectTask struct {
 	data   []uint32
 	ports  []sim.Port
 	stride int
+	round  int
+}
+
+func (t *collectTask) isFinished() bool {
+	return t.round >= len(t.data)/t.stride
 }
 
 func (d *driverImpl) Collect(
@@ -201,6 +254,7 @@ func (d *driverImpl) Collect(
 ) {
 	task := &collectTask{
 		data:   data,
+		ports:  d.getLocalPorts(side, portRange),
 		stride: stride,
 	}
 
