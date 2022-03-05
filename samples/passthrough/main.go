@@ -11,11 +11,14 @@ import (
 	"gitlab.com/akita/akita/v2/sim"
 )
 
+var width = 2
+var height = 1
+
 //go:embed passthrough.cgraasm
 var passThroughKernel string
 
 func passThrough(driver api.Driver) {
-	length := 8
+	length := 1024
 	src := make([]uint32, length)
 	dst := make([]uint32, length)
 
@@ -23,11 +26,11 @@ func passThrough(driver api.Driver) {
 		src[i] = uint32(i)
 	}
 
-	driver.FeedIn(src, cgra.West, [2]int{0, 4}, 4)
-	driver.Collect(dst, cgra.East, [2]int{0, 4}, 4)
+	driver.FeedIn(src, cgra.West, [2]int{0, height}, height)
+	driver.Collect(dst, cgra.East, [2]int{0, height}, height)
 
-	for x := 0; x < 1; x++ {
-		for y := 0; y < 4; y++ {
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
 			driver.MapProgram(passThroughKernel, [2]int{x, y})
 		}
 	}
@@ -49,8 +52,8 @@ func main() {
 	device := config.DeviceBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
-		WithWidth(1).
-		WithHeight(4).
+		WithWidth(width).
+		WithHeight(height).
 		Build("Device")
 
 	driver.RegisterDevice(device)

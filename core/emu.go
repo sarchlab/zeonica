@@ -31,6 +31,10 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 		i.runWait(tokens, state)
 	case "SEND":
 		i.runSend(tokens, state)
+	case "JMP":
+		i.runJmp(tokens, state)
+	default:
+		panic("unknown instruction " + inst)
 	}
 
 }
@@ -83,6 +87,18 @@ func (i instEmulator) runSend(inst []string, state *coreState) {
 func (i instEmulator) sendDstMustBeNetSendReg(dst string) {
 	if !strings.HasPrefix(dst, "NET_SEND_") {
 		panic("the destination of a SEND instruction must be NET_SEND registers")
+	}
+}
+
+func (i instEmulator) runJmp(inst []string, state *coreState) {
+	dst := inst[1]
+
+	for i := 0; i < len(state.Code); i++ {
+		line := strings.Trim(state.Code[i], " \t\n")
+		if strings.HasPrefix(line, dst) && strings.HasSuffix(line, ":") {
+			state.PC = uint32(i)
+			return
+		}
 	}
 }
 

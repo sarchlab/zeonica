@@ -124,6 +124,10 @@ var _ = Describe("Driver", func() {
 		localPort2 := portFactory.ports["driver.Device_North_1"]
 		localPort3 := portFactory.ports["driver.Device_North_2"]
 
+		localPort1.EXPECT().CanSend().Return(true).AnyTimes()
+		localPort2.EXPECT().CanSend().Return(true).AnyTimes()
+		localPort3.EXPECT().CanSend().Return(true).AnyTimes()
+
 		data := []uint32{1, 2, 3, 4, 5, 6}
 
 		driver.feedInTasks = []*feedInTask{

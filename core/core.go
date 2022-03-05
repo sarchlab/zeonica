@@ -105,6 +105,10 @@ func (c *Core) runProgram() bool {
 	}
 
 	inst := c.state.Code[c.state.PC]
+	for inst[len(inst)-1] == ':' {
+		c.state.PC++
+		inst = c.state.Code[c.state.PC]
+	}
 
 	prevPC := c.state.PC
 	c.emu.RunInst(inst, &c.state)
