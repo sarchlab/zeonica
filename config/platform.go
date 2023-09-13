@@ -1,8 +1,8 @@
 package config
 
 import (
+	"github.com/sarchlab/akita/v3/sim"
 	"github.com/sarchlab/zeonica/cgra"
-	"gitlab.com/akita/akita/v2/sim"
 )
 
 type tileCore interface {

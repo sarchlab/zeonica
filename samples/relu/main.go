@@ -4,9 +4,9 @@ import (
 	_ "embed"
 	"strings"
 
+	"github.com/sarchlab/akita/v3/sim"
 	"github.com/sarchlab/zeonica/config"
 	"github.com/tebeka/atexit"
-	"gitlab.com/akita/akita/v2/sim"
 )
 
 //go:embed relu.cgraasm

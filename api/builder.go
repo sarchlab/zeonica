@@ -1,6 +1,6 @@
 package api
 
-import "gitlab.com/akita/akita/v2/sim"
+import "github.com/sarchlab/akita/v3/sim"
 
 type defaultPortFactory struct {
 }

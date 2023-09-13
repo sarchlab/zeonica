@@ -2,7 +2,7 @@
 package cgra
 
 import (
-	"gitlab.com/akita/akita/v2/sim"
+	"github.com/sarchlab/akita/v3/sim"
 )
 
 // Side defines the side of a tile.

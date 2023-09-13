@@ -7,8 +7,8 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	sim "github.com/sarchlab/akita/v3/sim"
 	cgra "github.com/sarchlab/zeonica/cgra"
-	sim "gitlab.com/akita/akita/v2/sim"
 )
 
 // MockDevice is a mock of Device interface.

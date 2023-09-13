@@ -4,8 +4,8 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sarchlab/akita/v3/sim"
 	"github.com/sarchlab/zeonica/cgra"
-	"gitlab.com/akita/akita/v2/sim"
 )
 
 type mockPortFactory struct {
