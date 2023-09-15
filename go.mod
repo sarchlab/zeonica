@@ -8,7 +8,6 @@ require (
 	github.com/onsi/gomega v1.27.7
 	github.com/sarchlab/akita/v3 v3.0.0-alpha.29
 	github.com/tebeka/atexit v0.3.0
-	gitlab.com/akita/akita/v2 v2.0.2
 )
 
 //replace gitlab.com/akita/akita/v2 => ../akita
