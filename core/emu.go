@@ -204,5 +204,5 @@ func (i instEmulator) runJeq(inst []string, state *coreState) {
 }
 
 func (i instEmulator) runDone() {
-	return
+	// Do nothing.
 }

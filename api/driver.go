@@ -305,5 +305,8 @@ func (d *driverImpl) MapProgram(program string, core [2]int) {
 // Run runs all the tasks in the driver.
 func (d *driverImpl) Run() {
 	d.TickNow(d.Engine.CurrentTime())
-	d.Engine.Run()
+	err := d.Engine.Run()
+	if err != nil {
+		panic(err)
+	}
 }
