@@ -1,6 +1,6 @@
 package cgra
 
-import "gitlab.com/akita/akita/v2/sim"
+import "github.com/sarchlab/akita/v3/sim"
 
 // MoveMsg moves data from one tile to another in a CGRA.
 type MoveMsg struct {

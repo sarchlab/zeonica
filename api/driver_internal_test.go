@@ -2,10 +2,10 @@ package api
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/sarchlab/akita/v3/sim"
 	"github.com/sarchlab/zeonica/cgra"
-	"gitlab.com/akita/akita/v2/sim"
 )
 
 type mockPortFactory struct {
@@ -71,7 +71,7 @@ var _ = Describe("Driver", func() {
 			portFactory: portFactory,
 		}
 		driver.TickingComponent =
-			sim.NewTickingComponent("driver", mockEngine, 1, driver)
+			sim.NewTickingComponent("Driver", mockEngine, 1, driver)
 		driver.RegisterDevice(mockDevice)
 	})
 
@@ -88,9 +88,9 @@ var _ = Describe("Driver", func() {
 		Expect(driver.feedInTasks[0].data).To(Equal(data))
 		Expect(driver.feedInTasks[0].localPorts).
 			To(Equal([]sim.Port{
-				portFactory.ports["driver.Device_North_0"],
-				portFactory.ports["driver.Device_North_1"],
-				portFactory.ports["driver.Device_North_2"],
+				portFactory.ports["Driver.DeviceNorth[0]"],
+				portFactory.ports["Driver.DeviceNorth[1]"],
+				portFactory.ports["Driver.DeviceNorth[2]"],
 			}))
 		Expect(driver.feedInTasks[0].remotePorts).
 			To(Equal([]sim.Port{
@@ -110,9 +110,9 @@ var _ = Describe("Driver", func() {
 		Expect(driver.collectTasks[0].data).To(Equal(data))
 		Expect(driver.collectTasks[0].ports).
 			To(Equal([]sim.Port{
-				portFactory.ports["driver.Device_North_0"],
-				portFactory.ports["driver.Device_North_1"],
-				portFactory.ports["driver.Device_North_2"],
+				portFactory.ports["Driver.DeviceNorth[0]"],
+				portFactory.ports["Driver.DeviceNorth[1]"],
+				portFactory.ports["Driver.DeviceNorth[2]"],
 			}))
 	})
 
@@ -120,9 +120,9 @@ var _ = Describe("Driver", func() {
 		remotePort1 := NewMockPort(mockCtrl)
 		remotePort2 := NewMockPort(mockCtrl)
 		remotePort3 := NewMockPort(mockCtrl)
-		localPort1 := portFactory.ports["driver.Device_North_0"]
-		localPort2 := portFactory.ports["driver.Device_North_1"]
-		localPort3 := portFactory.ports["driver.Device_North_2"]
+		localPort1 := portFactory.ports["Driver.DeviceNorth[0]"]
+		localPort2 := portFactory.ports["Driver.DeviceNorth[1]"]
+		localPort3 := portFactory.ports["Driver.DeviceNorth[2]"]
 
 		localPort1.EXPECT().CanSend().Return(true).AnyTimes()
 		localPort2.EXPECT().CanSend().Return(true).AnyTimes()
@@ -159,9 +159,9 @@ var _ = Describe("Driver", func() {
 	})
 
 	It("should do collect", func() {
-		localPort1 := portFactory.ports["driver.Device_North_0"]
-		localPort2 := portFactory.ports["driver.Device_North_1"]
-		localPort3 := portFactory.ports["driver.Device_North_2"]
+		localPort1 := portFactory.ports["Driver.DeviceNorth[0]"]
+		localPort2 := portFactory.ports["Driver.DeviceNorth[1]"]
+		localPort3 := portFactory.ports["Driver.DeviceNorth[2]"]
 
 		data := make([]uint32, 6)
 

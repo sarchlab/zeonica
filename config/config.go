@@ -4,10 +4,10 @@ package config
 import (
 	"fmt"
 
+	"github.com/sarchlab/akita/v3/noc/networking/mesh"
+	"github.com/sarchlab/akita/v3/sim"
 	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/core"
-	"gitlab.com/akita/akita/v2/sim"
-	"gitlab.com/akita/noc/v2/networking/mesh"
 )
 
 // DeviceBuilder can build CGRA devices.
@@ -74,7 +74,7 @@ func (d DeviceBuilder) createTiles(
 		dev.Tiles[y] = make([]*tile, d.width)
 		for x := 0; x < d.width; x++ {
 			tile := &tile{}
-			coreName := fmt.Sprintf("%s.Tile_%d_%d.Core", name, x, y)
+			coreName := fmt.Sprintf("%s.Tile[%d][%d].Core", name, x, y)
 			tile.Core = core.Builder{}.
 				WithEngine(d.engine).
 				WithFreq(d.freq).

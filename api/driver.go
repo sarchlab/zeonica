@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sarchlab/akita/v3/sim"
 	"github.com/sarchlab/zeonica/cgra"
-	"gitlab.com/akita/akita/v2/sim"
 )
 
 // Driver provides the interface to control an accelerator.
@@ -188,7 +188,7 @@ func (d *driverImpl) establishConnectionOneSide(
 }
 
 func (d *driverImpl) localPortName(side cgra.Side, index int) string {
-	return fmt.Sprintf("Device_%s_%d", side.Name(), index)
+	return fmt.Sprintf("Device%s[%d]", side.Name(), index)
 }
 
 func (d *driverImpl) connectOnePort(side cgra.Side, index int, port sim.Port) {
@@ -197,7 +197,7 @@ func (d *driverImpl) connectOnePort(side cgra.Side, index int, port sim.Port) {
 	d.AddPort(portName, localPort)
 
 	conn := sim.NewDirectConnection(
-		localPort.Name()+"-"+port.Name(),
+		localPort.Name()+"."+port.Name(),
 		d.Engine,
 		d.Freq,
 	)
@@ -305,5 +305,8 @@ func (d *driverImpl) MapProgram(program string, core [2]int) {
 // Run runs all the tasks in the driver.
 func (d *driverImpl) Run() {
 	d.TickNow(d.Engine.CurrentTime())
-	d.Engine.Run()
+	err := d.Engine.Run()
+	if err != nil {
+		panic(err)
+	}
 }

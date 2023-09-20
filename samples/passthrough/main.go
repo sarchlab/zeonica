@@ -4,11 +4,11 @@ import (
 	_ "embed"
 	"fmt"
 
+	"github.com/sarchlab/akita/v3/sim"
 	"github.com/sarchlab/zeonica/api"
 	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/config"
 	"github.com/tebeka/atexit"
-	"gitlab.com/akita/akita/v2/sim"
 )
 
 var width = 16

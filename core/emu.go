@@ -26,6 +26,9 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 	}
 
 	instName := tokens[0]
+	if strings.Contains(instName, "CMP") {
+		instName = "CMP"
+	}
 	switch instName {
 	case "WAIT":
 		i.runWait(tokens, state)
@@ -33,10 +36,15 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 		i.runSend(tokens, state)
 	case "JMP":
 		i.runJmp(tokens, state)
+	case "CMP":
+		i.runCmp(tokens, state)
+	case "JEQ":
+		i.runJeq(tokens, state)
+	case "DONE":
+		i.runDone()
 	default:
 		panic("unknown instruction " + inst)
 	}
-
 }
 
 func (i instEmulator) runWait(inst []string, state *coreState) {
@@ -124,4 +132,64 @@ func (i instEmulator) writeOperand(operand string, value uint32, state *coreStat
 
 		state.Registers[registerIndex] = value
 	}
+}
+
+func (i instEmulator) runCmp(inst []string, state *coreState) {
+	instruction := inst[0]
+	dst := inst[1]
+	src := inst[2]
+	//Pending for float type
+	//Float or Integer
+	// switch {
+	// case strings.Contains(instruction, "I"):
+	// 	imme, err := strconv.ParseUint(inst[3], 10, 32)
+	// }
+	imme, err := strconv.ParseUint(inst[3], 10, 32)
+	if err != nil {
+		panic("invalid compare number")
+	}
+
+	srcVal := i.readOperand(src, state)
+	dstVal := uint32(0)
+	imme32 := uint32(imme)
+
+	conditionFuncs := map[string]func(uint32, uint32) bool{
+		"EQ": func(a, b uint32) bool { return a == b },
+		"NE": func(a, b uint32) bool { return a != b },
+		"LT": func(a, b uint32) bool { return a < b },
+		"LE": func(a, b uint32) bool { return a <= b },
+		"GT": func(a, b uint32) bool { return a > b },
+		"GE": func(a, b uint32) bool { return a >= b },
+	}
+
+	for key, function := range conditionFuncs {
+		if strings.Contains(instruction, key) && function(srcVal, imme32) {
+			dstVal = 1
+			break
+		}
+	}
+
+	i.writeOperand(dst, dstVal, state)
+	state.PC++
+}
+
+func (i instEmulator) runJeq(inst []string, state *coreState) {
+	src := inst[2]
+	imme, err := strconv.ParseUint(inst[3], 10, 32)
+
+	if err != nil {
+		panic("invalid compare number")
+	}
+
+	srcVal := i.readOperand(src, state)
+
+	if srcVal == uint32(imme) {
+		i.runJmp(inst, state)
+	} else {
+		state.PC++
+	}
+}
+
+func (i instEmulator) runDone() {
+	// Do nothing.
 }
