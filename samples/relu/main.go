@@ -11,14 +11,14 @@ import (
 	"github.com/tebeka/atexit"
 )
 
-var width = 4
-var height = 4
+var width = 16
+var height = 16
 
 //go:embed relu.cgraasm
 var program string
 
 func relu(driver api.Driver) {
-	length := 10
+	length := 16
 
 	src := make([]uint32, length)
 	dst := make([]uint32, length)
@@ -40,7 +40,6 @@ func relu(driver api.Driver) {
 
 	fmt.Println(src)
 	fmt.Println(dst)
-
 }
 
 func main() {
@@ -58,10 +57,6 @@ func main() {
 		WithHeight(height).
 		Build("Device")
 
-	//device.Tiles[0].Core.Code = strings.Split(program, "\n")
-	//device.Tiles[0].Core.TickLater(0)
-
-	//engine.Run()
 	driver.RegisterDevice(device)
 	relu(driver)
 	atexit.Exit(0)
