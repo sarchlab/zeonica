@@ -45,7 +45,6 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 	default:
 		panic("unknown instruction " + inst)
 	}
-
 }
 
 func (i instEmulator) runWait(inst []string, state *coreState) {
@@ -152,34 +151,22 @@ func (i instEmulator) runCmp(inst []string, state *coreState) {
 
 	srcVal := i.readOperand(src, state)
 	dstVal := uint32(0)
+	imme32 := uint32(imme)
 
-	switch {
-	case strings.Contains(instruction, "EQ"):
-		if srcVal == uint32(imme) {
-			dstVal = 1
-		}
-	case strings.Contains(instruction, "NE"):
-		if srcVal != uint32(imme) {
-			dstVal = 1
-		}
-	case strings.Contains(instruction, "LT"):
-		if srcVal < uint32(imme) {
-			dstVal = 1
-		}
-	case strings.Contains(instruction, "LE"):
-		if srcVal < uint32(imme) || srcVal == uint32(imme) {
-			dstVal = 1
-		}
-	case strings.Contains(instruction, "GT"):
-		if srcVal > uint32(imme) {
-			dstVal = 1
-		}
-	case strings.Contains(instruction, "GE"):
-		if srcVal > uint32(imme) || srcVal == uint32(imme) {
-			dstVal = 1
-		}
-	default:
+	conditionFuncs := map[string]func(uint32, uint32) bool{
+		"EQ": func(a, b uint32) bool { return a == b },
+		"NE": func(a, b uint32) bool { return a != b },
+		"LT": func(a, b uint32) bool { return a < b },
+		"LE": func(a, b uint32) bool { return a <= b },
+		"GT": func(a, b uint32) bool { return a > b },
+		"GE": func(a, b uint32) bool { return a >= b },
+	}
 
+	for key, function := range conditionFuncs {
+		if strings.Contains(instruction, key) && function(srcVal, imme32) {
+			dstVal = 1
+			break
+		}
 	}
 
 	i.writeOperand(dst, dstVal, state)
