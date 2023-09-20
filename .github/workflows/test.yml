@@ -17,7 +17,7 @@ jobs:
           go-version: "stable"
 
       - name: Build
-        run: go build ./...
+        run: go build ./zeonica
 
       - name: Lint
         uses: golangci/golangci-lint-action@v3
