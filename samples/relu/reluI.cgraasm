@@ -1,0 +1,10 @@
+	WAIT, $0, NET_RECV_3
+	I_CMP_LT, $1, $0, 0
+	JEQ, ELSE, $1, 1
+IF:
+	SEND, NET_SEND_1, $0
+	JMP, END
+ELSE:
+	SEND, NET_SEND_1, 0
+END:
+	DONE,

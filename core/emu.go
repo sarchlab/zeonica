@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math"
 	"strconv"
 	"strings"
 )
@@ -29,20 +30,19 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 	if strings.Contains(instName, "CMP") {
 		instName = "CMP"
 	}
-	switch instName {
-	case "WAIT":
-		i.runWait(tokens, state)
-	case "SEND":
-		i.runSend(tokens, state)
-	case "JMP":
-		i.runJmp(tokens, state)
-	case "CMP":
-		i.runCmp(tokens, state)
-	case "JEQ":
-		i.runJeq(tokens, state)
-	case "DONE":
-		i.runDone()
-	default:
+
+	instFuncs := map[string]func([]string, *coreState){
+		"WAIT": i.runWait,
+		"SEND": i.runSend,
+		"JMP":  i.runJmp,
+		"CMP":  i.runCmp,
+		"JEQ":  i.runJeq,
+		"DONE": func(_ []string, _ *coreState) { i.runDone() }, // Since runDone might not have parameters
+	}
+
+	if instFunc, ok := instFuncs[instName]; ok {
+		instFunc(tokens, state)
+	} else {
 		panic("unknown instruction " + inst)
 	}
 }
@@ -135,40 +135,80 @@ func (i instEmulator) writeOperand(operand string, value uint32, state *coreStat
 }
 
 func (i instEmulator) runCmp(inst []string, state *coreState) {
+	Itype := inst[0]
+	//Float or Integer
+	switch {
+	case strings.Contains(Itype, "I"):
+		i.parseAndCompareI(inst, state)
+	case strings.Contains(Itype, "F32"):
+		i.parseAndCompareF32(inst, state)
+	default:
+		panic("invalid cmp")
+	}
+}
+
+func (i instEmulator) parseAndCompareI(inst []string, state *coreState) {
 	instruction := inst[0]
 	dst := inst[1]
 	src := inst[2]
-	//Pending for float type
-	//Float or Integer
-	// switch {
-	// case strings.Contains(instruction, "I"):
-	// 	imme, err := strconv.ParseUint(inst[3], 10, 32)
-	// }
+
+	srcVal := i.readOperand(src, state)
+	dstVal := uint32(0)
 	imme, err := strconv.ParseUint(inst[3], 10, 32)
 	if err != nil {
 		panic("invalid compare number")
 	}
 
-	srcVal := i.readOperand(src, state)
-	dstVal := uint32(0)
-	imme32 := uint32(imme)
+	immeI32 := int32(uint32(imme))
+	srcValI := int32(srcVal)
 
-	conditionFuncs := map[string]func(uint32, uint32) bool{
-		"EQ": func(a, b uint32) bool { return a == b },
-		"NE": func(a, b uint32) bool { return a != b },
-		"LT": func(a, b uint32) bool { return a < b },
-		"LE": func(a, b uint32) bool { return a <= b },
-		"GT": func(a, b uint32) bool { return a > b },
-		"GE": func(a, b uint32) bool { return a >= b },
+	conditionFuncs := map[string]func(int32, int32) bool{
+		"EQ": func(a, b int32) bool { return a == b },
+		"NE": func(a, b int32) bool { return a != b },
+		"LE": func(a, b int32) bool { return a <= b },
+		"LT": func(a, b int32) bool { return a < b },
+		"GT": func(a, b int32) bool { return a > b },
+		"GE": func(a, b int32) bool { return a >= b },
 	}
 
 	for key, function := range conditionFuncs {
-		if strings.Contains(instruction, key) && function(srcVal, imme32) {
+		if strings.Contains(instruction, key) && function(srcValI, immeI32) {
 			dstVal = 1
-			break
 		}
 	}
+	i.writeOperand(dst, dstVal, state)
+	state.PC++
+}
 
+func (i instEmulator) parseAndCompareF32(inst []string, state *coreState) {
+	instruction := inst[0]
+	dst := inst[1]
+	src := inst[2]
+
+	srcVal := i.readOperand(src, state)
+	dstVal := uint32(0)
+	imme, err := strconv.ParseUint(inst[3], 10, 32)
+	if err != nil {
+		panic("invalid compare number")
+	}
+
+	conditionFuncsF := map[string]func(float32, float32) bool{
+		"EQ": func(a, b float32) bool { return a == b },
+		"NE": func(a, b float32) bool { return a != b },
+		"LT": func(a, b float32) bool { return a < b },
+		"LE": func(a, b float32) bool { return a <= b },
+		"GT": func(a, b float32) bool { return a > b },
+		"GE": func(a, b float32) bool { return a >= b },
+	}
+
+	immeF32 := math.Float32frombits(uint32(imme))
+	srcValF := math.Float32frombits(srcVal)
+
+	for key, function := range conditionFuncsF {
+		if strings.Contains(instruction, key) && function(srcValF, immeF32) {
+			dstVal = 1
+		}
+	}
 	i.writeOperand(dst, dstVal, state)
 	state.PC++
 }

@@ -25,6 +25,7 @@ jobs:
           skip-pkg-cache: true
           version: "latest"
           args: --timeout=10m
+          
       - name: Install Ginkgo
         run: go install github.com/onsi/ginkgo/v2/ginkgo
 
