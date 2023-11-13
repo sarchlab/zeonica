@@ -11,10 +11,10 @@ Special registers include:
 * TILE_X: The X coordinate of the tile.
 * TILE_Y: The Y coordinate of the tile.
 * NET_RECV_N: The head of network buffer for received data. The N here is the index of the buffer. This is configurable according to the hardware. The default configuration is like this:
-	* NET_RECV_0: The head of the buffer from the North.
-	* NET_RECV_1: The head of the buffer from the West.
-	* NET_RECV_2: The head of the buffer from the South.
-	* NET_RECV_3: The head of the buffer from the East.
+	* NET_RECV_NORTH: The head of the buffer from the North.
+	* NET_RECV_WEST: The head of the buffer from the West.
+	* NET_RECV_SOUTH: The head of the buffer from the South.
+	* NET_RECV_EAST: The head of the buffer from the East.
 * NET_SEND_N: The head of network buffer for data to send. The indexing must match the NET_RECV_N register.
 
 ### Instructions

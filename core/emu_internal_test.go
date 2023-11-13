@@ -30,7 +30,7 @@ var _ = Describe("InstEmulator", func() {
 		It("should wait for data to arrive", func() {
 			s.RecvBufHeadReady[0] = false
 
-			inst := "WAIT, $0, NET_RECV_0"
+			inst := "WAIT, $0, NET_RECV_NORTH"
 
 			ie.RunInst(inst, &s)
 
@@ -41,7 +41,7 @@ var _ = Describe("InstEmulator", func() {
 			s.RecvBufHeadReady[0] = true
 			s.RecvBufHead[0] = 4
 
-			inst := "WAIT, $2, NET_RECV_0"
+			inst := "WAIT, $2, NET_RECV_NORTH"
 
 			ie.RunInst(inst, &s)
 
@@ -55,7 +55,7 @@ var _ = Describe("InstEmulator", func() {
 		It("should wait if sendBuf is busy", func() {
 			s.SendBufHeadBusy[0] = true
 
-			inst := "SEND, NET_SEND_0, $0"
+			inst := "SEND, NET_SEND_NORTH, $0"
 
 			ie.RunInst(inst, &s)
 
@@ -66,7 +66,7 @@ var _ = Describe("InstEmulator", func() {
 			s.SendBufHeadBusy[0] = false
 			s.Registers[0] = 4
 
-			inst := "SEND, NET_SEND_0, $0"
+			inst := "SEND, NET_SEND_NORTH, $0"
 
 			ie.RunInst(inst, &s)
 
