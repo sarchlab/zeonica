@@ -4,6 +4,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/sarchlab/zeonica/cgra"
 )
 
 type coreState struct {
@@ -52,9 +54,20 @@ func (i instEmulator) runWait(inst []string, state *coreState) {
 	src := inst[2]
 
 	i.waitSrcMustBeNetRecvReg(src)
-	srcIndex, err := strconv.Atoi(strings.TrimPrefix(src, "NET_RECV_"))
-	if err != nil {
-		panic(err)
+
+	direction := src[9:]
+	var srcIndex int
+	switch direction {
+	case "NORTH":
+		srcIndex = int(cgra.North)
+	case "WEST":
+		srcIndex = int(cgra.West)
+	case "SOUTH":
+		srcIndex = int(cgra.South)
+	case "EAST":
+		srcIndex = int(cgra.East)
+	default:
+		panic("invalid side")
 	}
 
 	if !state.RecvBufHeadReady[srcIndex] {
@@ -77,9 +90,20 @@ func (i instEmulator) runSend(inst []string, state *coreState) {
 	src := inst[2]
 
 	i.sendDstMustBeNetSendReg(dst)
-	dstIndex, err := strconv.Atoi(strings.TrimPrefix(dst, "NET_SEND_"))
-	if err != nil {
-		panic(err)
+
+	direction := dst[9:]
+	var dstIndex int
+	switch direction {
+	case "NORTH":
+		dstIndex = int(cgra.North)
+	case "WEST":
+		dstIndex = int(cgra.West)
+	case "SOUTH":
+		dstIndex = int(cgra.South)
+	case "EAST":
+		dstIndex = int(cgra.East)
+	default:
+		panic("invalid side")
 	}
 
 	if state.SendBufHeadBusy[dstIndex] {
