@@ -55,7 +55,7 @@ var _ = Describe("InstEmulator", func() {
 		It("should wait if sendBuf is busy", func() {
 			s.SendBufHeadBusy[0] = true
 
-			inst := "SEND, NET_RECV_NORTH, $0"
+			inst := "SEND, NET_SEND_NORTH, $0"
 
 			ie.RunInst(inst, &s)
 
@@ -66,7 +66,7 @@ var _ = Describe("InstEmulator", func() {
 			s.SendBufHeadBusy[0] = false
 			s.Registers[0] = 4
 
-			inst := "SEND, NET_RECV_NORTH, $0"
+			inst := "SEND, NET_SEND_NORTH, $0"
 
 			ie.RunInst(inst, &s)
 
