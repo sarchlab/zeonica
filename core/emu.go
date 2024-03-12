@@ -40,6 +40,7 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 		"CMP":  i.runCmp,
 		"JEQ":  i.runJeq,
 		"DONE": func(_ []string, _ *coreState) { i.runDone() }, // Since runDone might not have parameters
+		"MAC":  i.runMac,
 	}
 
 	if instFunc, ok := instFuncs[instName]; ok {
@@ -252,6 +253,20 @@ func (i instEmulator) runJeq(inst []string, state *coreState) {
 	} else {
 		state.PC++
 	}
+}
+
+func (i instEmulator) runMac(inst []string, state *coreState) {
+	src1 := inst[2]
+	src2 := inst[3]
+	dst := inst[1]
+
+	srcVal1 := i.readOperand(src1, state)
+	srcVal2 := i.readOperand(src2, state)
+	dstVal := i.readOperand(dst, state)
+	dstVal += srcVal1 * srcVal2
+	i.writeOperand(dst, dstVal, state)
+
+	state.PC++
 }
 
 func (i instEmulator) runDone() {
