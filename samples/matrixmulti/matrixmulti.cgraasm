@@ -1,0 +1,7 @@
+START:
+    WAIT, $1, NET_RECV_NORTH
+    WAIT, $2, NET_RECV_WEST
+    MAC, $3, $1, $2
+    SEND, NET_SEND_SOUTH, $1
+    SEND, NET_SEND_EAST, $2
+    JMP, START
