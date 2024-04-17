@@ -30,11 +30,19 @@ func (b Builder) Build(name string) *Core {
 	c.TickingComponent = sim.NewTickingComponent(name, b.engine, b.freq, c)
 	c.state = coreState{
 		Registers:        make([]uint32, 64),
-		RecvBufHead:      make([]uint32, 4),
-		RecvBufHeadReady: make([]bool, 4),
-		SendBufHead:      make([]uint32, 4),
-		SendBufHeadBusy:  make([]bool, 4),
+		RecvBufHead:      make([][]uint32, 4),
+		RecvBufHeadReady: make([][]bool, 4),
+		SendBufHead:      make([][]uint32, 4),
+		SendBufHeadBusy:  make([][]bool, 4),
 	}
+
+	for i := 0; i < 4; i++ {
+		c.state.RecvBufHead[i] = make([]uint32, 4)
+		c.state.RecvBufHeadReady[i] = make([]bool, 4)
+		c.state.SendBufHead[i] = make([]uint32, 4)
+		c.state.SendBufHeadBusy[i] = make([]bool, 4)
+	}
+
 	c.ports = make(map[cgra.Side]*portPair)
 
 	b.makePort(c, cgra.North)

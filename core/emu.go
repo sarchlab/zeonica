@@ -13,10 +13,10 @@ type coreState struct {
 	TileX, TileY     uint32
 	Registers        []uint32
 	Code             []string
-	RecvBufHead      []uint32
-	RecvBufHeadReady []bool
-	SendBufHead      []uint32
-	SendBufHeadBusy  []bool
+	RecvBufHead      [][]uint32 //[Color][Direction]
+	RecvBufHeadReady [][]bool
+	SendBufHead      [][]uint32
+	SendBufHeadBusy  [][]bool
 }
 
 type instEmulator struct {
@@ -32,6 +32,12 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 	if strings.Contains(instName, "CMP") {
 		instName = "CMP"
 	}
+	// alwaysflag := false
+	// if strings.HasPrefix(instName, "@") && !alwaysflag {
+	// 	instName = "SENDREC"
+	// 	alwaysflag = true
+	// 	i.runAlwaysSendRec(tokens, state)
+	// }
 
 	instFuncs := map[string]func([]string, *coreState){
 		"WAIT": i.runWait,
@@ -50,15 +56,10 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 	}
 }
 
-func (i instEmulator) runWait(inst []string, state *coreState) {
-	dst := inst[1]
-	src := inst[2]
-
-	i.waitSrcMustBeNetRecvReg(src)
-
-	direction := src[9:]
+func (i instEmulator) getIndex(side string) int {
 	var srcIndex int
-	switch direction {
+
+	switch side {
 	case "NORTH":
 		srcIndex = int(cgra.North)
 	case "WEST":
@@ -71,12 +72,53 @@ func (i instEmulator) runWait(inst []string, state *coreState) {
 		panic("invalid side")
 	}
 
-	if !state.RecvBufHeadReady[srcIndex] {
+	return srcIndex
+}
+
+func (i instEmulator) RouterSrcMustBeDirection(src string) {
+	arr := []string{"NORTH", "SOUTH", "WEST", "EAST"}
+	res := false
+	for _, s := range arr {
+		if s == src {
+			res = true
+			break
+		}
+	}
+
+	if res {
+		panic("the source of a ROUTER_FORWARD instruction must be directions")
+	}
+}
+
+func (i instEmulator) getColorIndex(color string) int {
+	switch color {
+	case "R":
+		return 0
+	case "Y":
+		return 1
+	case "B":
+		return 2
+	default:
+		panic("Wrong Color")
+	}
+}
+
+func (i instEmulator) runWait(inst []string, state *coreState) {
+	dst := inst[1]
+	src := inst[2]
+	colorIndex := i.getColorIndex(inst[3])
+
+	i.waitSrcMustBeNetRecvReg(src)
+
+	direction := src[9:]
+	srcIndex := i.getIndex(direction)
+
+	if !state.RecvBufHeadReady[colorIndex][srcIndex] {
 		return
 	}
 
-	state.RecvBufHeadReady[srcIndex] = false
-	i.writeOperand(dst, state.RecvBufHead[srcIndex], state)
+	state.RecvBufHeadReady[colorIndex][srcIndex] = false
+	i.writeOperand(dst, state.RecvBufHead[colorIndex][srcIndex], state)
 	state.PC++
 }
 
@@ -89,31 +131,20 @@ func (i instEmulator) waitSrcMustBeNetRecvReg(src string) {
 func (i instEmulator) runSend(inst []string, state *coreState) {
 	dst := inst[1]
 	src := inst[2]
+	colorIndex := i.getColorIndex(inst[3])
 
 	i.sendDstMustBeNetSendReg(dst)
 
 	direction := dst[9:]
-	var dstIndex int
-	switch direction {
-	case "NORTH":
-		dstIndex = int(cgra.North)
-	case "WEST":
-		dstIndex = int(cgra.West)
-	case "SOUTH":
-		dstIndex = int(cgra.South)
-	case "EAST":
-		dstIndex = int(cgra.East)
-	default:
-		panic("invalid side")
-	}
+	dstIndex := i.getIndex(direction)
 
-	if state.SendBufHeadBusy[dstIndex] {
+	if state.SendBufHeadBusy[colorIndex][dstIndex] {
 		return
 	}
 
-	state.SendBufHeadBusy[dstIndex] = true
+	state.SendBufHeadBusy[colorIndex][dstIndex] = true
 	val := i.readOperand(src, state)
-	state.SendBufHead[dstIndex] = val
+	state.SendBufHead[colorIndex][dstIndex] = val
 	state.PC++
 }
 
