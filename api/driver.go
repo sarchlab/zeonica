@@ -18,13 +18,13 @@ type Driver interface {
 	// FeedIn provides the data to the accelerator. The data is fed into the
 	// provides ports. The stride is the difference between the indices of
 	// the data that is sent to adjacent ports in the same cycle.
-	FeedIn(data []uint32, side cgra.Side, portRange [2]int, stride int)
+	FeedIn(data []uint32, side cgra.Side, portRange [2]int, stride int, color string)
 
 	// Collect collects the data from the accelerator. The data is collected
 	// from the provided ports. The stride is the difference between the
 	// indices of the data that is collected from adjacent ports in the same
 	// cycle.
-	Collect(data []uint32, side cgra.Side, portRange [2]int, stride int)
+	Collect(data []uint32, side cgra.Side, portRange [2]int, stride int, color string)
 
 	// MapProgram maps to the provided program to a core at the given cordinate.
 	MapProgram(program string, core [2]int)
@@ -43,8 +43,8 @@ type driverImpl struct {
 	device      cgra.Device
 	portFactory portFactory
 
-	feedInTasks  []*feedInTask
-	collectTasks []*collectTask
+	feedInTasks  [4][]*feedInTask  //Four Directions, every direction has a task queue.
+	collectTasks [4][]*collectTask //Four Directions
 }
 
 // Tick runs the driver for one cycle.
@@ -57,21 +57,24 @@ func (d *driverImpl) Tick(now sim.VTimeInSec) (madeProgress bool) {
 
 func (d *driverImpl) doFeedIn() bool {
 	madeProgress := false
+	for i := 0; i < 4; i++ {
+		for _, task := range d.feedInTasks[i] {
+			madeProgress = d.doOneFeedInTask(task) || madeProgress
+		}
 
-	for _, task := range d.feedInTasks {
-		madeProgress = d.doOneFeedInTask(task) || madeProgress
+		d.removeFinishedFeedInTasks()
 	}
-
-	d.removeFinishedFeedInTasks()
 
 	return madeProgress
 }
 
 func (d *driverImpl) removeFinishedFeedInTasks() {
-	for i := len(d.feedInTasks) - 1; i >= 0; i-- {
-		if d.feedInTasks[i].isFinished() {
-			d.feedInTasks = append(
-				d.feedInTasks[:i], d.feedInTasks[i+1:]...)
+	for i := 0; i < 4; i++ {
+		for j := len(d.feedInTasks[i]) - 1; j >= 0; j-- {
+			if d.feedInTasks[i][j].isFinished() {
+				d.feedInTasks[i] = append(
+					d.feedInTasks[i][:j], d.feedInTasks[i][j+1:]...)
+			}
 		}
 	}
 }
@@ -96,8 +99,10 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 			WithSrc(port).
 			WithDst(task.remotePorts[i]).
 			WithData(task.data[task.round*task.stride+i]).
+			WithColor(task.color).
 			Build()
 		err := port.Send(msg)
+		//fmt.Println(msg)
 		if err != nil {
 			panic("CGRA cannot handle the data rate")
 		}
@@ -112,12 +117,13 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 
 func (d *driverImpl) doCollect() bool {
 	madeProgress := false
+	for i := 0; i < 4; i++ {
+		for _, task := range d.collectTasks[i] {
+			madeProgress = d.doOneCollectTask(task) || madeProgress
+		}
 
-	for _, task := range d.collectTasks {
-		madeProgress = d.doOneCollectTask(task) || madeProgress
+		d.removeFinishedCollectTasks()
 	}
-
-	d.removeFinishedCollectTasks()
 
 	return madeProgress
 }
@@ -149,10 +155,12 @@ func (*driverImpl) allDataReady(task *collectTask) bool {
 }
 
 func (d *driverImpl) removeFinishedCollectTasks() {
-	for i := len(d.collectTasks) - 1; i >= 0; i-- {
-		if d.collectTasks[i].isFinished() {
-			d.collectTasks = append(
-				d.collectTasks[:i], d.collectTasks[i+1:]...)
+	for i := 0; i < 4; i++ {
+		for j := len(d.collectTasks[i]) - 1; j >= 0; j-- {
+			if d.collectTasks[i][j].isFinished() {
+				d.collectTasks[i] = append(
+					d.collectTasks[i][:j], d.collectTasks[i][j+1:]...)
+			}
 		}
 	}
 }
@@ -234,6 +242,7 @@ type feedInTask struct {
 	remotePorts []sim.Port
 
 	stride int
+	color  int
 	round  int
 }
 
@@ -246,15 +255,31 @@ func (d *driverImpl) FeedIn(
 	side cgra.Side,
 	portRange [2]int,
 	stride int,
+	color string,
 ) {
 	task := &feedInTask{
 		data:        data,
 		localPorts:  d.getLocalPorts(side, portRange),
 		remotePorts: d.device.GetSidePorts(side, portRange),
 		stride:      stride,
+		color:       d.getColorIndex(color),
 	}
+	sideIndex := int(side)
+	//fmt.Println(color)
+	d.feedInTasks[sideIndex] = append(d.feedInTasks[sideIndex], task)
+}
 
-	d.feedInTasks = append(d.feedInTasks, task)
+func (d *driverImpl) getColorIndex(color string) int {
+	switch color {
+	case "R":
+		return 0
+	case "Y":
+		return 1
+	case "B":
+		return 2
+	default:
+		panic("Wrong Color")
+	}
 }
 
 func (d *driverImpl) getLocalPorts(
@@ -274,6 +299,7 @@ type collectTask struct {
 	data   []uint32
 	ports  []sim.Port
 	stride int
+	color  int
 	round  int
 }
 
@@ -286,14 +312,18 @@ func (d *driverImpl) Collect(
 	side cgra.Side,
 	portRange [2]int,
 	stride int,
+	color string,
 ) {
 	task := &collectTask{
 		data:   data,
 		ports:  d.getLocalPorts(side, portRange),
 		stride: stride,
+		color:  d.getColorIndex(color),
 	}
 
-	d.collectTasks = append(d.collectTasks, task)
+	sideIndex := int(side)
+	//fmt.Println(color)
+	d.collectTasks[sideIndex] = append(d.collectTasks[sideIndex], task)
 }
 
 // MapProgram dispatches a program to a core.

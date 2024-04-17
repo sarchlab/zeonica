@@ -16,6 +16,8 @@ Special registers include:
 	* NET_RECV_SOUTH: The head of the buffer from the South.
 	* NET_RECV_EAST: The head of the buffer from the East.
 * NET_SEND_N: The head of network buffer for data to send. The indexing must match the NET_RECV_N register.
+* Color: The color of data input in to the tile. It currently could be "R", "Y", "B". You can define the meaning of each color. Example: In passthrough, "R" represent source data.
+* @: @ symbol is a decorator, which will trigger some procedure. These procedures are not controlled by clock.
 
 ### Instructions
 
@@ -23,7 +25,10 @@ All instructions have 2 or 3 operands. The first operand is the destination and 
 
 Here is the instruction list
 
+* @Wait_AND: Wait data from two or more directions are ready, otherwise jump to the bottom of the code.
+* @ROUTER_FORWARD: Send the data from the opposite direction where the data is from. 
 * I_ADD: Integer addition.
+* MAC: Multiply and accumulate.
 * [I/F32]_CMP_[OP]: Integer/F32 greater than comparison. Supported OPs include:
 	* EQ: Equal
 	* NE: Not equal

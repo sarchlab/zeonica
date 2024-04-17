@@ -6,7 +6,8 @@ import "github.com/sarchlab/akita/v3/sim"
 type MoveMsg struct {
 	sim.MsgMeta
 
-	Data uint32
+	Data  uint32
+	Color int
 }
 
 // Meta returns the meta data of the msg.
@@ -19,6 +20,7 @@ type MoveMsgBuilder struct {
 	src, dst sim.Port
 	sendTime sim.VTimeInSec
 	data     uint32
+	color    int
 }
 
 // WithSrc sets the source port of the msg.
@@ -45,6 +47,12 @@ func (m MoveMsgBuilder) WithData(data uint32) MoveMsgBuilder {
 	return m
 }
 
+// WithData sets the color of the msg
+func (m MoveMsgBuilder) WithColor(color int) MoveMsgBuilder {
+	m.color = color
+	return m
+}
+
 // Build creates a MoveMsg.
 func (m MoveMsgBuilder) Build() *MoveMsg {
 	return &MoveMsg{
@@ -54,6 +62,7 @@ func (m MoveMsgBuilder) Build() *MoveMsg {
 			Dst:      m.dst,
 			SendTime: m.sendTime,
 		},
-		Data: m.data,
+		Data:  m.data,
+		Color: m.color,
 	}
 }
