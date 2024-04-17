@@ -32,15 +32,15 @@ func passThrough(driver api.Driver) {
 	src2 := [15]uint32{9, 0, 0, 6, 8, 0, 3, 5, 7, 0, 2, 4, 0, 0, 1}
 	dst := make([]uint32, 9)
 
-	driver.FeedIn(src1[:], cgra.West, [2]int{0, height}, height)
-	driver.FeedIn(src2[:], cgra.North, [2]int{0, width}, width)
+	driver.FeedIn(src1[:], cgra.West, [2]int{0, height}, height, "R")
+	driver.FeedIn(src2[:], cgra.North, [2]int{0, width}, width, "R")
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			driver.MapProgram(matrixMulti, [2]int{x, y})
 		}
 	}
 	driver.Run()
-	driver.Collect(dst, cgra.North, [2]int{0, height}, height)
+	driver.Collect(dst, cgra.North, [2]int{0, height}, height, "Y")
 	for x := width - 1; x > -1; x-- {
 		for y := 0; y < height; y++ {
 			driver.MapProgram(output, [2]int{x, y})
