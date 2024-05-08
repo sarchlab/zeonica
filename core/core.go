@@ -34,55 +34,10 @@ func (c *Core) MapProgram(program []string) {
 
 // Tick runs the program for one cycle.
 func (c *Core) Tick(now sim.VTimeInSec) (madeProgress bool) {
-	// fmt.Println("Before Recv")
-	// fmt.Print("Recv Buffer Head(Recv)")
-	// fmt.Println(c.state.RecvBufHead)
-	// fmt.Print("Recv Buffer Head Ready(Recv)")
-	// fmt.Println(c.state.RecvBufHeadReady)
-	// fmt.Print("Send Buffer Head(SEND)")
-	// fmt.Println(c.state.SendBufHead)
-	// fmt.Print("Send Buffer Head Busy(SEND)")
-	// fmt.Println(c.state.SendBufHeadBusy)
 	madeProgress = c.doRecv() || madeProgress
-	// fmt.Println("After Recv")
-	// fmt.Print("Recv Buffer Head(Recv)")
-	// fmt.Println(c.state.RecvBufHead)
-	// fmt.Print("Recv Buffer Head Ready(Recv)")
-	// fmt.Println(c.state.RecvBufHeadReady)
-	// fmt.Print("Send Buffer Head(SEND)")
-	// fmt.Println(c.state.SendBufHead)
-	// fmt.Print("Send Buffer Head Busy(SEND)")
-	// fmt.Println(c.state.SendBufHeadBusy)
-	c.AlwaysPart()
-	// fmt.Println("After Always")
-	// fmt.Print("Recv Buffer Head(Recv)")
-	// fmt.Println(c.state.RecvBufHead)
-	// fmt.Print("Recv Buffer Head Ready(Recv)")
-	// fmt.Println(c.state.RecvBufHeadReady)
-	// fmt.Print("Send Buffer Head(SEND)")
-	// fmt.Println(c.state.SendBufHead)
-	// fmt.Print("Send Buffer Head Busy(SEND)")
-	// fmt.Println(c.state.SendBufHeadBusy)
+	madeProgress = c.AlwaysPart() || madeProgress
 	madeProgress = c.runProgram() || madeProgress
-	// fmt.Println("After Run")
-	// fmt.Print("Recv Buffer Head(Recv)")
-	// fmt.Println(c.state.RecvBufHead)
-	// fmt.Print("Recv Buffer Head Ready(Recv)")
-	// fmt.Println(c.state.RecvBufHeadReady)
-	// fmt.Print("Send Buffer Head(SEND)")
-	// fmt.Println(c.state.SendBufHead)
-	// fmt.Print("Send Buffer Head Busy(SEND)")
-	// fmt.Println(c.state.SendBufHeadBusy)
 	madeProgress = c.doSend() || madeProgress
-	// fmt.Println("After Send")
-	// fmt.Print("Recv Buffer Head(Recv)")
-	// fmt.Println(c.state.RecvBufHead)
-	// fmt.Print("Recv Buffer Head Ready(Recv)")
-	// fmt.Println(c.state.RecvBufHeadReady)
-	// fmt.Print("Send Buffer Head(SEND)")
-	// fmt.Println(c.state.SendBufHead)
-	// fmt.Print("Send Buffer Head Busy(SEND)")
-	// fmt.Println(c.state.SendBufHeadBusy)
 	return madeProgress
 }
 
@@ -113,10 +68,6 @@ func (c *Core) doSend() bool {
 				c.Name(),
 				msg.Data, msg.Src.Name(), msg.Dst.Name(),
 				color)
-			// fmt.Print("Send Buffer Head(SEND)")
-			// fmt.Println(c.state.SendBufHead)
-			// fmt.Print("Send Buffer Head Busy(SEND)")
-			// fmt.Println(c.state.SendBufHeadBusy)
 			c.state.SendBufHeadBusy[color][i] = false
 		}
 	}
@@ -127,17 +78,18 @@ func (c *Core) doSend() bool {
 func (c *Core) doRecv() bool {
 	madeProgress := false
 
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 4; i++ { //direction
+		item := c.ports[cgra.Side(i)].local.Retrieve(c.Engine.CurrentTime())
+		if item == nil {
+			continue
+		}
+		fmt.Printf("Scanning direction %d(0 is North, 3 is West)\n", i)
 		for color := 0; color < 4; color++ {
+			fmt.Printf("Receiving Data for %s with color %d. Recv buffer head: %+v\n",
+				c.Name(), color, c.state.RecvBufHeadReady[color][i])
 			if c.state.RecvBufHeadReady[color][i] {
 				continue
 			}
-
-			item := c.ports[cgra.Side(i)].local.Retrieve(c.Engine.CurrentTime())
-			if item == nil {
-				continue
-			}
-
 			msg := item.(*cgra.MoveMsg)
 			if color != msg.Color {
 				continue
@@ -150,10 +102,6 @@ func (c *Core) doRecv() bool {
 				c.Name(),
 				msg.Data, msg.Src.Name(), msg.Dst.Name(),
 				color)
-			//fmt.Print("Recv Buffer Head(Recv)")
-			//fmt.Println(c.state.RecvBufHead)
-			//fmt.Print("Recv Buffer Head Ready(Recv)")
-			//fmt.Println(c.state.RecvBufHeadReady)
 			madeProgress = true
 		}
 	}
@@ -185,10 +133,10 @@ func (c *Core) runProgram() bool {
 }
 
 // Distributor for always executing part, these parts are not controlled by cycles.
-func (c *Core) AlwaysPart() {
-	//madeProgress := false //If madeprogress, tick, otherwise, wait
+func (c *Core) AlwaysPart() bool {
+	madeProgress := true //If madeprogress, tick, otherwise, wait
 	if int(c.state.PC) >= len(c.state.Code) {
-		return
+		return false
 	}
 
 	inst := c.state.Code[c.state.PC]
@@ -196,31 +144,32 @@ func (c *Core) AlwaysPart() {
 		c.state.PC++
 		inst = c.state.Code[c.state.PC]
 	}
-
 	for strings.HasPrefix(inst, "@") {
-		if int(c.state.PC) >= len(c.state.Code) {
-			return
-		}
-		inst := c.state.Code[c.state.PC]
 		prevPC := c.state.PC
 		parts := strings.Split(inst, ",")
 		instName := parts[0]
 		instName = strings.TrimLeft(instName, "@")
+		fmt.Println(inst)
 		switch instName {
 		case "ROUTER_FORWARD":
-			c.Router(parts[1], parts[2], parts[3])
+			madeProgress = c.Router(parts[1], parts[2], parts[3]) || madeProgress
 		case "WAIT_AND":
-			c.WaitAnd(parts[1], parts[2], parts[3])
+			c.WaitAnd(parts[1], parts[2], parts[3]) //Pending modification
 		default:
 			panic("Invalid Instruction")
 		}
 		c.state.PC++
 		nextPC := c.state.PC
 		if prevPC == nextPC {
-			return
+			return false
 		}
 		fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
+		if int(c.state.PC) >= len(c.state.Code) {
+			return false
+		}
+		inst = c.state.Code[c.state.PC]
 	}
+	return madeProgress
 }
 
 // If data from two sources is not ready, wait to ready.
@@ -240,30 +189,21 @@ func (c *Core) WaitAnd(src1 string, src2 string, color string) {
 }
 
 // Wait for data is ready and send.
-func (c *Core) Router(dst string, src string, color string) {
+func (c *Core) Router(dst string, src string, color string) bool {
 
 	srcIndex := c.getIndex(src)
 	dstIndex := c.getIndex(dst)
 	colorIndex := c.emu.getColorIndex(color)
-
 	//The data is not ready.
 	if !c.state.RecvBufHeadReady[colorIndex][srcIndex] {
-		fmt.Println("Router Src not READY")
-		fmt.Print(c.state.RecvBufHeadReady[colorIndex])
-		fmt.Println()
-		//c.state.PC = uint32(len(c.state.Code))
-		//return false
-		return
+		fmt.Printf("Router Src not READY %s\n", c.Name())
+		return false
 	}
 
 	//The receiver is not ready.
 	if c.state.SendBufHeadBusy[colorIndex][dstIndex] {
-		fmt.Println("Router Dst not READY")
-		fmt.Print(c.state.SendBufHead[colorIndex])
-		fmt.Println()
-		//c.state.PC = uint32(len(c.state.Code))
-		//return false
-		return
+		fmt.Printf("Router Dst not READY %s\n", c.Name())
+		return false
 	}
 
 	c.state.SendBufHeadBusy[colorIndex][dstIndex] = true
@@ -274,7 +214,7 @@ func (c *Core) Router(dst string, src string, color string) {
 		c.state.RecvBufHead[colorIndex][srcIndex], src, dst)
 	fmt.Print("Send Buffer Head(ROUTER)")
 	fmt.Println(c.state.SendBufHead)
-	//return true
+	return true
 }
 
 // If the source data is available, send the result to next core after computation.

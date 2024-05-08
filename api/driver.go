@@ -57,7 +57,7 @@ func (d *driverImpl) Tick(now sim.VTimeInSec) (madeProgress bool) {
 
 func (d *driverImpl) doFeedIn() bool {
 	madeProgress := false
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 4; i++ { //Colors
 		for _, task := range d.feedInTasks[i] {
 			madeProgress = d.doOneFeedInTask(task) || madeProgress
 		}
@@ -69,7 +69,7 @@ func (d *driverImpl) doFeedIn() bool {
 }
 
 func (d *driverImpl) removeFinishedFeedInTasks() {
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 4; i++ { //Colors
 		for j := len(d.feedInTasks[i]) - 1; j >= 0; j-- {
 			if d.feedInTasks[i][j].isFinished() {
 				d.feedInTasks[i] = append(
@@ -106,7 +106,8 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 		if err != nil {
 			panic("CGRA cannot handle the data rate")
 		}
-
+		fmt.Printf("Feed in %d to ", task.data[task.round*task.stride+i])
+		fmt.Println(task.remotePorts[i])
 		madeProgress = true
 	}
 
