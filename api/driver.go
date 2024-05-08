@@ -106,8 +106,7 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 		if err != nil {
 			panic("CGRA cannot handle the data rate")
 		}
-		fmt.Printf("Feed in %d to ", task.data[task.round*task.stride+i])
-		fmt.Println(task.remotePorts[i])
+		//fmt.Printf("Feed in %d to %v\n", task.data[task.round*task.stride+i], task.remotePorts[i])
 		madeProgress = true
 	}
 

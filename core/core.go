@@ -83,10 +83,10 @@ func (c *Core) doRecv() bool {
 		if item == nil {
 			continue
 		}
-		fmt.Printf("Scanning direction %d(0 is North, 3 is West)\n", i)
+		//fmt.Printf("%s Scanning direction %d(0 is North, 3 is West)\n", c.Name(), i)
 		for color := 0; color < 4; color++ {
-			fmt.Printf("Receiving Data for %s with color %d. Recv buffer head: %+v\n",
-				c.Name(), color, c.state.RecvBufHeadReady[color][i])
+			//fmt.Printf("%s Receiving Data with color %d. Recv buffer head: %+v\n",
+			//	c.Name(), color, c.state.RecvBufHeadReady[color][i])
 			if c.state.RecvBufHeadReady[color][i] {
 				continue
 			}
@@ -149,7 +149,6 @@ func (c *Core) AlwaysPart() bool {
 		parts := strings.Split(inst, ",")
 		instName := parts[0]
 		instName = strings.TrimLeft(instName, "@")
-		fmt.Println(inst)
 		switch instName {
 		case "ROUTER_FORWARD":
 			madeProgress = c.Router(parts[1], parts[2], parts[3]) || madeProgress
@@ -211,9 +210,7 @@ func (c *Core) Router(dst string, src string, color string) bool {
 	fmt.Printf("%10f, %s, ROUTER %d %s->%s\n",
 		c.Engine.CurrentTime()*1e9,
 		c.Name(),
-		c.state.RecvBufHead[colorIndex][srcIndex], src, dst)
-	fmt.Print("Send Buffer Head(ROUTER)")
-	fmt.Println(c.state.SendBufHead)
+		c.state.RecvBufHead[colorIndex][srcIndex], c.Name(), dst)
 	return true
 }
 
