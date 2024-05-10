@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -8,15 +9,31 @@ import (
 	"github.com/sarchlab/zeonica/cgra"
 )
 
+type routingRule struct {
+	src   cgra.Side
+	dst   cgra.Side
+	color string
+}
+
+type trigger struct {
+	src   cgra.Side
+	color string
+	pc    int
+}
+
 type coreState struct {
-	PC               uint32
-	TileX, TileY     uint32
-	Registers        []uint32
-	Code             []string
+	PC           uint32
+	TileX, TileY uint32
+	Registers    []uint32
+	Code         []string
+
 	RecvBufHead      [][]uint32 //[Color][Direction]
 	RecvBufHeadReady [][]bool
 	SendBufHead      [][]uint32
 	SendBufHeadBusy  [][]bool
+
+	routingRules []*routingRule
+	triggers     []*trigger
 }
 
 type instEmulator struct {
@@ -40,13 +57,14 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 	// }
 
 	instFuncs := map[string]func([]string, *coreState){
-		"WAIT": i.runWait,
-		"SEND": i.runSend,
-		"JMP":  i.runJmp,
-		"CMP":  i.runCmp,
-		"JEQ":  i.runJeq,
-		"DONE": func(_ []string, _ *coreState) { i.runDone() }, // Since runDone might not have parameters
-		"MAC":  i.runMac,
+		"WAIT":           i.runWait,
+		"SEND":           i.runSend,
+		"JMP":            i.runJmp,
+		"CMP":            i.runCmp,
+		"JEQ":            i.runJeq,
+		"DONE":           func(_ []string, _ *coreState) { i.runDone() }, // Since runDone might not have parameters
+		"MAC":            i.runMac,
+		"CONFIG_ROUTING": i.configRouting,
 	}
 
 	if instFunc, ok := instFuncs[instName]; ok {
@@ -302,4 +320,58 @@ func (i instEmulator) runMac(inst []string, state *coreState) {
 
 func (i instEmulator) runDone() {
 	// Do nothing.
+}
+
+func (i instEmulator) configRouting(inst []string, state *coreState) {
+	src := inst[2]
+	dst := inst[1]
+	color := inst[3]
+
+	rule := &routingRule{
+		src:   cgra.Side(i.getIndex(src)),
+		dst:   cgra.Side(i.getIndex(dst)),
+		color: color,
+	}
+
+	i.addRoutingRule(rule, state)
+	state.PC++
+}
+
+func (i instEmulator) addRoutingRule(rule *routingRule, state *coreState) {
+	for _, r := range state.routingRules {
+		if r.src == rule.src && r.color == rule.color {
+			r.dst = rule.dst
+			return
+		}
+	}
+
+	state.routingRules = append(state.routingRules, rule)
+}
+
+func (i instEmulator) runRoutingRules(state *coreState) (madeProgress bool) {
+	for _, rule := range state.routingRules {
+		srcIndex := int(rule.src)
+		dstIndex := int(rule.dst)
+		colorIndex := i.getColorIndex(rule.color)
+
+		if !state.RecvBufHeadReady[colorIndex][srcIndex] {
+			continue
+		}
+
+		if state.SendBufHeadBusy[colorIndex][dstIndex] {
+			continue
+		}
+
+		state.RecvBufHeadReady[colorIndex][srcIndex] = false
+		state.SendBufHeadBusy[colorIndex][dstIndex] = true
+		state.SendBufHead[colorIndex][dstIndex] =
+			state.RecvBufHead[colorIndex][srcIndex]
+		madeProgress = true
+
+		fmt.Printf("Tile[%d][%d], %s->%s, %s\n",
+			state.TileX, state.TileY,
+			rule.src.Name(), rule.dst.Name(), rule.color)
+	}
+
+	return madeProgress
 }

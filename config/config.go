@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 
+	"github.com/sarchlab/akita/v3/monitoring"
 	"github.com/sarchlab/akita/v3/noc/networking/mesh"
 	"github.com/sarchlab/akita/v3/sim"
 	"github.com/sarchlab/zeonica/cgra"
@@ -14,6 +15,7 @@ import (
 type DeviceBuilder struct {
 	engine        sim.Engine
 	freq          sim.Freq
+	monitor       *monitoring.Monitor
 	width, height int
 }
 
@@ -26,6 +28,12 @@ func (d DeviceBuilder) WithEngine(engine sim.Engine) DeviceBuilder {
 // WithFreq sets the frequency of the device.
 func (d DeviceBuilder) WithFreq(freq sim.Freq) DeviceBuilder {
 	d.freq = freq
+	return d
+}
+
+// WithMonitor sets the monitor that monitors the device.
+func (d DeviceBuilder) WithMonitor(monitor *monitoring.Monitor) DeviceBuilder {
+	d.monitor = monitor
 	return d
 }
 
@@ -55,6 +63,9 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 		WithFreq(d.freq).
 		WithSwitchLatency(1).
 		WithBandwidth(1)
+	if d.monitor != nil {
+		nocConnector = nocConnector.WithMonitor(d.monitor)
+	}
 	nocConnector.CreateNetwork(name + ".Mesh")
 
 	d.createTiles(dev, name, nocConnector)
@@ -79,6 +90,10 @@ func (d DeviceBuilder) createTiles(
 				WithEngine(d.engine).
 				WithFreq(d.freq).
 				Build(coreName)
+
+			if d.monitor != nil {
+				d.monitor.RegisterComponent(tile.Core)
+			}
 
 			dev.Tiles[y][x] = tile
 
