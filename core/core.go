@@ -35,7 +35,8 @@ func (c *Core) MapProgram(program []string) {
 // Tick runs the program for one cycle.
 func (c *Core) Tick(now sim.VTimeInSec) (madeProgress bool) {
 	madeProgress = c.doRecv() || madeProgress
-	madeProgress = c.AlwaysPart() || madeProgress
+	// madeProgress = c.AlwaysPart() || madeProgress
+	madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
 	madeProgress = c.runProgram() || madeProgress
 	madeProgress = c.doSend() || madeProgress
 	return madeProgress
@@ -79,10 +80,15 @@ func (c *Core) doRecv() bool {
 	madeProgress := false
 
 	for i := 0; i < 4; i++ { //direction
-		item := c.ports[cgra.Side(i)].local.Retrieve(c.Engine.CurrentTime())
+		item := c.ports[cgra.Side(i)].local.Peek()
 		if item == nil {
 			continue
 		}
+
+		// fmt.Printf("%10f, %s, %d retrieved\n",
+		// 	c.Engine.CurrentTime()*1e9,
+		// 	c.Name(), cgra.Side(i))
+
 		//fmt.Printf("%s Scanning direction %d(0 is North, 3 is West)\n", c.Name(), i)
 		for color := 0; color < 4; color++ {
 			//fmt.Printf("%s Receiving Data with color %d. Recv buffer head: %+v\n",
@@ -90,10 +96,12 @@ func (c *Core) doRecv() bool {
 			if c.state.RecvBufHeadReady[color][i] {
 				continue
 			}
+
 			msg := item.(*cgra.MoveMsg)
 			if color != msg.Color {
 				continue
 			}
+
 			c.state.RecvBufHeadReady[color][i] = true
 			c.state.RecvBufHead[color][i] = msg.Data
 
@@ -102,6 +110,8 @@ func (c *Core) doRecv() bool {
 				c.Name(),
 				msg.Data, msg.Src.Name(), msg.Dst.Name(),
 				color)
+
+			c.ports[cgra.Side(i)].local.Retrieve(c.Engine.CurrentTime())
 			madeProgress = true
 		}
 	}
@@ -144,11 +154,13 @@ func (c *Core) AlwaysPart() bool {
 		c.state.PC++
 		inst = c.state.Code[c.state.PC]
 	}
+
 	for strings.HasPrefix(inst, "@") {
 		prevPC := c.state.PC
 		parts := strings.Split(inst, ",")
 		instName := parts[0]
 		instName = strings.TrimLeft(instName, "@")
+
 		switch instName {
 		case "ROUTER_FORWARD":
 			madeProgress = c.Router(parts[1], parts[2], parts[3]) || madeProgress
@@ -157,17 +169,21 @@ func (c *Core) AlwaysPart() bool {
 		default:
 			panic("Invalid Instruction")
 		}
+
 		c.state.PC++
 		nextPC := c.state.PC
 		if prevPC == nextPC {
 			return false
 		}
+
 		fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
 		if int(c.state.PC) >= len(c.state.Code) {
 			return false
 		}
+
 		inst = c.state.Code[c.state.PC]
 	}
+
 	return madeProgress
 }
 

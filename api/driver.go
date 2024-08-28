@@ -11,6 +11,8 @@ import (
 
 // Driver provides the interface to control an accelerator.
 type Driver interface {
+	sim.Component
+
 	// RegisterDevice registers a device to the driver. The driver will
 	// establish connections to the device.
 	RegisterDevice(device cgra.Device)
@@ -106,7 +108,10 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 		if err != nil {
 			panic("CGRA cannot handle the data rate")
 		}
-		//fmt.Printf("Feed in %d to %v\n", task.data[task.round*task.stride+i], task.remotePorts[i])
+		fmt.Printf("%10f, Feed in %d to %s\n",
+			d.Engine.CurrentTime()*1e9,
+			task.data[task.round*task.stride+i],
+			task.remotePorts[i].Name())
 		madeProgress = true
 	}
 
