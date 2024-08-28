@@ -85,9 +85,9 @@ func (c *Core) doRecv() bool {
 			continue
 		}
 
-		fmt.Printf("%10f, %s, retrieved\n",
-			c.Engine.CurrentTime()*1e9,
-			c.Name())
+		// fmt.Printf("%10f, %s, %d retrieved\n",
+		// 	c.Engine.CurrentTime()*1e9,
+		// 	c.Name(), cgra.Side(i))
 
 		//fmt.Printf("%s Scanning direction %d(0 is North, 3 is West)\n", c.Name(), i)
 		for color := 0; color < 4; color++ {
