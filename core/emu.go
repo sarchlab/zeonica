@@ -15,11 +15,11 @@ type routingRule struct {
 	color string
 }
 
-// type trigger struct {
-// 	src   cgra.Side
-// 	color string
-// 	pc    int
-// }
+type Trigger struct {
+	src    [4]bool
+	color  int
+	branch string
+}
 
 type coreState struct {
 	PC           uint32
@@ -33,7 +33,7 @@ type coreState struct {
 	SendBufHeadBusy  [][]bool
 
 	routingRules []*routingRule
-	//triggers     []*trigger
+	triggers     []*Trigger
 }
 
 type instEmulator struct {
@@ -68,10 +68,11 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 		"CONFIG_ROUTING":   i.runConfigRouting,
 		"TRIGGER_SEND":     i.runTriggerSend,
 		"TRIGGER_TWO_SIDE": i.runTriggerTwoSide,
+		"TRIGGER_ONE_SIDE": i.runTriggerOneSide,
 		"ADDI":             i.runIAdd,
 		"IDLE":             func(_ []string, state *coreState) { i.runIdle(state) },
 		"RECV_SEND":        i.runRecvSend,
-		"TRIGGER_ONE_SIDE": i.runTriggerOneSide,
+		"SLEEP":            i.runSleep,
 	}
 
 	if instFunc, ok := instFuncs[instName]; ok {
@@ -406,33 +407,33 @@ func (i instEmulator) addRoutingRule(rule *routingRule, state *coreState) {
 	state.routingRules = append(state.routingRules, rule)
 }
 
-func (i instEmulator) runRoutingRules(state *coreState) (madeProgress bool) {
-	for _, rule := range state.routingRules {
-		srcIndex := int(rule.src)
-		dstIndex := int(rule.dst)
-		colorIndex := i.getColorIndex(rule.color)
+// func (i instEmulator) runRoutingRules(state *coreState) (madeProgress bool) {
+// 	for _, rule := range state.routingRules {
+// 		srcIndex := int(rule.src)
+// 		dstIndex := int(rule.dst)
+// 		colorIndex := i.getColorIndex(rule.color)
 
-		if !state.RecvBufHeadReady[colorIndex][srcIndex] {
-			continue
-		}
+// 		if !state.RecvBufHeadReady[colorIndex][srcIndex] {
+// 			continue
+// 		}
 
-		if state.SendBufHeadBusy[colorIndex][dstIndex] {
-			continue
-		}
+// 		if state.SendBufHeadBusy[colorIndex][dstIndex] {
+// 			continue
+// 		}
 
-		state.RecvBufHeadReady[colorIndex][srcIndex] = false
-		state.SendBufHeadBusy[colorIndex][dstIndex] = true
-		state.SendBufHead[colorIndex][dstIndex] =
-			state.RecvBufHead[colorIndex][srcIndex]
-		madeProgress = true
+// 		state.RecvBufHeadReady[colorIndex][srcIndex] = false
+// 		state.SendBufHeadBusy[colorIndex][dstIndex] = true
+// 		state.SendBufHead[colorIndex][dstIndex] =
+// 			state.RecvBufHead[colorIndex][srcIndex]
+// 		madeProgress = true
 
-		fmt.Printf("Tile[%d][%d], %s->%s, %s\n",
-			state.TileX, state.TileY,
-			rule.src.Name(), rule.dst.Name(), rule.color)
-	}
+// 		fmt.Printf("Tile[%d][%d], %s->%s, %s\n",
+// 			state.TileX, state.TileY,
+// 			rule.src.Name(), rule.dst.Name(), rule.color)
+// 	}
 
-	return madeProgress
-}
+// 	return madeProgress
+// }
 
 /**
  * @description: If data is sent to the src side of the current tile, the instruction will receive it,
@@ -488,6 +489,15 @@ func (i instEmulator) runTriggerTwoSide(inst []string, state *coreState) {
 		return
 	}
 	fmt.Print("Untriggered\n")
+	// Store the trigger into state trigger list.
+	trigger := &Trigger{
+		color:  color1Index,
+		branch: codeBlock,
+	}
+	trigger.src[src1Index] = true
+	trigger.src[src2Index] = true
+
+	i.addTrigger(trigger, state)
 	state.PC++
 }
 
@@ -509,6 +519,22 @@ func (i instEmulator) runTriggerOneSide(inst []string, state *coreState) {
 		return
 	}
 	state.PC++
+}
+
+// Add new trigger or modify existing trigger.
+func (i instEmulator) addTrigger(trigger *Trigger, state *coreState) {
+	for _, t := range state.triggers {
+		if t.src[0] == trigger.src[0] &&
+			t.src[1] == trigger.src[1] &&
+			t.src[2] == trigger.src[2] &&
+			t.src[3] == trigger.src[3] &&
+			t.color == trigger.color {
+			t.branch = trigger.branch
+			return
+		}
+	}
+
+	state.triggers = append(state.triggers, trigger)
 }
 
 /**
@@ -577,4 +603,28 @@ func (i instEmulator) runRecvSend(inst []string, state *coreState) {
 	state.SendBufHeadBusy[dstColorIndex][dstIndex] = true
 	state.SendBufHead[dstColorIndex][dstIndex] = val
 	state.PC++
+}
+
+// Sleep
+// It will go through all the triggers in the codes and to find the first fulfilled one
+// and jump to the branch
+func (i instEmulator) runSleep(inst []string, state *coreState) {
+
+	for _, t := range state.triggers {
+		flag := false
+		color := t.color
+		branch := t.branch
+		for i := 0; i < 4; i++ {
+			if t.src[i] && state.RecvBufHeadReady[color][i] {
+				flag = flag && true
+			} else {
+				flag = flag && false
+			}
+		}
+		if flag {
+			i.Jump(branch, state)
+		}
+	}
+
+	//No PC++. We want this part is a cycle until one trigger is fulfilled.
 }

@@ -1,12 +1,12 @@
 START:
     TRIGGER_TWO_SIDE, COMPUT, WEST_R, NORTH_R
     TRIGGER_ONE_SIDE, SHIFT, NORTH_B 
-    JMP, START sleep for all possible trigger
+    SLEEP
 COMPUT:
     RECV_SEND, SOUTH_R, $1, NORTH_R
     RECV_SEND, EAST_R, $2, WEST_R
     MAC, $3, $1, $2
-    JMP, START sleep for all possible trigger
+    SLEEP
 SHIFT:
     RECV_SEND, SOUTH_B, $3, NORTH_B
-    sleep for all possible trigger
+    SLEEP
