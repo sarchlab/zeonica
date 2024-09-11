@@ -35,7 +35,7 @@ func (c *Core) MapProgram(program []string) {
 func (c *Core) Tick(now sim.VTimeInSec) (madeProgress bool) {
 	madeProgress = c.doRecv() || madeProgress
 	// madeProgress = c.AlwaysPart() || madeProgress
-	madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
+	// madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
 	madeProgress = c.runProgram() || madeProgress
 	madeProgress = c.doSend() || madeProgress
 	return madeProgress
