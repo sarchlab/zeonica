@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/sarchlab/akita/v3/sim"
 	"github.com/sarchlab/zeonica/cgra"
@@ -143,49 +142,49 @@ func (c *Core) runProgram() bool {
 }
 
 // Distributor for always executing part, these parts are not controlled by cycles.
-func (c *Core) AlwaysPart() bool {
-	madeProgress := true //If madeprogress, tick, otherwise, wait
-	if int(c.state.PC) >= len(c.state.Code) {
-		return false
-	}
+// func (c *Core) AlwaysPart() bool {
+// 	madeProgress := true //If madeprogress, tick, otherwise, wait
+// 	if int(c.state.PC) >= len(c.state.Code) {
+// 		return false
+// 	}
 
-	inst := c.state.Code[c.state.PC]
-	for inst[len(inst)-1] == ':' {
-		c.state.PC++
-		inst = c.state.Code[c.state.PC]
-	}
+// 	inst := c.state.Code[c.state.PC]
+// 	for inst[len(inst)-1] == ':' {
+// 		c.state.PC++
+// 		inst = c.state.Code[c.state.PC]
+// 	}
 
-	for strings.HasPrefix(inst, "@") {
-		prevPC := c.state.PC
-		parts := strings.Split(inst, ",")
-		instName := parts[0]
-		instName = strings.TrimLeft(instName, "@")
+// 	for strings.HasPrefix(inst, "@") {
+// 		prevPC := c.state.PC
+// 		parts := strings.Split(inst, ",")
+// 		instName := parts[0]
+// 		instName = strings.TrimLeft(instName, "@")
 
-		switch instName {
-		case "ROUTER_FORWARD":
-			madeProgress = c.Router(parts[1], parts[2], parts[3]) || madeProgress
-		case "WAIT_AND":
-			c.WaitAnd(parts[1], parts[2], parts[3]) //Pending modification
-		default:
-			panic("Invalid Instruction")
-		}
+// 		switch instName {
+// 		case "ROUTER_FORWARD":
+// 			madeProgress = c.Router(parts[1], parts[2], parts[3]) || madeProgress
+// 		case "WAIT_AND":
+// 			c.WaitAnd(parts[1], parts[2], parts[3]) //Pending modification
+// 		default:
+// 			panic("Invalid Instruction")
+// 		}
 
-		c.state.PC++
-		nextPC := c.state.PC
-		if prevPC == nextPC {
-			return false
-		}
+// 		c.state.PC++
+// 		nextPC := c.state.PC
+// 		if prevPC == nextPC {
+// 			return false
+// 		}
 
-		fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
-		if int(c.state.PC) >= len(c.state.Code) {
-			return false
-		}
+// 		fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
+// 		if int(c.state.PC) >= len(c.state.Code) {
+// 			return false
+// 		}
 
-		inst = c.state.Code[c.state.PC]
-	}
+// 		inst = c.state.Code[c.state.PC]
+// 	}
 
-	return madeProgress
-}
+// 	return madeProgress
+// }
 
 // If data from two sources is not ready, wait to ready.
 func (c *Core) WaitAnd(src1 string, src2 string, color string) {
