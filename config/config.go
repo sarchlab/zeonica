@@ -85,7 +85,7 @@ func (d DeviceBuilder) createTiles(
 		dev.Tiles[y] = make([]*tile, d.width)
 		for x := 0; x < d.width; x++ {
 			tile := &tile{}
-			coreName := fmt.Sprintf("%s.Tile[%d][%d].Core", name, x, y)
+			coreName := fmt.Sprintf("%s.Tile[%d][%d].Core", name, y, x)
 			tile.Core = core.Builder{}.
 				WithEngine(d.engine).
 				WithFreq(d.freq).
