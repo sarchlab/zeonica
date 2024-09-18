@@ -7,7 +7,7 @@ import (
 
 type tileCore interface {
 	sim.Component
-	MapProgram(program []string)
+	MapProgram(program []string, x int, y int)
 	SetRemotePort(side cgra.Side, port sim.Port)
 }
 
@@ -37,8 +37,8 @@ func (t tile) SetRemotePort(side cgra.Side, port sim.Port) {
 }
 
 // MapProgram sets the program that the tile needs to run.
-func (t tile) MapProgram(program []string) {
-	t.Core.MapProgram(program)
+func (t tile) MapProgram(program []string, x int, y int) {
+	t.Core.MapProgram(program, x, y)
 }
 
 // A Device is a CGRA device that includes a large number of tiles. Tiles can be

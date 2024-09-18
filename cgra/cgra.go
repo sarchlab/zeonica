@@ -35,7 +35,7 @@ func (s Side) Name() string {
 type Tile interface {
 	GetPort(side Side) sim.Port
 	SetRemotePort(side Side, port sim.Port)
-	MapProgram(program []string)
+	MapProgram(program []string, x int, y int)
 }
 
 // A Device is a CGRA device.

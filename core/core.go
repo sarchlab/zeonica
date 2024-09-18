@@ -26,9 +26,11 @@ func (c *Core) SetRemotePort(side cgra.Side, remote sim.Port) {
 }
 
 // MapProgram sets the program that the core needs to run.
-func (c *Core) MapProgram(program []string) {
+func (c *Core) MapProgram(program []string, x int, y int) {
 	c.state.Code = program
 	c.state.PC = 0
+	c.state.TileX = uint32(x)
+	c.state.TileY = uint32(y)
 }
 
 // Tick runs the program for one cycle.
