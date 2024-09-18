@@ -201,7 +201,7 @@ func (i instEmulator) Jump(dst string, state *coreState) {
 	for i := 0; i < len(state.Code); i++ {
 		line := strings.Trim(state.Code[i], " \t\n")
 		if strings.HasPrefix(line, dst) && strings.HasSuffix(line, ":") {
-			state.PC = uint32(i)
+			state.PC = uint32(i) + 1
 			return
 		}
 	}
@@ -482,14 +482,7 @@ func (i instEmulator) runTriggerTwoSide(inst []string, state *coreState) {
 	color1Index := i.getColorIndex(parts1[1])
 	color2Index := i.getColorIndex(parts2[1])
 
-	if state.RecvBufHeadReady[color1Index][src1Index] &&
-		state.RecvBufHeadReady[color2Index][src2Index] {
-		fmt.Print("Triggered\n")
-		i.Jump(codeBlock, state)
-		return
-	}
-	fmt.Print("Untriggered\n")
-	// Store the trigger into state trigger list.
+	// Store the trigger into state trigger list whether triggered or not.
 	trigger := &Trigger{
 		color:  color1Index,
 		branch: codeBlock,
@@ -498,6 +491,14 @@ func (i instEmulator) runTriggerTwoSide(inst []string, state *coreState) {
 	trigger.src[src2Index] = true
 
 	i.addTrigger(trigger, state)
+
+	if state.RecvBufHeadReady[color1Index][src1Index] &&
+		state.RecvBufHeadReady[color2Index][src2Index] {
+		//fmt.Print("Triggered\n")
+		i.Jump(codeBlock, state)
+		return
+	}
+	//fmt.Print("Untriggered\n")
 	state.PC++
 }
 
@@ -514,10 +515,17 @@ func (i instEmulator) runTriggerOneSide(inst []string, state *coreState) {
 	srcIndex := i.getDirecIndex(parts[0])
 	colorIndex := i.getColorIndex(parts[1])
 
+	trigger := &Trigger{
+		color:  colorIndex,
+		branch: codeBlock,
+	}
+	trigger.src[srcIndex] = true
 	if state.RecvBufHeadReady[colorIndex][srcIndex] {
 		i.Jump(codeBlock, state)
+		//fmt.Print("Triggered\n")
 		return
 	}
+	//fmt.Print("Untriggered\n")
 	state.PC++
 }
 
@@ -609,22 +617,22 @@ func (i instEmulator) runRecvSend(inst []string, state *coreState) {
 // It will go through all the triggers in the codes and to find the first fulfilled one
 // and jump to the branch
 func (i instEmulator) runSleep(inst []string, state *coreState) {
-
 	for _, t := range state.triggers {
-		flag := false
+		flag := true
 		color := t.color
 		branch := t.branch
 		for i := 0; i < 4; i++ {
-			if t.src[i] && state.RecvBufHeadReady[color][i] {
-				flag = flag && true
-			} else {
-				flag = flag && false
+			if t.src[i] && !(state.RecvBufHeadReady[color][i]) {
+				flag = false
 			}
 		}
 		if flag {
+			//fmt.Printf("[%d][%d]Sleep: Triggered: %s\n", state.TileX, state.TileY, t.branch)
 			i.Jump(branch, state)
+			return
 		}
 	}
-
+	//fmt.Printf("[%d][%d]Sleep: Untriggered. PC%d\n", state.TileX, state.TileY, state.PC)
+	// When sleep, register all registers.
 	//No PC++. We want this part is a cycle until one trigger is fulfilled.
 }
