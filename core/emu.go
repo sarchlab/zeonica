@@ -60,9 +60,9 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 		"WAIT":             i.runWait,
 		"SEND":             i.runSend,
 		"JMP":              i.runJmp,
-		"CMP":              i.runCmp,
 		"JEQ":              i.runJeq,
 		"JNE":              i.runJne,
+		"CMP":              i.runCmp,
 		"DONE":             func(_ []string, _ *coreState) { i.runDone() }, // Since runDone might not have parameters
 		"MAC":              i.runMac,
 		"CONFIG_ROUTING":   i.runConfigRouting,
@@ -72,6 +72,7 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 		"ADDI":             i.runIAdd,
 		"IDLE":             func(_ []string, state *coreState) { i.runIdle(state) },
 		"RECV_SEND":        i.runRecvSend,
+		"SEND_RECV":        i.runSendRecv,
 		"SLEEP":            i.runSleep,
 	}
 
@@ -635,4 +636,36 @@ func (i instEmulator) runSleep(inst []string, state *coreState) {
 	//fmt.Printf("[%d][%d]Sleep: Untriggered. PC%d\n", state.TileX, state.TileY, state.PC)
 	// When sleep, register all registers.
 	//No PC++. We want this part is a cycle until one trigger is fulfilled.
+}
+
+func (i instEmulator) runSendRecv(inst []string, state *coreState) {
+	dst := inst[1]
+	dstReg := inst[2]
+	src := inst[3]
+
+	srcParts := strings.Split(src, "_")
+	dstParts := strings.Split(dst, "_")
+
+	srcIndex := i.getDirecIndex(srcParts[0])
+	dstIndex := i.getDirecIndex(dstParts[0])
+	srcColorIndex := i.getColorIndex(srcParts[1])
+	dstColorIndex := i.getColorIndex(dstParts[1])
+
+	if !state.RecvBufHeadReady[srcColorIndex][srcIndex] {
+		return
+	}
+
+	if state.SendBufHeadBusy[dstColorIndex][dstIndex] {
+		return
+	}
+	sendVal := i.readOperand(dstReg, state)
+
+	state.SendBufHeadBusy[dstColorIndex][dstIndex] = true
+	state.SendBufHead[dstColorIndex][dstIndex] = sendVal
+
+	val := state.RecvBufHead[srcColorIndex][srcIndex]
+	state.RecvBufHeadReady[srcColorIndex][srcIndex] = false
+
+	i.writeOperand(dstReg, val, state)
+	state.PC++
 }
