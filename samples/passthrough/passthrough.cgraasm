@@ -1,4 +1,5 @@
 START:
-	WAIT, $0, NET_RECV_WEST, R
+	WAIT, $0, NET_RECV_WEST, R #test comment
 	SEND, NET_SEND_EAST, $0, R
+	#test comment
 	JMP, START

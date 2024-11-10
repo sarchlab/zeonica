@@ -65,21 +65,26 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 		"CMP":              i.runCmp,
 		"DONE":             func(_ []string, _ *coreState) { i.runDone() }, // Since runDone might not have parameters
 		"MAC":              i.runMac,
+		"MUL":				i.runMul,
 		"CONFIG_ROUTING":   i.runConfigRouting,
 		"TRIGGER_SEND":     i.runTriggerSend,
-		"TRIGGER_TWO_SIDE": i.runTriggerTwoSide,
+		"TRIGGER_TWO_SIDE": i.runTriggerTwoSide, // must be from two direction
 		"TRIGGER_ONE_SIDE": i.runTriggerOneSide,
 		"ADDI":             i.runIAdd,
 		"IDLE":             func(_ []string, state *coreState) { i.runIdle(state) },
 		"RECV_SEND":        i.runRecvSend,
 		"SEND_RECV":        i.runSendRecv,
 		"SLEEP":            i.runSleep,
+		"MOV":				i.runMov,
+		//"ADDF": 			i.runFAdd,
+		//ld, st instructions
 	}
 
 	if instFunc, ok := instFuncs[instName]; ok {
 		instFunc(tokens, state)
 	} else {
-		panic("unknown instruction " + inst)
+		//panic("unknown instruction " + inst)
+		panic(fmt.Sprintf("unknown instruction '%s' at PC %d", instName, state.PC))
 	}
 }
 
@@ -130,6 +135,7 @@ func (i instEmulator) getColorIndex(color string) int {
 	}
 }
 
+
 /**
  * @description:
  * @prototype:
@@ -158,6 +164,64 @@ func (i instEmulator) waitSrcMustBeNetRecvReg(src string) {
 		panic("the source of a WAIT instruction must be NET_RECV registers")
 	}
 }
+
+// runMov handles the MOV instruction for both immediate values and register-to-register moves.
+// Prototype for moving an immediate: MOV, DstReg, Immediate
+// Prototype for register to register: MOV, DstReg, SrcReg
+func (i instEmulator) runMov(inst []string, state *coreState) {
+    dst := inst[1]
+    src := inst[2]
+
+    // Determine if the source is an immediate value or a register
+    var value uint32
+    if strings.HasPrefix(src, "$") {
+        // Source is a register, so read the value from that register
+        value = i.readOperand(src, state)
+    } else {
+        // Source is an immediate value, so parse it from string to uint32
+        immediateValue, err := strconv.ParseUint(src, 10, 32)
+        if err != nil {
+            panic(fmt.Sprintf("invalid immediate value for MOV: %s", src))
+        }
+        value = uint32(immediateValue)
+    }
+
+    // Write the value into the destination register
+    i.writeOperand(dst, value, state)
+
+    fmt.Printf("MOV Instruction: Moving %v into %s\n", value, dst)
+
+    state.PC++
+}
+
+// func (i instEmulator) runFAdd(inst []string, state *coreState) {
+//     dst := inst[1]  // Destination register
+//     src1 := inst[2] // Source register 1
+//     src2 := inst[3] // Source register 2
+
+//     // Read the values from the source registers
+//     srcVal1 := i.readOperand(src1, state)
+//     srcVal2 := i.readOperand(src2, state)
+
+//     // Convert uint32 to float32
+//     srcVal1Float := math.Float32frombits(srcVal1)
+//     srcVal2Float := math.Float32frombits(srcVal2)
+
+//     // Perform the floating-point addition
+//     resultFloat := srcVal1Float + srcVal2Float
+
+//     // Convert the result back to uint32
+//     resultUint := math.Float32bits(resultFloat)
+
+//     // Write the result to the destination register
+//     i.writeOperand(dst, resultUint, state)
+
+//     // Advance the program counter
+//     state.PC++
+
+//     // Debug log for verification
+//     fmt.Printf("ADDF: %s = %f + %f = %f\n", dst, srcVal1Float, srcVal2Float, resultFloat)
+// }
 
 /**
  * @description:
@@ -209,27 +273,57 @@ func (i instEmulator) Jump(dst string, state *coreState) {
 }
 
 func (i instEmulator) readOperand(operand string, state *coreState) (value uint32) {
-	if strings.HasPrefix(operand, "$") {
-		registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
-		if err != nil {
-			panic("invalid register index")
-		}
+	// if strings.HasPrefix(operand, "$") {
+	// 	registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
+	// 	if err != nil {
+	// 		panic("invalid register index")
+	// 	}
 
-		value = state.Registers[registerIndex]
-	}
+	// 	value = state.Registers[registerIndex]
+	// }
+	operand = strings.TrimSpace(operand)
+    if strings.HasPrefix(operand, "$") {
+        registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
+        if err != nil {
+            panic(fmt.Sprintf("invalid register index in readOperand: %s", operand))
+        }
+
+        if registerIndex < 0 || registerIndex >= len(state.Registers) {
+            panic(fmt.Sprintf("register index %d out of range in readOperand", registerIndex))
+        }
+
+        value = state.Registers[registerIndex]
+    } else {
+        panic(fmt.Sprintf("Invalid operand %s in readOperand; expected register", operand))
+    }
 
 	return
 }
 
 func (i instEmulator) writeOperand(operand string, value uint32, state *coreState) {
-	if strings.HasPrefix(operand, "$") {
-		registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
-		if err != nil {
-			panic("invalid register index")
-		}
+	// if strings.HasPrefix(operand, "$") {
+	// 	registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
+	// 	if err != nil {
+	// 		panic("invalid register index")
+	// 	}
 
-		state.Registers[registerIndex] = value
-	}
+	// 	state.Registers[registerIndex] = value
+	// }
+	operand = strings.TrimSpace(operand)
+    if strings.HasPrefix(operand, "$") {
+        registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
+        if err != nil {
+            panic(fmt.Sprintf("invalid register index in writeOperand: %s", operand))
+        }
+
+        if registerIndex < 0 || registerIndex >= len(state.Registers) {
+            panic(fmt.Sprintf("register index %d out of range in writeOperand", registerIndex))
+        }
+
+        state.Registers[registerIndex] = value
+    } else {
+        panic(fmt.Sprintf("Invalid operand %s in writeOperand; expected register", operand))
+    }
 }
 
 /**
@@ -378,9 +472,31 @@ func (i instEmulator) runMac(inst []string, state *coreState) {
 	state.PC++
 }
 
+/**
+ * @description:
+ * Get data from
+ * @prototype: MUL, DstReg, SrcReg1, SrcReg2
+ */
+ func (i instEmulator) runMul(inst []string, state *coreState) {
+	dst := inst[1]
+	src1 := inst[2]
+	src2 := inst[3]
+
+	srcVal1 := i.readOperand(src1, state)
+	srcVal2 := i.readOperand(src2, state)
+	dstVal := i.readOperand(dst, state)
+	dstVal = srcVal1 * srcVal2
+	i.writeOperand(dst, dstVal, state)
+
+	fmt.Printf("Mul Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
+
+	state.PC++
+}
+
 func (i instEmulator) runDone() {
 	// Do nothing.
 }
+
 
 func (i instEmulator) runConfigRouting(inst []string, state *coreState) {
 	src := inst[2]

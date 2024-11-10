@@ -3,6 +3,9 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"strings"
+	"bufio"
+	"os"
 
 	"github.com/sarchlab/akita/v3/sim"
 	"github.com/sarchlab/zeonica/api"
@@ -28,7 +31,6 @@ func passThrough(driver api.Driver) {
 
 	driver.FeedIn(src, cgra.West, [2]int{0, height}, height, "R")
 	driver.Collect(dst, cgra.East, [2]int{0, height}, height, "R")
-
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			driver.MapProgram(passThroughKernel, [2]int{x, y})

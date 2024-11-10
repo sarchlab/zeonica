@@ -1,0 +1,12 @@
+Monitoring simulation with http://localhost:33873
+  0.000000, Feed in 1 to Device.Tile[0][0].Core.North
+  1.000000, Device.Tile[0][0].Core, Recv 1 Driver.DeviceNorth[0]->Device.Tile[0][0].Core.North, Color 0
+  2.000000, Device.Tile[0][0].Core, Inst WAIT, $3, NET_RECV_NORTH, R
+MOV Instruction: Moving 1 into $0
+  3.000000, Device.Tile[0][0].Core, Inst MOV, $0, $3
+MOV Instruction: Moving 2 into $1
+  4.000000, Device.Tile[0][0].Core, Inst MOV, $1, 2
+  5.000000, Device.Tile[0][0].Core, Inst ADDI, $2, $0, $1
+  6.000000, Device.Tile[0][0].Core, Inst SEND, NET_SEND_SOUTH, $2, B
+  7.000000, Device.Tile[0][0].Core, Send 3 Device.Tile[0][0].Core.South->Driver.DeviceSouth[0], Color 2
+ADD Result: [0]
