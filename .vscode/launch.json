@@ -26,6 +26,13 @@
 			"program": "${workspaceFolder}/samples/matrixmulti"
 		},
 		{
+			"name": "Input Layer",
+			"type": "go",
+			"request": "launch",
+			"mode": "auto",
+			"program": "${workspaceFolder}/samples/inputlayer"
+		},
+		{
 			"name": "Test core",
 			"type": "go",
 			"request": "launch",

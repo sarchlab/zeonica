@@ -100,6 +100,7 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 		msg := cgra.MoveMsgBuilder{}.
 			WithSrc(port).
 			WithDst(task.remotePorts[i]).
+			WithSendTime(d.Engine.CurrentTime()).
 			WithData(task.data[task.round*task.stride+i]).
 			WithColor(task.color).
 			Build()
