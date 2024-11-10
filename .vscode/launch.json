@@ -23,7 +23,7 @@
 			"type": "go",
 			"request": "launch",
 			"mode": "auto",
-			"program": "${workspaceFolder}/samples/Matrixmulti"
+			"program": "${workspaceFolder}/samples/matrixmulti"
 		},
 		{
 			"name": "Test core",

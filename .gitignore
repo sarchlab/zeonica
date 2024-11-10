@@ -16,4 +16,7 @@
 
 .DS_Store
 *.debug
+
+*.log 
+
 samples/passthrough/passthrough
