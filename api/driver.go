@@ -102,9 +102,11 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 			WithDst(task.remotePorts[i]).
 			WithData(task.data[task.round*task.stride+i]).
 			WithColor(task.color).
+			WithSendTime(d.Engine.CurrentTime()). // Set the current engine time here
 			Build()
+		
 		err := port.Send(msg)
-		//fmt.Println(msg)
+		fmt.Println(msg)
 		if err != nil {
 			panic("CGRA cannot handle the data rate")
 		}
@@ -112,11 +114,11 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 			d.Engine.CurrentTime()*1e9,
 			task.data[task.round*task.stride+i],
 			task.remotePorts[i].Name())
-		madeProgress = true
+		
+        madeProgress = true
 	}
-
+	
 	task.round++
-
 	return madeProgress
 }
 

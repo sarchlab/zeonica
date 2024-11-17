@@ -59,13 +59,14 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 	instFuncs := map[string]func([]string, *coreState){
 		"WAIT":             i.runWait,
 		"SEND":             i.runSend,
+		"RECV":				i.runRecv,
 		"JMP":              i.runJmp,
 		"JEQ":              i.runJeq,
 		"JNE":              i.runJne,
 		"CMP":              i.runCmp,
 		"DONE":             func(_ []string, _ *coreState) { i.runDone() }, // Since runDone might not have parameters
 		"MAC":              i.runMac,
-		"MUL":				i.runMul,
+		"MUL":              i.runMul,
 		"CONFIG_ROUTING":   i.runConfigRouting,
 		"TRIGGER_SEND":     i.runTriggerSend,
 		"TRIGGER_TWO_SIDE": i.runTriggerTwoSide, // must be from two direction
@@ -165,6 +166,38 @@ func (i instEmulator) waitSrcMustBeNetRecvReg(src string) {
 	}
 }
 
+func (i instEmulator) runRecv(inst []string, state *coreState) {
+    // Parse the instruction arguments
+    dstReg := inst[1]    // The register to store the received value
+    src := inst[2]       // The source side (e.g., NORTH, SOUTH, WEST, EAST)
+    color := inst[3]     // The color of the message
+
+    // Determine direction and color indices
+    srcIndex := i.getDirecIndex(src)
+    colorIndex := i.getColorIndex(color)
+
+    // Check if the data is ready to be received from the buffer
+    if !state.RecvBufHeadReady[colorIndex][srcIndex] {
+        // If the data is not ready, just return and keep the PC as is.
+        // This effectively stalls until the data is available.
+        return
+    }
+
+    // Retrieve the data from the buffer and mark it as no longer ready
+    data := state.RecvBufHead[colorIndex][srcIndex]
+    state.RecvBufHeadReady[colorIndex][srcIndex] = false
+
+    // Write the received value to the destination register
+    i.writeOperand(dstReg, data, state)
+
+    // Advance the program counter to the next instruction
+    state.PC++
+
+    // Debug log to indicate the RECV operation
+    fmt.Printf("RECV Instruction: Received %d from %s buffer, stored in %s\n", data, src, dstReg)
+}
+
+
 // runMov handles the MOV instruction for both immediate values and register-to-register moves.
 // Prototype for moving an immediate: MOV, DstReg, Immediate
 // Prototype for register to register: MOV, DstReg, SrcReg
@@ -244,6 +277,7 @@ func (i instEmulator) runSend(inst []string, state *coreState) {
 	state.SendBufHeadBusy[colorIndex][dstIndex] = true
 	val := i.readOperand(src, state)
 	state.SendBufHead[colorIndex][dstIndex] = val
+	fmt.Printf("SEND: Stored value %v in send buffer for color %d and destination index %d\n", val, colorIndex, dstIndex)
 	state.PC++
 }
 
@@ -321,6 +355,7 @@ func (i instEmulator) writeOperand(operand string, value uint32, state *coreStat
         }
 
         state.Registers[registerIndex] = value
+		fmt.Printf("Updated register $%d to value %d at PC %d\n", registerIndex, value, state.PC)
     } else {
         panic(fmt.Sprintf("Invalid operand %s in writeOperand; expected register", operand))
     }
@@ -468,7 +503,7 @@ func (i instEmulator) runMac(inst []string, state *coreState) {
 	i.writeOperand(dst, dstVal, state)
 
 	fmt.Printf("Mac Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
-
+	fmt.Printf("MAC: %s += %s * %s => Result: %v\n", dst, src1, src2, dstVal)
 	state.PC++
 }
 
@@ -689,6 +724,7 @@ func (i instEmulator) runIAdd(inst []string, state *coreState) {
 		src2Val = uint32(num)
 	}
 	dstVal := src1Val + src2Val
+	fmt.Printf("IADD: Adding %v (src1) + %v (src2) = %v\n", src1Val, src2Val, dstVal)
 	i.writeOperand(dst, dstVal, state)
 	state.PC++
 }

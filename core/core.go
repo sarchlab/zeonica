@@ -137,8 +137,14 @@ func (c *Core) runProgram() bool {
 	if prevPC == nextPC {
 		return false
 	}
-
 	fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
+	//debug reg value
+	//fmt.Printf("Core (%d, %d) Register values:\n", c.state.TileX, c.state.TileY)
+	// for i, val := range c.state.Registers {
+	// 	if val != 0 { // Only print registers that are used
+	// 		fmt.Printf("  $%-2d: %d\n", i, val) // More readable formatting
+	// 	}
+	// }
 
 	return true
 }

@@ -3,7 +3,8 @@ package main
 import (
 	_ "embed"
 	"fmt"
-	"time"
+	"os"
+	//"time"
 
 	"github.com/sarchlab/akita/v3/monitoring"
 	"github.com/sarchlab/akita/v3/sim"
@@ -60,6 +61,17 @@ func matrixMulti(driver api.Driver) {
 }
 
 func main() {
+	// Open the log file for writing
+	logFile, err := os.OpenFile("matrix_multiplication.log", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	if err != nil {
+		fmt.Println("Failed to open log file:", err)
+		return
+	}
+	defer logFile.Close()
+
+	// Redirect stdout and stderr to the log file
+	os.Stdout = logFile
+	os.Stderr = logFile
 	monitor := monitoring.NewMonitor()
 
 	engine := sim.NewSerialEngine()
@@ -85,6 +97,6 @@ func main() {
 
 	matrixMulti(driver)
 
-	time.Sleep(100 * time.Hour)
+	//time.Sleep(100 * time.Hour)
 	atexit.Exit(0)
 }

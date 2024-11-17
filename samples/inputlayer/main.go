@@ -14,8 +14,8 @@ import (
 	"github.com/tebeka/atexit"
 )
 
-var inputHeight = 784
-var inputWidth = 256 
+var inputHeight = 2
+var inputWidth = 2 
 
 //go:embed input.cgraasm
 var inputKernel string
@@ -23,17 +23,17 @@ var inputKernel string
 func inputLayer(driver api.Driver) {
 	// Preset input data for testing
 	inputData := make([]uint32, inputHeight)
-	for i := 0; i < 784; i++ {
-		inputData[i] = uint32(i % 784) // Example data, cycling through values 0-255
+	for i := 0; i < inputHeight; i++ {
+		inputData[i] = 3 // Example data, cycling through values 0-255
 	}
 
 	// Preset weight and bias data for testing
 	weightData := make([]uint32, inputHeight)
 	biasData := make([]uint32, inputWidth)
-	for i := 0; i < 784; i++ {
+	for i := 0; i < inputHeight; i++ {
 		weightData[i] = 2 //Example weight
 	}
-	for i := 0; i < 256; i++ {
+	for i := 0; i < inputWidth; i++ {
 		biasData[i] = 1 // Example bias, set to 1 for simplicity
 	}
 
@@ -43,30 +43,23 @@ func inputLayer(driver api.Driver) {
 		}
 	}
 	fmt.Println("Feeding in weight data...")
-	//weight_result := make([]uint32, inputHeight)
 	driver.FeedIn(weightData, cgra.West, [2]int{0, inputWidth}, inputWidth, "R")
-	//fmt.Println("Collecting weight result...")
-	//driver.Collect(weight_result, cgra.East, [2]int{0, inputHeight}, inputHeight, "R")
-	//fmt.Println("Weight result Output:", weight_result)
 	driver.Run()
 
 	fmt.Println("Feeding in input data...")
-	//input_out := make([]uint32, inputHeight)
 	driver.FeedIn(inputData, cgra.West, [2]int{0, inputHeight}, inputHeight, "B")
-	//fmt.Println("Collecting input data output...")
-	// driver.Collect(input_out, cgra.East, [2]int{0, inputHeight}, inputHeight, "B") 
-	// fmt.Println("Input_out Output:", input_out)
 	driver.Run()
 	
 	// Feed in bias data
 	fmt.Println("Feeding in bias data...")
 	driver.FeedIn(biasData, cgra.North, [2]int{0, inputWidth}, inputWidth, "R")
-	fmt.Println("Collecting input layer output...")
-	// Collect the results from the output of the input layer
-	inputLayerOutput := make([]uint32, inputWidth) // Collect the results from the last row
-	driver.Collect(inputLayerOutput, cgra.South, [2]int{0, inputWidth}, inputWidth, "R")
 	driver.Run()
 
+	inputLayerOutput := make([]uint32, inputWidth) // Collect the results from the last row
+	driver.FeedIn(biasData, cgra.North, [2]int{0, inputWidth}, inputWidth, "R")
+	fmt.Println("Collecting input layer output...")
+	driver.Collect(inputLayerOutput, cgra.South, [2]int{0, inputWidth}, inputWidth, "R")
+	driver.Run()
 	fmt.Println("Input Layer Output:", inputLayerOutput)
 }
 
