@@ -56,6 +56,7 @@ func (c *Core) doSend() bool {
 				WithDst(c.ports[cgra.Side(i)].remote).
 				WithSrc(c.ports[cgra.Side(i)].local).
 				WithData(c.state.SendBufHead[color][i]).
+				//Predicate
 				WithSendTime(c.Engine.CurrentTime()).
 				WithColor(color).
 				Build()
@@ -105,6 +106,7 @@ func (c *Core) doRecv() bool {
 
 			c.state.RecvBufHeadReady[color][i] = true
 			c.state.RecvBufHead[color][i] = msg.Data
+			//predicate
 
 			fmt.Printf("%10f, %s, Recv %d %s->%s, Color %d\n",
 				c.Engine.CurrentTime()*1e9,

@@ -45,8 +45,8 @@ func relu(driver api.Driver) {
 		src[i] = *(*uint32)(unsafe.Pointer(&INum))
 	}
 
-	driver.FeedIn(src, cgra.West, [2]int{0, height}, height)
-	driver.Collect(dst, cgra.East, [2]int{0, height}, height)
+	driver.FeedIn(src, cgra.West, [2]int{0, height}, height, "R")
+	driver.Collect(dst, cgra.East, [2]int{0, height}, height, "R")
 
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {

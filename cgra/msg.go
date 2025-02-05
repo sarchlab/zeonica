@@ -8,6 +8,8 @@ type MoveMsg struct {
 
 	Data  uint32
 	Color int
+	//create a new branch predicate data
+	//Predicate int
 }
 
 // Meta returns the meta data of the msg.
@@ -21,6 +23,8 @@ type MoveMsgBuilder struct {
 	sendTime sim.VTimeInSec
 	data     uint32
 	color    int
+	// predicate value
+	//predicate int
 }
 
 // WithSrc sets the source port of the msg.
@@ -53,6 +57,12 @@ func (m MoveMsgBuilder) WithColor(color int) MoveMsgBuilder {
 	return m
 }
 
+//WithPredicate sets the predicate of the msg
+func (m MoveMsgBuilder) WithPredicate(predicate int) MoveMsgBuilder {
+	m.predicate = predicate
+	return m
+}
+
 // Build creates a MoveMsg.
 func (m MoveMsgBuilder) Build() *MoveMsg {
 	return &MoveMsg{
@@ -64,5 +74,6 @@ func (m MoveMsgBuilder) Build() *MoveMsg {
 		},
 		Data:  m.data,
 		Color: m.color,
+		//Predicate: m.predicate,
 	}
 }
