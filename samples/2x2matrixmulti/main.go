@@ -19,29 +19,38 @@ var height = 3
 
 //go:embed matrixmulti.cgraasm
 var matrixMultiKernal string
+//var pe(0,0)
+//var pe(0,1)
+// var pe(0,2)
+// var pe(1,0)
+// var pe(1,1)
+// var pe(1,2)
+// var pe(2,0)
+// var pe(2,1)
+// var pe(2,2)
 
 //go:embed output.cgraasm
 var output string
 
 func matrixMulti(driver api.Driver) {
 
-	//1 2 3
-	//4 5 6
-	//7 8 9
-	src1 := []uint32{1, 0, 2, 4, 0, 5}
-	//9 8 7
-	//6 5 4
-	//3 2 1
-	src2 := []uint32{9, 0, 8, 6, 0, 5}
+	//1 3
+	//2 4
+	src1 := []uint32{1, 0, 3, 2, 0, 4}
+	//2 6
+	//4 8
+	src2 := []uint32{2, 0, 6, 4, 0, 8}
 	dst := make([]uint32, 6)
 
 	driver.FeedIn(src1[:], cgra.West, [2]int{0, height}, height, "R")
 	driver.FeedIn(src2[:], cgra.North, [2]int{0, width}, width, "R")
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
-			driver.MapProgram(matrixMultiKernal, [2]int{x, y})
-		}
-	}
+	// for x := 0; x < width; x++ {
+	// 	for y := 0; y < height; y++ {
+	// 		driver.MapProgram(matrixMultiKernal, [2]int{x, y})
+	// 	}
+	// }
+	//change to mannual mapping
+	//each pe has different instruction
 	driver.Run()
 	driver.FeedIn(src2[:], cgra.North, [2]int{0, width}, width, "B") //for output signal
 	driver.Collect(dst, cgra.South, [2]int{0, height}, height, "B")  //for output

@@ -272,6 +272,7 @@ func (c *Core) getIndex(side string) int {
 		srcIndex = int(cgra.South)
 	case "EAST":
 		srcIndex = int(cgra.East)
+	// Adding new direction
 	default:
 		panic("invalid side")
 	}
