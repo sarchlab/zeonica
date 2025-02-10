@@ -63,21 +63,19 @@ func (c *Core) MapProgram(program []string, x int, y int) {
 
 // Tick runs the program for one cycle.
 func (c *Core) Tick(now sim.VTimeInSec) (madeProgress bool) {
-	fmt.Printf("%10f, %s, Start Tick\n", now*1e9, c.Name())
 	madeProgress = c.doSend() || madeProgress
 	// madeProgress = c.AlwaysPart() || madeProgress
 	// madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
 	madeProgress = c.runProgram() || madeProgress
 	madeProgress = c.doRecv() || madeProgress
-	fmt.Printf("%10f, %s, end Tick，progress=%v\n", now*1e9, c.Name(), madeProgress)
 	return madeProgress
 }
 
 func (c *Core) doSend() bool {
 	madeProgress := false
-
 	for i := 0; i < 4; i++ {
 		for color := 0; color < 4; color++ {
+			
 			if !c.state.SendBufHeadBusy[color][i] {
 				continue
 			}
@@ -86,7 +84,6 @@ func (c *Core) doSend() bool {
 				WithDst(c.ports[cgra.Side(i)].remote).
 				WithSrc(c.ports[cgra.Side(i)].local).
 				WithData(c.state.SendBufHead[color][i]).
-				//Predicate
 				WithSendTime(c.Engine.CurrentTime()).
 				WithColor(color).
 				Build()
@@ -110,7 +107,6 @@ func (c *Core) doSend() bool {
 
 func (c *Core) doRecv() bool {
 	madeProgress := false
-
 	for i := 0; i < 4; i++ { //direction
 		item := c.ports[cgra.Side(i)].local.Peek()
 		if item == nil {
@@ -136,7 +132,6 @@ func (c *Core) doRecv() bool {
 
 			c.state.RecvBufHeadReady[color][i] = true
 			c.state.RecvBufHead[color][i] = msg.Data
-			//predicate
 
 			fmt.Printf("%10f, %s, Recv %d %s->%s, Color %d\n",
 				c.Engine.CurrentTime()*1e9,
@@ -156,16 +151,22 @@ func (c *Core) runProgram() bool {
 	if int(c.state.PC) >= len(c.state.Code) {
 		return false
 	}
-
+	// fmt.Printf(
+    //     "PC=%d, SendBufHeadBusy=%v,\n RecvBufHeadReady=%v\n",
+    //     c.state.PC,
+    //     c.state.SendBufHeadBusy,
+    //     c.state.RecvBufHeadReady,
+    // )
 	inst := c.state.Code[c.state.PC]
 	for inst[len(inst)-1] == ':' {
 		c.state.PC++
 		inst = c.state.Code[c.state.PC]
 	}
 	prevPC := c.state.PC
+	fmt.Printf("start run inst \n")
 	c.emu.RunInst(inst, &c.state)
 	nextPC := c.state.PC
-
+	fmt.Printf("end run inst, current PC = %d\n", nextPC)
 	if prevPC == nextPC {
 		return false
 	}

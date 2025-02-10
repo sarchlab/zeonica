@@ -70,6 +70,7 @@ func matrixMulti(driver api.Driver) {
         panic(err)
     }
 	//send data to PE(2,0) and PE(2,1)
+	//driver.FeedIn(src1[:], cgra.South, [2]int{0, 2}, 2, "R")
 	driver.FeedIn(src1[0:2], cgra.South, [2]int{0, 2}, 2, "R") 
 	driver.FeedIn(src1[2:4], cgra.South, [2]int{0, 2}, 2, "B")
 	driver.Run()

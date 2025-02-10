@@ -41,6 +41,7 @@ type instEmulator struct {
 }
 
 func (i instEmulator) RunInst(inst string, state *coreState) {
+	fmt.Printf("Running instruction: %s\n", inst)
 	tokens := strings.Split(inst, ",")
 	for i := range tokens {
 		tokens[i] = strings.TrimSpace(tokens[i])
@@ -1176,7 +1177,6 @@ func (i instEmulator) runRecvSend(inst []string, state *coreState) {
 	dst := inst[1]
 	dstReg := inst[2]
 	src := inst[3]
-
 	srcParts := strings.Split(src, "_")
 	dstParts := strings.Split(dst, "_")
 
@@ -1184,20 +1184,19 @@ func (i instEmulator) runRecvSend(inst []string, state *coreState) {
 	dstIndex := i.getDirecIndex(dstParts[0])
 	srcColorIndex := i.getColorIndex(srcParts[1])
 	dstColorIndex := i.getColorIndex(dstParts[1])
-
 	if !state.RecvBufHeadReady[srcColorIndex][srcIndex] {
+		fmt.Printf("recvbufhead not ready\n")
 		return
 	}
-
+	
 	val := state.RecvBufHead[srcColorIndex][srcIndex]
 	state.RecvBufHeadReady[srcColorIndex][srcIndex] = false
 
 	i.writeOperand(dstReg, val, state)
-
 	if state.SendBufHeadBusy[dstColorIndex][dstIndex] {
+		fmt.Printf("sendbufhead busy\n")
 		return
 	}
-
 	state.SendBufHeadBusy[dstColorIndex][dstIndex] = true
 	state.SendBufHead[dstColorIndex][dstIndex] = val
 	state.PC++

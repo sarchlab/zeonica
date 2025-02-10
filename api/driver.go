@@ -59,10 +59,10 @@ type PerPEKernels map[[2]int]string
 
 func (d *driverImpl) PreloadMemory(x int, y int, data uint32, baseAddr uint32) {
 	tile := d.device.GetTile(x, y)
-	fmt.Printf(
-        "[DEBUG] PreloadMemory(x=%d, y=%d) -> Tile: %v\n",
-        x, y, tile,
-    )
+	// fmt.Printf(
+    //     "[DEBUG] PreloadMemory(x=%d, y=%d) -> Tile: %v\n",
+    //     x, y, tile,
+    // )
 	tile.WriteMemory(x, y, data, baseAddr)
 }
 
