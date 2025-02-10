@@ -52,6 +52,7 @@ var _ = Describe("Driver", func() {
 			GetTile(gomock.Any(), gomock.Any()).
 			Return(mockTile).
 			AnyTimes()
+		// handle incorrect coordinators
 		mockDevice.EXPECT().
 			GetSidePorts(gomock.Any(), gomock.Any()).
 			DoAndReturn(func(side cgra.Side, portRange [2]int) []sim.Port {
@@ -61,7 +62,15 @@ var _ = Describe("Driver", func() {
 				}
 				return ports
 			}).AnyTimes()
-
+		
+		mockDevice.EXPECT().
+		GetTile(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(x, y int) cgra.Tile {
+			if x >= 0 && x < 4 && y >= 0 && y < 4 {
+				return mockTile
+			}
+			return nil
+		}).AnyTimes()
 		portFactory = &mockPortFactory{
 			mockCtrl: mockCtrl,
 			ports:    make(map[string]*MockPort),
@@ -223,3 +232,4 @@ func expectPortsToRecv(
 		}(port, data[i], i)
 	}
 }
+

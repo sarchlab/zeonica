@@ -28,8 +28,13 @@ type Driver interface {
 	// cycle.
 	Collect(data []uint32, side cgra.Side, portRange [2]int, stride int, color string)
 
-	// MapProgram maps to the provided program to a core at the given cordinate.
+	// MapProgram maps to the provided program to a core at the given coordinate.
 	MapProgram(program string, core [2]int)
+	//new manual mapping for different kernel to different PE
+	SetPerPEKernels(kernels PerPEKernels) error
+
+	PreloadMemory(x int, y int, data uint32, baseAddr uint32)
+	ReadMemory(x int, y int, addr uint32) uint32
 
 	// Run will run all the tasks that have been added to the driver.
 	Run()
@@ -47,6 +52,23 @@ type driverImpl struct {
 
 	feedInTasks  [4][]*feedInTask  //Four Directions, every direction has a task queue.
 	collectTasks [4][]*collectTask //Four Directions
+}
+
+//struct for manually mapping different kernel to different PE
+type PerPEKernels map[[2]int]string
+
+func (d *driverImpl) PreloadMemory(x int, y int, data uint32, baseAddr uint32) {
+	tile := d.device.GetTile(x, y)
+	fmt.Printf(
+        "[DEBUG] PreloadMemory(x=%d, y=%d) -> Tile: %v\n",
+        x, y, tile,
+    )
+	tile.WriteMemory(x, y, data, baseAddr)
+}
+
+func (d *driverImpl) ReadMemory(x int, y int, addr uint32) uint32 {
+	tile := d.device.GetTile(x, y)
+	return tile.GetMemory(x, y, addr)
 }
 
 // Tick runs the driver for one cycle.
@@ -106,7 +128,7 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 			Build()
 		
 		err := port.Send(msg)
-		fmt.Println(msg)
+		//fmt.Println(msg)
 		if err != nil {
 			panic("CGRA cannot handle the data rate")
 		}
@@ -337,6 +359,25 @@ func (d *driverImpl) Collect(
 func (d *driverImpl) MapProgram(program string, core [2]int) {
 	tile := d.device.GetTile(core[0], core[1])
 	tile.MapProgram(strings.Split(program, "\n"), core[0], core[1])
+}
+
+func (d *driverImpl) SetPerPEKernels(kernels PerPEKernels) error {
+    deviceWidth, deviceHeight := d.device.GetSize()
+    
+    for coord, code := range kernels {
+        x, y := coord[0], coord[1]
+        
+        // Verify the coordinate
+        if x < 0 || x >= deviceWidth || y < 0 || y >= deviceHeight {
+            return fmt.Errorf("invalid coordinate [%d,%d] for device size %dx%d", 
+                x, y, deviceWidth, deviceHeight)
+        }
+        
+        // map the program to the core
+        d.MapProgram(code, coord)
+    }
+    
+    return nil
 }
 
 // Run runs all the tasks in the driver.

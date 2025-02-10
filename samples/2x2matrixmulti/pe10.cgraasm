@@ -1,3 +1,0 @@
-MUL_CONST $2, $1, $0
-MUL_CONST $5, $4, $3
-SLEEP

@@ -17,44 +17,68 @@ import (
 var width = 3
 var height = 3
 
-//go:embed matrixmulti.cgraasm
-var matrixMultiKernal string
-//var pe(0,0)
-//var pe(0,1)
-// var pe(0,2)
-// var pe(1,0)
-// var pe(1,1)
-// var pe(1,2)
-// var pe(2,0)
-// var pe(2,1)
-// var pe(2,2)
+//go:embed Donothing.cgraasm
+var doNothingKernel string
+//go:embed LoadData.cgraasm
+var loadDataKernel string
+//go:embed StoreData.cgraasm
+var storeDataKernel string
+//go:embed MAC1.cgraasm
+var mac1Kernel string
+//go:embed MULT1.cgraasm
+var mult1Kernel string
+//go:embed MAC2.cgraasm
+var mac2Kernel string
+//go:embed MULT2.cgraasm
+var mult2Kernel string
 
-//go:embed output.cgraasm
-var output string
 
 func matrixMulti(driver api.Driver) {
 
 	//1 3
 	//2 4
-	src1 := []uint32{1, 0, 3, 2, 0, 4}
+	src1 := []uint32{1, 2, 3, 4}
 	//2 6
 	//4 8
-	src2 := []uint32{2, 0, 6, 4, 0, 8}
-	dst := make([]uint32, 6)
+	src2 := []uint32{2, 4, 6, 8}
+	dst := make([]uint32, 4)
+	//write memory:    x, y, data, baseAddr
+	driver.PreloadMemory(0, 0, src2[0], 0)
+	driver.PreloadMemory(0, 1, src2[1], 0)
+	driver.PreloadMemory(1, 0, src2[2], 0)
+	driver.PreloadMemory(1, 1, src2[3], 0)
 
-	driver.FeedIn(src1[:], cgra.West, [2]int{0, height}, height, "R")
-	driver.FeedIn(src2[:], cgra.North, [2]int{0, width}, width, "R")
-	// for x := 0; x < width; x++ {
-	// 	for y := 0; y < height; y++ {
-	// 		driver.MapProgram(matrixMultiKernal, [2]int{x, y})
-	// 	}
-	// }
-	//change to mannual mapping
-	//each pe has different instruction
+	//expected output:
+	//14 20
+	//30 44
+
+	//create table of mapping kernel to PE
+	kernels := api.PerPEKernels{
+        {0,0}: mult2Kernel,  
+		{0,1}: mac2Kernel,
+		{0,2}: storeDataKernel,
+		{1,0}: mult1Kernel,
+		{1,1}: mac1Kernel,
+		{1,2}: storeDataKernel,
+		{2,0}: loadDataKernel,
+		{2,1}: loadDataKernel,
+		{2,2}: doNothingKernel,         
+    }
+
+    // set the mapping
+    if err := driver.SetPerPEKernels(kernels); err != nil {
+        panic(err)
+    }
+	//send data to PE(2,0) and PE(2,1)
+	driver.FeedIn(src1[0:2], cgra.South, [2]int{0, 2}, 2, "R") 
+	driver.FeedIn(src1[2:4], cgra.South, [2]int{0, 2}, 2, "B")
 	driver.Run()
-	driver.FeedIn(src2[:], cgra.North, [2]int{0, width}, width, "B") //for output signal
-	driver.Collect(dst, cgra.South, [2]int{0, height}, height, "B")  //for output
-	driver.Run()
+	//driver.FeedIn(src2[:], cgra.North, [2]int{0, width}, width, "B") //for output signal
+	//driver.Collect(dst, cgra.South, [2]int{0, height}, height, "B")  //for output
+	dst[0] = driver.ReadMemory(2, 2, 0)
+	dst[1] = driver.ReadMemory(2, 2, 1)
+	dst[2] = driver.ReadMemory(1, 2, 0)
+	dst[3] = driver.ReadMemory(1, 2, 1)
 	fmt.Println(dst)
 }
 

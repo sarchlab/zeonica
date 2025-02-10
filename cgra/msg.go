@@ -58,10 +58,10 @@ func (m MoveMsgBuilder) WithColor(color int) MoveMsgBuilder {
 }
 
 //WithPredicate sets the predicate of the msg
-func (m MoveMsgBuilder) WithPredicate(predicate int) MoveMsgBuilder {
-	m.predicate = predicate
-	return m
-}
+// func (m MoveMsgBuilder) WithPredicate(predicate int) MoveMsgBuilder {
+// 	m.predicate = predicate
+// 	return m
+// }
 
 // Build creates a MoveMsg.
 func (m MoveMsgBuilder) Build() *MoveMsg {

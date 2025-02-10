@@ -332,6 +332,9 @@ func (i instEmulator) parseAddress(addrStr string, state *coreState) uint32 {
 func (i instEmulator) runLoad(inst []string, state *coreState) {
     dstReg := inst[1]       
     addrStr := inst[2]      // address（ 0x100 or $1+0x10）
+	// $1 + 0x10 implies that the base address of register 1 
+	// (which is 0xF0) plus an offset of 0x10 
+	// results in the address 0x100.
     addr := i.parseAddress(addrStr, state)
     
     if addr >= uint32(len(state.Memory)) {
@@ -992,7 +995,7 @@ func (i instEmulator) runPhi_const(inst []string, state *coreState){
 
 func (i instEmulator) runSel(inst []string, state *coreState){
     // SEL, DstReg, CondReg, TrueReg, FalseReg
-
+	
 }
 
 func (i instEmulator) runDone() {

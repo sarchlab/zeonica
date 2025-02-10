@@ -36,6 +36,10 @@ type Tile interface {
 	GetPort(side Side) sim.Port
 	SetRemotePort(side Side, port sim.Port)
 	MapProgram(program []string, x int, y int)
+	GetMemory(x int, y int, addr uint32) uint32
+	WriteMemory(x int, y int, data uint32, baseAddr uint32)
+	GetTileX() int
+	GetTileY() int
 }
 
 // A Device is a CGRA device.

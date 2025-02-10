@@ -90,10 +90,12 @@ func (d DeviceBuilder) createTiles(
 				WithEngine(d.engine).
 				WithFreq(d.freq).
 				Build(coreName)
-
+			
 			if d.monitor != nil {
 				d.monitor.RegisterComponent(tile.Core)
 			}
+			
+			tile.Core.MapProgram(nil, x, y)
 
 			dev.Tiles[y][x] = tile
 

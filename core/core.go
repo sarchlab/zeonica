@@ -21,6 +21,34 @@ type Core struct {
 	emu   instEmulator
 }
 
+func (c *Core) GetTileX() int {
+    return int(c.state.TileX)
+}
+
+func (c *Core) GetTileY() int {
+    return int(c.state.TileY)
+}
+
+//get memory
+func (c *Core) GetMemory(x int, y int, addr uint32) uint32 {
+	if x == int(c.state.TileX) && y == int(c.state.TileY) {
+		return c.state.Memory[addr]
+	} else {
+		panic("Invalid Tile")
+	}
+}
+
+//write memory
+func (c *Core) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
+	fmt.Printf("Core [%d][%d] receive WriteMemory(x=%d, y=%d)\n", c.state.TileX, c.state.TileY, x, y)
+	if x == int(c.state.TileX) && y == int(c.state.TileY) {
+		c.state.Memory[baseAddr] = data
+		fmt.Printf("Core [%d][%d] write memory[%d] = %d\n", c.state.TileX, c.state.TileY, baseAddr, c.state.Memory[baseAddr])
+	} else {
+		panic(fmt.Sprintf("Invalid Tile: Expect (%d, %d)，but get (%d, %d)", c.state.TileX, c.state.TileY, x, y))
+	}
+}
+
 func (c *Core) SetRemotePort(side cgra.Side, remote sim.Port) {
 	c.ports[side].remote = remote
 }
@@ -35,11 +63,13 @@ func (c *Core) MapProgram(program []string, x int, y int) {
 
 // Tick runs the program for one cycle.
 func (c *Core) Tick(now sim.VTimeInSec) (madeProgress bool) {
+	fmt.Printf("%10f, %s, Start Tick\n", now*1e9, c.Name())
 	madeProgress = c.doSend() || madeProgress
 	// madeProgress = c.AlwaysPart() || madeProgress
 	// madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
 	madeProgress = c.runProgram() || madeProgress
 	madeProgress = c.doRecv() || madeProgress
+	fmt.Printf("%10f, %s, end Tick，progress=%v\n", now*1e9, c.Name(), madeProgress)
 	return madeProgress
 }
 
