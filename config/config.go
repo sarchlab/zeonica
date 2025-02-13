@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/sarchlab/akita/v4/monitoring"
-	"github.com/sarchlab/akita/v4/noc/networking/mesh"
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/core"
@@ -81,7 +80,6 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 func (d DeviceBuilder) createTiles(
 	dev *device,
 	name string,
-	nocConnector *mesh.Connector,
 ) {
 	for y := 0; y < d.height; y++ {
 		dev.Tiles[y] = make([]*tile, d.width)
@@ -100,15 +98,6 @@ func (d DeviceBuilder) createTiles(
 			tile.Core.MapProgram(nil, x, y)
 
 			dev.Tiles[y][x] = tile
-
-			nocConnector.AddTile(
-				[3]int{x, y, 0},
-				[]sim.Port{
-					tile.Core.GetPortByName(cgra.East.Name()),
-					tile.Core.GetPortByName(cgra.West.Name()),
-					tile.Core.GetPortByName(cgra.North.Name()),
-					tile.Core.GetPortByName(cgra.South.Name()),
-				})
 		}
 	}
 }
