@@ -58,20 +58,22 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 		Tiles:  make([][]*tile, d.height),
 	}
 
-	nocConnector := mesh.NewConnector().
-		WithEngine(d.engine).
-		WithFreq(d.freq).
-		WithSwitchLatency(1).
-		WithBandwidth(1)
-	if d.monitor != nil {
-		nocConnector = nocConnector.WithMonitor(d.monitor)
-	}
-	nocConnector.CreateNetwork(name + ".Mesh")
+	// TODO: Do not use noc connection. Create direct connections instead.
+	// nocConnector := mesh.NewConnector().
+	// 	WithEngine(d.engine).
+	// 	WithFreq(d.freq).
+	// 	WithSwitchLatency(1).
+	// 	WithBandwidth(1)
+	// if d.monitor != nil {
+	// 	nocConnector = nocConnector.WithMonitor(d.monitor)
+	// }
+	// nocConnector.CreateNetwork(name + ".Mesh")
 
-	d.createTiles(dev, name, nocConnector)
-	d.setRemovePorts(dev)
+	d.createTiles(dev, name)
+	d.connectTiles(dev)
+	// d.setRemotePorts(dev)
 
-	nocConnector.EstablishNetwork()
+	// nocConnector.EstablishNetwork()
 
 	return dev
 }
@@ -111,7 +113,7 @@ func (d DeviceBuilder) createTiles(
 	}
 }
 
-func (d DeviceBuilder) setRemovePorts(dev *device) {
+func (d DeviceBuilder) setRemotePorts(dev *device) {
 	for y := 0; y < d.height; y++ {
 		for x := 0; x < d.width; x++ {
 			tile := dev.Tiles[y][x]
