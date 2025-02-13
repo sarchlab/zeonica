@@ -2,7 +2,7 @@
 package cgra
 
 import (
-	"github.com/sarchlab/akita/v3/sim"
+	"github.com/sarchlab/akita/v4/sim"
 )
 
 // Side defines the side of a tile.
@@ -34,7 +34,7 @@ func (s Side) Name() string {
 // Tile defines a tile in the CGRA.
 type Tile interface {
 	GetPort(side Side) sim.Port
-	SetRemotePort(side Side, port sim.Port)
+	SetRemotePort(side Side, port sim.RemotePort)
 	MapProgram(program []string, x int, y int)
 	GetMemory(x int, y int, addr uint32) uint32
 	WriteMemory(x int, y int, data uint32, baseAddr uint32)

@@ -4,9 +4,9 @@ package config
 import (
 	"fmt"
 
-	"github.com/sarchlab/akita/v3/monitoring"
-	"github.com/sarchlab/akita/v3/noc/networking/mesh"
-	"github.com/sarchlab/akita/v3/sim"
+	"github.com/sarchlab/akita/v4/monitoring"
+	"github.com/sarchlab/akita/v4/noc/networking/mesh"
+	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/core"
 )
@@ -90,11 +90,11 @@ func (d DeviceBuilder) createTiles(
 				WithEngine(d.engine).
 				WithFreq(d.freq).
 				Build(coreName)
-			
+
 			if d.monitor != nil {
 				d.monitor.RegisterComponent(tile.Core)
 			}
-			
+
 			tile.Core.MapProgram(nil, x, y)
 
 			dev.Tiles[y][x] = tile
@@ -119,25 +119,25 @@ func (d DeviceBuilder) setRemovePorts(dev *device) {
 			if x > 0 {
 				westTile := dev.Tiles[y][x-1]
 				tile.SetRemotePort(cgra.West,
-					westTile.Core.GetPortByName(cgra.East.Name()))
+					westTile.Core.GetPortByName(cgra.East.Name()).AsRemote())
 			}
 
 			if y > 0 {
 				northTile := dev.Tiles[y-1][x]
 				tile.SetRemotePort(cgra.North,
-					northTile.Core.GetPortByName(cgra.South.Name()))
+					northTile.Core.GetPortByName(cgra.South.Name()).AsRemote())
 			}
 
 			if x < d.width-1 {
 				eastTile := dev.Tiles[y][x+1]
 				tile.SetRemotePort(cgra.East,
-					eastTile.Core.GetPortByName(cgra.West.Name()))
+					eastTile.Core.GetPortByName(cgra.West.Name()).AsRemote())
 			}
 
 			if y < d.height-1 {
 				southTile := dev.Tiles[y+1][x]
 				tile.SetRemotePort(cgra.South,
-					southTile.Core.GetPortByName(cgra.North.Name()))
+					southTile.Core.GetPortByName(cgra.North.Name()).AsRemote())
 			}
 		}
 	}

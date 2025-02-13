@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/sarchlab/akita/v3/monitoring"
-	"github.com/sarchlab/akita/v3/sim"
+	"github.com/sarchlab/akita/v4/monitoring"
+	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/api"
 	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/config"
@@ -19,7 +19,6 @@ var addKernel string
 
 func fAddLayer(driver api.Driver) {
 
-
 	// Set up the CGRA configuration with the FADD kernel
 	for x := 0; x < 1; x++ {
 		for y := 0; y < 1; y++ {
@@ -30,12 +29,12 @@ func fAddLayer(driver api.Driver) {
 	// Run the CGRA simulation for the input layer
 	inputData := make([]uint32, 1)
 	inputData[0] = uint32(1)
-	driver.FeedIn(inputData, cgra.North, [2]int{0,1}, 1, "R")
+	driver.FeedIn(inputData, cgra.North, [2]int{0, 1}, 1, "R")
 	driver.Run()
 	// Collect the results from the output of the input layer
 	//driver.FeedIn(inputData, cgra.North, [2]int{0,1}, 1, "R")
 	outputData := make([]uint32, 1)
-	driver.FeedIn(inputData, cgra.North, [2]int{0,1}, 1, "B")
+	driver.FeedIn(inputData, cgra.North, [2]int{0, 1}, 1, "B")
 	driver.Collect(outputData, cgra.South, [2]int{0, 1}, 1, "B")
 	driver.Run()
 

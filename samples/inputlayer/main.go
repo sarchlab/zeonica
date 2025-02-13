@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/sarchlab/akita/v3/monitoring"
-	"github.com/sarchlab/akita/v3/sim"
+	"github.com/sarchlab/akita/v4/monitoring"
+	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/api"
 	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/config"
@@ -15,7 +15,7 @@ import (
 )
 
 var inputHeight = 2
-var inputWidth = 2 
+var inputWidth = 2
 
 //go:embed input.cgraasm
 var inputKernel string
@@ -49,7 +49,7 @@ func inputLayer(driver api.Driver) {
 	fmt.Println("Feeding in input data...")
 	driver.FeedIn(inputData, cgra.West, [2]int{0, inputHeight}, inputHeight, "B")
 	driver.Run()
-	
+
 	// Feed in bias data
 	fmt.Println("Feeding in bias data...")
 	driver.FeedIn(biasData, cgra.North, [2]int{0, inputWidth}, inputWidth, "R")

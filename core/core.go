@@ -3,13 +3,13 @@ package core
 import (
 	"fmt"
 
-	"github.com/sarchlab/akita/v3/sim"
+	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
 )
 
 type portPair struct {
 	local  sim.Port
-	remote sim.Port
+	remote sim.RemotePort
 }
 
 type Core struct {
@@ -22,14 +22,14 @@ type Core struct {
 }
 
 func (c *Core) GetTileX() int {
-    return int(c.state.TileX)
+	return int(c.state.TileX)
 }
 
 func (c *Core) GetTileY() int {
-    return int(c.state.TileY)
+	return int(c.state.TileY)
 }
 
-//get memory
+// get memory
 func (c *Core) GetMemory(x int, y int, addr uint32) uint32 {
 	if x == int(c.state.TileX) && y == int(c.state.TileY) {
 		return c.state.Memory[addr]
@@ -38,7 +38,7 @@ func (c *Core) GetMemory(x int, y int, addr uint32) uint32 {
 	}
 }
 
-//write memory
+// write memory
 func (c *Core) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
 	fmt.Printf("Core [%d][%d] receive WriteMemory(x=%d, y=%d)\n", c.state.TileX, c.state.TileY, x, y)
 	if x == int(c.state.TileX) && y == int(c.state.TileY) {
@@ -49,7 +49,7 @@ func (c *Core) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
 	}
 }
 
-func (c *Core) SetRemotePort(side cgra.Side, remote sim.Port) {
+func (c *Core) SetRemotePort(side cgra.Side, remote sim.RemotePort) {
 	c.ports[side].remote = remote
 }
 
@@ -62,7 +62,7 @@ func (c *Core) MapProgram(program []string, x int, y int) {
 }
 
 // Tick runs the program for one cycle.
-func (c *Core) Tick(now sim.VTimeInSec) (madeProgress bool) {
+func (c *Core) Tick() (madeProgress bool) {
 	madeProgress = c.doSend() || madeProgress
 	// madeProgress = c.AlwaysPart() || madeProgress
 	// madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
@@ -75,20 +75,20 @@ func (c *Core) doSend() bool {
 	madeProgress := false
 	for i := 0; i < 4; i++ {
 		for color := 0; color < 4; color++ {
-			
+
 			if !c.state.SendBufHeadBusy[color][i] {
 				continue
 			}
 
 			msg := cgra.MoveMsgBuilder{}.
 				WithDst(c.ports[cgra.Side(i)].remote).
-				WithSrc(c.ports[cgra.Side(i)].local).
+				WithSrc(c.ports[cgra.Side(i)].local.AsRemote()).
 				WithData(c.state.SendBufHead[color][i]).
 				WithSendTime(c.Engine.CurrentTime()).
 				WithColor(color).
 				Build()
 
-			err := c.ports[cgra.Side(i)].remote.Send(msg)
+			err := c.ports[cgra.Side(i)].local.Send(msg)
 			if err != nil {
 				continue
 			}
@@ -96,7 +96,7 @@ func (c *Core) doSend() bool {
 			fmt.Printf("%10f, %s, Send %d %s->%s, Color %d\n",
 				c.Engine.CurrentTime()*1e9,
 				c.Name(),
-				msg.Data, msg.Src.Name(), msg.Dst.Name(),
+				msg.Data, msg.Src, msg.Dst,
 				color)
 			c.state.SendBufHeadBusy[color][i] = false
 		}
@@ -108,7 +108,7 @@ func (c *Core) doSend() bool {
 func (c *Core) doRecv() bool {
 	madeProgress := false
 	for i := 0; i < 4; i++ { //direction
-		item := c.ports[cgra.Side(i)].local.Peek()
+		item := c.ports[cgra.Side(i)].local.PeekIncoming()
 		if item == nil {
 			continue
 		}
@@ -136,10 +136,10 @@ func (c *Core) doRecv() bool {
 			fmt.Printf("%10f, %s, Recv %d %s->%s, Color %d\n",
 				c.Engine.CurrentTime()*1e9,
 				c.Name(),
-				msg.Data, msg.Src.Name(), msg.Dst.Name(),
+				msg.Data, msg.Src, msg.Dst,
 				color)
 
-			c.ports[cgra.Side(i)].local.Retrieve(c.Engine.CurrentTime())
+			c.ports[cgra.Side(i)].local.RetrieveIncoming()
 			madeProgress = true
 		}
 	}
@@ -152,11 +152,11 @@ func (c *Core) runProgram() bool {
 		return false
 	}
 	// fmt.Printf(
-    //     "PC=%d, SendBufHeadBusy=%v,\n RecvBufHeadReady=%v\n",
-    //     c.state.PC,
-    //     c.state.SendBufHeadBusy,
-    //     c.state.RecvBufHeadReady,
-    // )
+	//     "PC=%d, SendBufHeadBusy=%v,\n RecvBufHeadReady=%v\n",
+	//     c.state.PC,
+	//     c.state.SendBufHeadBusy,
+	//     c.state.RecvBufHeadReady,
+	// )
 	inst := c.state.Code[c.state.PC]
 	for inst[len(inst)-1] == ':' {
 		c.state.PC++

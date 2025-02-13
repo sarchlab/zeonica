@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sarchlab/akita/v3/sim"
+	"github.com/sarchlab/akita/v4/sim"
+	"github.com/sarchlab/akita/v4/sim/directconnection"
 	"github.com/sarchlab/zeonica/cgra"
 )
 
@@ -30,10 +31,14 @@ type Driver interface {
 
 	// MapProgram maps to the provided program to a core at the given coordinate.
 	MapProgram(program string, core [2]int)
-	//new manual mapping for different kernel to different PE
+
+	//SetPerPRKernels manually maps a list of kernels to different PEs.
 	SetPerPEKernels(kernels PerPEKernels) error
 
+	//
 	PreloadMemory(x int, y int, data uint32, baseAddr uint32)
+
+	//
 	ReadMemory(x int, y int, addr uint32) uint32
 
 	// Run will run all the tasks that have been added to the driver.
@@ -54,15 +59,15 @@ type driverImpl struct {
 	collectTasks [4][]*collectTask //Four Directions
 }
 
-//struct for manually mapping different kernel to different PE
+// struct for manually mapping different kernel to different PE
 type PerPEKernels map[[2]int]string
 
 func (d *driverImpl) PreloadMemory(x int, y int, data uint32, baseAddr uint32) {
 	tile := d.device.GetTile(x, y)
 	// fmt.Printf(
-    //     "[DEBUG] PreloadMemory(x=%d, y=%d) -> Tile: %v\n",
-    //     x, y, tile,
-    // )
+	//     "[DEBUG] PreloadMemory(x=%d, y=%d) -> Tile: %v\n",
+	//     x, y, tile,
+	// )
 	tile.WriteMemory(x, y, data, baseAddr)
 }
 
@@ -72,7 +77,7 @@ func (d *driverImpl) ReadMemory(x int, y int, addr uint32) uint32 {
 }
 
 // Tick runs the driver for one cycle.
-func (d *driverImpl) Tick(now sim.VTimeInSec) (madeProgress bool) {
+func (d *driverImpl) Tick() (madeProgress bool) {
 	madeProgress = d.doFeedIn() || madeProgress
 	madeProgress = d.doCollect() || madeProgress
 
@@ -120,13 +125,13 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 
 	for i, port := range task.localPorts {
 		msg := cgra.MoveMsgBuilder{}.
-			WithSrc(port).
+			WithSrc(port.AsRemote()).
 			WithDst(task.remotePorts[i]).
 			WithData(task.data[task.round*task.stride+i]).
 			WithColor(task.color).
 			WithSendTime(d.Engine.CurrentTime()). // Set the current engine time here
 			Build()
-		
+
 		err := port.Send(msg)
 		//fmt.Println(msg)
 		if err != nil {
@@ -135,11 +140,11 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 		fmt.Printf("%10f, Feed in %d to %s\n",
 			d.Engine.CurrentTime()*1e9,
 			task.data[task.round*task.stride+i],
-			task.remotePorts[i].Name())
-		
-        madeProgress = true
+			task.remotePorts[i])
+
+		madeProgress = true
 	}
-	
+
 	task.round++
 	return madeProgress
 }
@@ -163,7 +168,7 @@ func (d *driverImpl) doOneCollectTask(task *collectTask) bool {
 	}
 
 	for i, port := range task.ports {
-		msg := port.Retrieve(d.Engine.CurrentTime()).(*cgra.MoveMsg)
+		msg := port.RetrieveIncoming().(*cgra.MoveMsg)
 		task.data[task.round*task.stride+i] = msg.Data
 	}
 
@@ -174,7 +179,7 @@ func (d *driverImpl) doOneCollectTask(task *collectTask) bool {
 
 func (*driverImpl) allDataReady(task *collectTask) bool {
 	for _, port := range task.ports {
-		item := port.Peek()
+		item := port.PeekIncoming()
 		if item == nil {
 			return false
 		}
@@ -233,18 +238,17 @@ func (d *driverImpl) connectOnePort(side cgra.Side, index int, port sim.Port) {
 	localPort := d.portFactory.make(d, d.Name()+"."+portName)
 	d.AddPort(portName, localPort)
 
-	conn := sim.NewDirectConnection(
-		localPort.Name()+"."+port.Name(),
-		d.Engine,
-		d.Freq,
-	)
-	conn.PlugIn(localPort, 1)
-	conn.PlugIn(port, 1)
+	conn := directconnection.MakeBuilder().
+		WithEngine(d.Engine).
+		WithFreq(d.Freq).
+		Build(localPort.Name() + "." + port.Name())
+	conn.PlugIn(localPort)
+	conn.PlugIn(port)
 
-	d.setTileRemovePort(side, index, localPort)
+	d.setTileRemotePort(side, index, localPort)
 }
 
-func (d *driverImpl) setTileRemovePort(
+func (d *driverImpl) setTileRemotePort(
 	side cgra.Side,
 	index int,
 	localPort sim.Port,
@@ -261,14 +265,15 @@ func (d *driverImpl) setTileRemovePort(
 	case cgra.West:
 		tile = d.device.GetTile(0, index)
 	}
-	tile.SetRemotePort(side, localPort)
+
+	tile.SetRemotePort(side, localPort.AsRemote())
 }
 
 type feedInTask struct {
 	data []uint32
 
 	localPorts  []sim.Port
-	remotePorts []sim.Port
+	remotePorts []sim.RemotePort
 
 	stride int
 	color  int
@@ -287,15 +292,20 @@ func (d *driverImpl) FeedIn(
 	color string,
 ) {
 	task := &feedInTask{
-		data:        data,
-		localPorts:  d.getLocalPorts(side, portRange),
-		remotePorts: d.device.GetSidePorts(side, portRange),
-		stride:      stride,
-		color:       d.getColorIndex(color),
+		data:       data,
+		localPorts: d.getLocalPorts(side, portRange),
+		stride:     stride,
+		color:      d.getColorIndex(color),
 	}
+
 	sideIndex := int(side)
-	//fmt.Println(color)
 	d.feedInTasks[sideIndex] = append(d.feedInTasks[sideIndex], task)
+
+	deviceSidePorts := d.device.GetSidePorts(side, portRange)
+	task.remotePorts = make([]sim.RemotePort, len(deviceSidePorts))
+	for i, port := range deviceSidePorts {
+		task.remotePorts[i] = port.AsRemote()
+	}
 }
 
 func (d *driverImpl) getColorIndex(color string) int {
@@ -362,27 +372,27 @@ func (d *driverImpl) MapProgram(program string, core [2]int) {
 }
 
 func (d *driverImpl) SetPerPEKernels(kernels PerPEKernels) error {
-    deviceWidth, deviceHeight := d.device.GetSize()
-    
-    for coord, code := range kernels {
-        x, y := coord[0], coord[1]
-        
-        // Verify the coordinate
-        if x < 0 || x >= deviceWidth || y < 0 || y >= deviceHeight {
-            return fmt.Errorf("invalid coordinate [%d,%d] for device size %dx%d", 
-                x, y, deviceWidth, deviceHeight)
-        }
-        
-        // map the program to the core
-        d.MapProgram(code, coord)
-    }
-    
-    return nil
+	deviceWidth, deviceHeight := d.device.GetSize()
+
+	for coord, code := range kernels {
+		x, y := coord[0], coord[1]
+
+		// Verify the coordinate
+		if x < 0 || x >= deviceWidth || y < 0 || y >= deviceHeight {
+			return fmt.Errorf("invalid coordinate [%d,%d] for device size %dx%d",
+				x, y, deviceWidth, deviceHeight)
+		}
+
+		// map the program to the core
+		d.MapProgram(code, coord)
+	}
+
+	return nil
 }
 
 // Run runs all the tasks in the driver.
 func (d *driverImpl) Run() {
-	d.TickNow(d.Engine.CurrentTime())
+	d.TickNow()
 	err := d.Engine.Run()
 	if err != nil {
 		panic(err)

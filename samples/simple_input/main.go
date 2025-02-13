@@ -4,10 +4,11 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+
 	//"time"
 
-	"github.com/sarchlab/akita/v3/monitoring"
-	"github.com/sarchlab/akita/v3/sim"
+	"github.com/sarchlab/akita/v4/monitoring"
+	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/api"
 	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/config"
@@ -16,6 +17,7 @@ import (
 
 var inputHeight = 2
 var inputWidth = 1
+
 //go:embed simple_input.cgraasm
 var inputKernel string
 

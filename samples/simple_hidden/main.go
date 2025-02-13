@@ -3,13 +3,13 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"math/rand"
 	"os"
 	"time"
-	"math/rand"
 	"unsafe"
 
-	"github.com/sarchlab/akita/v3/monitoring"
-	"github.com/sarchlab/akita/v3/sim"
+	"github.com/sarchlab/akita/v4/monitoring"
+	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/api"
 	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/config"
@@ -18,6 +18,7 @@ import (
 
 var inputHeight = 1
 var inputWidth = 1
+
 //go:embed hidden.cgraasm
 var hidden string
 
