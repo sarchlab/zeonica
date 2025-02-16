@@ -373,14 +373,13 @@ func (d *driverImpl) MapProgram(program string, core [2]int) {
 
 func (d *driverImpl) SetPerPEKernels(kernels PerPEKernels) error {
 	deviceWidth, deviceHeight := d.device.GetSize()
-
 	for coord, code := range kernels {
-		x, y := coord[0], coord[1]
-
+		y, x := coord[0], coord[1]
+		// since we are using x for horizontal and y for vertical
 		// Verify the coordinate
 		if x < 0 || x >= deviceWidth || y < 0 || y >= deviceHeight {
 			return fmt.Errorf("invalid coordinate [%d,%d] for device size %dx%d",
-				x, y, deviceWidth, deviceHeight)
+				y, x, deviceWidth, deviceHeight)
 		}
 
 		// map the program to the core

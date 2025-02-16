@@ -50,7 +50,6 @@ func (b Builder) Build(name string) *Core {
 	b.makePort(c, cgra.West)
 	b.makePort(c, cgra.South)
 	b.makePort(c, cgra.East)
-	//make port for new direction
 
 	return c
 }

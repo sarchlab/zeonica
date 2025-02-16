@@ -26,7 +26,7 @@ type coreState struct {
 	TileX, TileY uint32
 	Registers    []uint32
 	Code         []string
-	Memory		 []uint32
+	Memory       []uint32
 
 	RecvBufHead      [][]uint32 //[Color][Direction]
 	RecvBufHeadReady [][]bool
@@ -106,22 +106,22 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 		"ST": i.runStore, //able to load store imm as well
 
 		//Advanced Arithmetic: FADD, FADD_CONST, FINC, FSUB, FMUL, FMUL_CONST
-		"FADD": i.runFAdd,
+		"FADD":       i.runFAdd,
 		"FADD_CONST": i.runFAdd_Const,
-		"FINC": i.runFInc,
-		"FSUB": i.runFSub,
-		"FMUL": i.runFMul,
-		"FDIV": i.runFDiv,
+		"FINC":       i.runFInc,
+		"FSUB":       i.runFSub,
+		"FMUL":       i.runFMul,
+		"FDIV":       i.runFDiv,
 		"FMUL_CONST": i.runFMul_Const,
 		//Vector Operations: VEC_ADD, VEC_ADD_CONST, VEC_INC, VEC_SUB, VEC_SUB_CONST, VEC_MUL, VEC_REDUCE_ADD, VEC_REDUCE_MUL
 
 		//Specialized Control: OPT_PAS, OPT_START, OPT_NAH, OPT_PHI, OPT_PHI_CONST, OPT_SEL
-		"PAS": i.runPAS,
-		"START": i.runStart,
-		"NAH": i.runNah, 
-		"PHI": i.runPhi,
+		"PAS":       i.runPAS,
+		"START":     i.runStart,
+		"NAH":       i.runNah,
+		"PHI":       i.runPhi,
 		"PHI_CONST": i.runPhi_const,
-		"SEL": i.runSel,
+		"SEL":       i.runSel,
 	}
 
 	if instFunc, ok := instFuncs[instName]; ok {
@@ -179,15 +179,14 @@ func (i instEmulator) getColorIndex(color string) int {
 	}
 }
 
-
 // float32 to uint32
 func float2Uint(f float32) uint32 {
-    return math.Float32bits(f)
+	return math.Float32bits(f)
 }
 
 // uint32 to float32
 func uint2Float(u uint32) float32 {
-    return math.Float32frombits(u)
+	return math.Float32frombits(u)
 }
 
 /**
@@ -305,62 +304,62 @@ func (i instEmulator) runMov(inst []string, state *coreState) {
 }
 
 func (i instEmulator) parseAddress(addrStr string, state *coreState) uint32 {
-    // imm addr
-    if immediate, err := strconv.ParseUint(addrStr, 0, 32); err == nil {
-        return uint32(immediate)
-    }
+	// imm addr
+	if immediate, err := strconv.ParseUint(addrStr, 0, 32); err == nil {
+		return uint32(immediate)
+	}
 
-    // addr in reg
-    if strings.Contains(addrStr, "$") {
-        parts := strings.Split(addrStr, "+")
-        baseReg := strings.TrimSpace(parts[0])
-        baseAddr := i.readOperand(baseReg, state)
+	// addr in reg
+	if strings.Contains(addrStr, "$") {
+		parts := strings.Split(addrStr, "+")
+		baseReg := strings.TrimSpace(parts[0])
+		baseAddr := i.readOperand(baseReg, state)
 
-        offset := uint32(0)
-        if len(parts) > 1 {
-            offsetVal, err := strconv.ParseUint(parts[1], 0, 32)
-            if err != nil {
-                panic("invalid offset")
-            }
-            offset = uint32(offsetVal)
-        }
-        return baseAddr + offset
-    }
+		offset := uint32(0)
+		if len(parts) > 1 {
+			offsetVal, err := strconv.ParseUint(parts[1], 0, 32)
+			if err != nil {
+				panic("invalid offset")
+			}
+			offset = uint32(offsetVal)
+		}
+		return baseAddr + offset
+	}
 
-    panic("invalid address format")
+	panic("invalid address format")
 }
 
 func (i instEmulator) runLoad(inst []string, state *coreState) {
-    dstReg := inst[1]       
-    addrStr := inst[2]      // address（ 0x100 or $1+0x10）
-	// $1 + 0x10 implies that the base address of register 1 
-	// (which is 0xF0) plus an offset of 0x10 
+	dstReg := inst[1]
+	addrStr := inst[2] // address（ 0x100 or $1+0x10）
+	// $1 + 0x10 implies that the base address of register 1
+	// (which is 0xF0) plus an offset of 0x10
 	// results in the address 0x100.
-    addr := i.parseAddress(addrStr, state)
-    
-    if addr >= uint32(len(state.Memory)) {
-        panic("memory address out of bounds")
-    }
-    value := state.Memory[addr]
-    i.writeOperand(dstReg, value, state)
-    state.PC++
+	addr := i.parseAddress(addrStr, state)
+
+	if addr >= uint32(len(state.Memory)) {
+		panic("memory address out of bounds")
+	}
+	value := state.Memory[addr]
+	i.writeOperand(dstReg, value, state)
+	state.PC++
 }
 
 func (i instEmulator) runStore(inst []string, state *coreState) {
-    srcReg := inst[1]       
-    addrStr := inst[2]      
-    addr := i.parseAddress(addrStr, state)
-    if addr >= uint32(len(state.Memory)) {
-        panic("memory address out of bounds")
-    }
-    value := i.readOperand(srcReg, state)
-    state.Memory[addr] = value
-    state.PC++
+	srcReg := inst[1]
+	addrStr := inst[2]
+	addr := i.parseAddress(addrStr, state)
+	if addr >= uint32(len(state.Memory)) {
+		panic("memory address out of bounds")
+	}
+	value := i.readOperand(srcReg, state)
+	state.Memory[addr] = value
+	state.PC++
 }
 
 func (i instEmulator) sendDstMustBeNetSendReg(dst string) {
 	if !strings.HasPrefix(dst, "NET_SEND_") {
-		panic("the destination of a SEND instruction must be NET_SEND registers")
+		panic("the destination of a SEND instruction must be NET_SEND_ registers")
 	}
 }
 
@@ -722,95 +721,95 @@ func (i instEmulator) runDiv(inst []string, state *coreState) {
 }
 
 func (i instEmulator) runFAdd(inst []string, state *coreState) {
-    dst := inst[1]
-    src1 := inst[2]
-    src2 := inst[3]
+	dst := inst[1]
+	src1 := inst[2]
+	src2 := inst[3]
 
-    src1Uint := i.readOperand(src1, state)
-    src2Uint := i.readOperand(src2, state)
+	src1Uint := i.readOperand(src1, state)
+	src2Uint := i.readOperand(src2, state)
 
-    src1Float := uint2Float(src1Uint)
-    src2Float := uint2Float(src2Uint)
+	src1Float := uint2Float(src1Uint)
+	src2Float := uint2Float(src2Uint)
 
-    resultFloat := src1Float + src2Float
+	resultFloat := src1Float + src2Float
 
-    resultUint := float2Uint(resultFloat)
-    i.writeOperand(dst, resultUint, state)
+	resultUint := float2Uint(resultFloat)
+	i.writeOperand(dst, resultUint, state)
 
-    fmt.Printf(
-        "FADD: %s = %s(%f) + %s(%f) => %f (0x%08x)\n",
-        dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
-    )
-    state.PC++
+	fmt.Printf(
+		"FADD: %s = %s(%f) + %s(%f) => %f (0x%08x)\n",
+		dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
+	)
+	state.PC++
 }
 
 func (i instEmulator) runFSub(inst []string, state *coreState) {
-    dst := inst[1]
+	dst := inst[1]
 	src1 := inst[2]
-    src2 := inst[3]
+	src2 := inst[3]
 
-    src1Uint := i.readOperand(src1, state)
-    src2Uint := i.readOperand(src2, state)
+	src1Uint := i.readOperand(src1, state)
+	src2Uint := i.readOperand(src2, state)
 
 	src1Float := uint2Float(src1Uint)
-    src2Float := uint2Float(src2Uint)
+	src2Float := uint2Float(src2Uint)
 
-    resultFloat := src1Float - src2Float
+	resultFloat := src1Float - src2Float
 
-    resultUint := float2Uint(resultFloat)
-    i.writeOperand(dst, resultUint, state)
+	resultUint := float2Uint(resultFloat)
+	i.writeOperand(dst, resultUint, state)
 
-    fmt.Printf(
-        "FSUB: %s = %s(%f) - %s(%f) => %f (0x%08x)\n",
-        dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
-    )
-    state.PC++
+	fmt.Printf(
+		"FSUB: %s = %s(%f) - %s(%f) => %f (0x%08x)\n",
+		dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
+	)
+	state.PC++
 }
 
 func (i instEmulator) runFMul(inst []string, state *coreState) {
-    dst := inst[1]
+	dst := inst[1]
 	src1 := inst[2]
-    src2 := inst[3]
+	src2 := inst[3]
 
-    src1Uint := i.readOperand(src1, state)
-    src2Uint := i.readOperand(src2, state)
+	src1Uint := i.readOperand(src1, state)
+	src2Uint := i.readOperand(src2, state)
 
 	src1Float := uint2Float(src1Uint)
-    src2Float := uint2Float(src2Uint)
+	src2Float := uint2Float(src2Uint)
 
-    resultFloat := src1Float * src2Float
+	resultFloat := src1Float * src2Float
 
-    resultUint := float2Uint(resultFloat)
-    i.writeOperand(dst, resultUint, state)
+	resultUint := float2Uint(resultFloat)
+	i.writeOperand(dst, resultUint, state)
 
-    fmt.Printf(
-        "FMUL: %s = %s(%f) * %s(%f) => %f (0x%08x)\n",
-        dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
-    )
-    state.PC++
+	fmt.Printf(
+		"FMUL: %s = %s(%f) * %s(%f) => %f (0x%08x)\n",
+		dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
+	)
+	state.PC++
 }
 
 func (i instEmulator) runFDiv(inst []string, state *coreState) {
-    dst := inst[1]
+	dst := inst[1]
 	src1 := inst[2]
-    src2 := inst[3]
+	src2 := inst[3]
 
-    src1Uint := i.readOperand(src1, state)
-    src2Uint := i.readOperand(src2, state)
+	src1Uint := i.readOperand(src1, state)
+	src2Uint := i.readOperand(src2, state)
 
 	src1Float := uint2Float(src1Uint)
-    src2Float := uint2Float(src2Uint)
+	src2Float := uint2Float(src2Uint)
 
-    resultFloat := src1Float / src2Float
+	resultFloat := src1Float / src2Float
 
-    resultUint := float2Uint(resultFloat)
-    i.writeOperand(dst, resultUint, state)
+	resultUint := float2Uint(resultFloat)
+	i.writeOperand(dst, resultUint, state)
 
-    fmt.Printf(
-        "FDIV: %s = %s(%f) / %s(%f) => %f (0x%08x)\n",
-        dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
-    )
-    state.PC++
+	fmt.Printf(
+		"FDIV: %s = %s(%f) / %s(%f) => %f (0x%08x)\n",
+		dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
+	)
+	state.PC++
 }
 
 func (i instEmulator) runFAdd_Const(inst []string, state *coreState) {
@@ -837,7 +836,7 @@ func (i instEmulator) runFAdd_Const(inst []string, state *coreState) {
 	state.PC++
 }
 
-func (i instEmulator) runFInc(inst []string, state *coreState){
+func (i instEmulator) runFInc(inst []string, state *coreState) {
 	dst := inst[1]
 	//src := inst[2]
 
@@ -853,7 +852,7 @@ func (i instEmulator) runFInc(inst []string, state *coreState){
 	state.PC++
 }
 
-func (i instEmulator) runFMul_Const(inst []string, state *coreState){
+func (i instEmulator) runFMul_Const(inst []string, state *coreState) {
 	dst := inst[1]
 	src := inst[2]
 	immeStr := inst[3]
@@ -876,9 +875,6 @@ func (i instEmulator) runFMul_Const(inst []string, state *coreState){
 	)
 	state.PC++
 }
-
-
-
 
 // Bitwise
 func (i instEmulator) runLLS(inst []string, state *coreState) {
@@ -971,32 +967,32 @@ func (i instEmulator) runAND(inst []string, state *coreState) {
 	state.PC++
 }
 
-//Specialized Control
-func (i instEmulator) runPAS(inst []string, state *coreState){
+// Specialized Control
+func (i instEmulator) runPAS(inst []string, state *coreState) {
 
 }
 
-func (i instEmulator) runStart(inst []string, state *coreState){
+func (i instEmulator) runStart(inst []string, state *coreState) {
 
 }
 
-func (i instEmulator) runNah(inst []string, state *coreState){
+func (i instEmulator) runNah(inst []string, state *coreState) {
 	//do nothing, skip
 	fmt.Printf("NAH: No action taken, PC advanced to %d\n", state.PC)
 	state.PC++
 }
 
-func (i instEmulator) runPhi(inst []string, state *coreState){
+func (i instEmulator) runPhi(inst []string, state *coreState) {
 
 }
 
-func (i instEmulator) runPhi_const(inst []string, state *coreState){
+func (i instEmulator) runPhi_const(inst []string, state *coreState) {
 
 }
 
-func (i instEmulator) runSel(inst []string, state *coreState){
-    // SEL, DstReg, CondReg, TrueReg, FalseReg
-	
+func (i instEmulator) runSel(inst []string, state *coreState) {
+	// SEL, DstReg, CondReg, TrueReg, FalseReg
+
 }
 
 func (i instEmulator) runDone() {
@@ -1188,7 +1184,7 @@ func (i instEmulator) runRecvSend(inst []string, state *coreState) {
 		fmt.Printf("recvbufhead not ready\n")
 		return
 	}
-	
+
 	val := state.RecvBufHead[srcColorIndex][srcIndex]
 	state.RecvBufHeadReady[srcColorIndex][srcIndex] = false
 

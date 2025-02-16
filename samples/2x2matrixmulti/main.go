@@ -59,16 +59,23 @@ func matrixMulti(driver api.Driver) {
 	//30 44
 
 	//create table of mapping kernel to PE
+	/*
+		PE(0,0) PE(0,1) PE(0,2)
+		PE(1,0) PE(1,1) PE(1,2)
+		PE(2,0) PE(2,1) PE(2,2)
+		(x, y)
+	*/
 	kernels := api.PerPEKernels{
 		{0, 0}: mult2Kernel,
-		{0, 1}: mac2Kernel,
-		{0, 2}: storeDataKernel,
-		{1, 0}: mult1Kernel,
+		{1, 0}: mac2Kernel,
+		{2, 0}: storeDataKernel,
+		{0, 1}: mult1Kernel,
 		{1, 1}: mac1Kernel,
-		{1, 2}: storeDataKernel,
-		{2, 0}: loadDataKernel,
-		{2, 1}: loadDataKernel,
+		{2, 1}: storeDataKernel,
+		{0, 2}: loadDataKernel,
+		{1, 2}: loadDataKernel,
 		{2, 2}: doNothingKernel,
+		//(y,x)
 	}
 
 	// set the mapping
@@ -76,17 +83,16 @@ func matrixMulti(driver api.Driver) {
 		panic(err)
 	}
 	//send data to PE(2,0) and PE(2,1)
-	//driver.FeedIn(src1[:], cgra.South, [2]int{0, 2}, 2, "R")
 	driver.FeedIn(src1[0:2], cgra.South, [2]int{0, 2}, 2, "R")
 	driver.FeedIn(src1[2:4], cgra.South, [2]int{0, 2}, 2, "B")
 	driver.Run()
 	//driver.FeedIn(src2[:], cgra.North, [2]int{0, width}, width, "B") //for output signal
 	//driver.Collect(dst, cgra.South, [2]int{0, height}, height, "B")  //for output
-	dst[0] = driver.ReadMemory(2, 2, 0)
-	dst[1] = driver.ReadMemory(2, 2, 1)
-	dst[2] = driver.ReadMemory(1, 2, 0)
-	dst[3] = driver.ReadMemory(1, 2, 1)
-	fmt.Println(dst)
+	dst[0] = driver.ReadMemory(2, 0, 0)
+	dst[1] = driver.ReadMemory(2, 0, 1)
+	dst[2] = driver.ReadMemory(2, 1, 0)
+	dst[3] = driver.ReadMemory(2, 1, 1)
+	fmt.Printf("%v * %v = %v\n", src1, src2, dst)
 }
 
 func main() {

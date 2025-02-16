@@ -151,22 +151,17 @@ func (c *Core) runProgram() bool {
 	if int(c.state.PC) >= len(c.state.Code) {
 		return false
 	}
-	// fmt.Printf(
-	//     "PC=%d, SendBufHeadBusy=%v,\n RecvBufHeadReady=%v\n",
-	//     c.state.PC,
-	//     c.state.SendBufHeadBusy,
-	//     c.state.RecvBufHeadReady,
-	// )
 	inst := c.state.Code[c.state.PC]
+	//fmt.Printf("%10f, %s, inst: %s inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), inst, len(inst))
 	for inst[len(inst)-1] == ':' {
 		c.state.PC++
 		inst = c.state.Code[c.state.PC]
 	}
 	prevPC := c.state.PC
-	fmt.Printf("start run inst \n")
+	//fmt.Printf("start run inst \n")
 	c.emu.RunInst(inst, &c.state)
 	nextPC := c.state.PC
-	fmt.Printf("end run inst, current PC = %d\n", nextPC)
+	//fmt.Printf("end run inst, current PC = %d\n", nextPC)
 	if prevPC == nextPC {
 		return false
 	}
