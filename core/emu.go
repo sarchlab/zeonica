@@ -25,8 +25,10 @@ type coreState struct {
 	PC           uint32
 	TileX, TileY uint32
 	Registers    []uint32
-	Code         []string
-	Memory       []uint32
+	// still consider using outside block to control pc
+	//Code         [][]string
+	Memory []uint32
+	Code   []string
 
 	RecvBufHead      [][]uint32 //[Color][Direction]
 	RecvBufHeadReady [][]bool
@@ -41,7 +43,6 @@ type instEmulator struct {
 }
 
 func (i instEmulator) RunInst(inst string, state *coreState) {
-	fmt.Printf("Running instruction: %s\n", inst)
 	tokens := strings.Split(inst, ",")
 	for i := range tokens {
 		tokens[i] = strings.TrimSpace(tokens[i])
@@ -246,7 +247,7 @@ func (i instEmulator) runRecv(inst []string, state *coreState) {
 	state.PC++
 
 	// Debug log to indicate the RECV operation
-	fmt.Printf("RECV Instruction: Received %d from %s buffer, stored in %s\n", data, src, dstReg)
+	//fmt.Printf("RECV Instruction: Received %d from %s buffer, stored in %s\n", data, src, dstReg)
 }
 
 /**
@@ -270,7 +271,7 @@ func (i instEmulator) runSend(inst []string, state *coreState) {
 	state.SendBufHeadBusy[colorIndex][dstIndex] = true
 	val := i.readOperand(src, state)
 	state.SendBufHead[colorIndex][dstIndex] = val
-	fmt.Printf("SEND: Stored value %v in send buffer for color %d and destination index %d\n", val, colorIndex, dstIndex)
+	//fmt.Printf("SEND: Stored value %v in send buffer for color %d and destination index %d\n", val, colorIndex, dstIndex)
 	state.PC++
 }
 
@@ -298,7 +299,7 @@ func (i instEmulator) runMov(inst []string, state *coreState) {
 	// Write the value into the destination register
 	i.writeOperand(dst, value, state)
 
-	fmt.Printf("MOV Instruction: Moving %v into %s\n", value, dst)
+	//fmt.Printf("MOV Instruction: Moving %v into %s\n", value, dst)
 
 	state.PC++
 }
@@ -431,7 +432,7 @@ func (i instEmulator) writeOperand(operand string, value uint32, state *coreStat
 		}
 
 		state.Registers[registerIndex] = value
-		fmt.Printf("Updated register $%d to value %d at PC %d\n", registerIndex, value, state.PC)
+		//fmt.Printf("Updated register $%d to value %d at PC %d\n", registerIndex, value, state.PC)
 	} else {
 		panic(fmt.Sprintf("Invalid operand %s in writeOperand; expected register", operand))
 	}
@@ -578,8 +579,8 @@ func (i instEmulator) runMac(inst []string, state *coreState) {
 	dstVal += srcVal1 * srcVal2
 	i.writeOperand(dst, dstVal, state)
 
-	fmt.Printf("Mac Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
-	fmt.Printf("MAC: %s += %s * %s => Result: %v\n", dst, src1, src2, dstVal)
+	// fmt.Printf("Mac Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
+	// fmt.Printf("MAC: %s += %s * %s => Result: %v\n", dst, src1, src2, dstVal)
 	state.PC++
 }
 
@@ -594,7 +595,7 @@ func (i instEmulator) runMul_Sub(inst []string, state *coreState) {
 	dstVal -= srcVal1 * srcVal2
 	i.writeOperand(dst, dstVal, state)
 
-	fmt.Printf("MUL_SUB: %s -= %s * %s => Result: %v\n", dst, src1, src2, dstVal)
+	//fmt.Printf("MUL_SUB: %s -= %s * %s => Result: %v\n", dst, src1, src2, dstVal)
 	state.PC++
 }
 
@@ -614,7 +615,7 @@ func (i instEmulator) runMul(inst []string, state *coreState) {
 	dstVal = srcVal1 * srcVal2
 	i.writeOperand(dst, dstVal, state)
 
-	fmt.Printf("Mul Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
+	//fmt.Printf("Mul Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
 
 	state.PC++
 }
@@ -646,7 +647,7 @@ func (i instEmulator) runIAdd(inst []string, state *coreState) {
 		src2Val = uint32(num)
 	}
 	dstVal := src1Val + src2Val
-	fmt.Printf("IADD: Adding %v (src1) + %v (src2) = %v\n", src1Val, src2Val, dstVal)
+	//fmt.Printf("IADD: Adding %v (src1) + %v (src2) = %v\n", src1Val, src2Val, dstVal)
 	i.writeOperand(dst, dstVal, state)
 	state.PC++
 }
@@ -662,7 +663,7 @@ func (i instEmulator) runSub(inst []string, state *coreState) {
 	dstVal = srcVal1 - srcVal2
 	i.writeOperand(dst, dstVal, state)
 
-	fmt.Printf("SUB Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
+	//fmt.Printf("SUB Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
 
 	state.PC++
 }
@@ -682,7 +683,7 @@ func (i instEmulator) runMul_Const(inst []string, state *coreState) {
 	result := srcVal * immeVal
 	i.writeOperand(dst, result, state)
 
-	fmt.Printf("MUL_CONST: %s = %s * %d => Result: %d\n", dst, src, immeVal, result)
+	//fmt.Printf("MUL_CONST: %s = %s * %d => Result: %d\n", dst, src, immeVal, result)
 	state.PC++
 }
 
@@ -700,7 +701,7 @@ func (i instEmulator) runMul_Const_Add(inst []string, state *coreState) {
 	dstVal += srcVal * immeVal
 	i.writeOperand(dst, dstVal, state)
 
-	fmt.Printf("MUL_CONST_ADD: %s += %s * %d => Result: %d\n", dst, src, immeVal, dstVal)
+	//fmt.Printf("MUL_CONST_ADD: %s += %s * %d => Result: %d\n", dst, src, immeVal, dstVal)
 	state.PC++
 }
 
@@ -715,7 +716,7 @@ func (i instEmulator) runDiv(inst []string, state *coreState) {
 	dstVal = srcVal1 / srcVal2
 	i.writeOperand(dst, dstVal, state)
 
-	fmt.Printf("DIV Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
+	//fmt.Printf("DIV Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
 
 	state.PC++
 }
@@ -736,10 +737,10 @@ func (i instEmulator) runFAdd(inst []string, state *coreState) {
 	resultUint := float2Uint(resultFloat)
 	i.writeOperand(dst, resultUint, state)
 
-	fmt.Printf(
-		"FADD: %s = %s(%f) + %s(%f) => %f (0x%08x)\n",
-		dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
-	)
+	// fmt.Printf(
+	// 	"FADD: %s = %s(%f) + %s(%f) => %f (0x%08x)\n",
+	// 	dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
+	// )
 	state.PC++
 }
 
@@ -759,10 +760,10 @@ func (i instEmulator) runFSub(inst []string, state *coreState) {
 	resultUint := float2Uint(resultFloat)
 	i.writeOperand(dst, resultUint, state)
 
-	fmt.Printf(
-		"FSUB: %s = %s(%f) - %s(%f) => %f (0x%08x)\n",
-		dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
-	)
+	// fmt.Printf(
+	// 	"FSUB: %s = %s(%f) - %s(%f) => %f (0x%08x)\n",
+	// 	dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
+	// )
 	state.PC++
 }
 
@@ -782,10 +783,10 @@ func (i instEmulator) runFMul(inst []string, state *coreState) {
 	resultUint := float2Uint(resultFloat)
 	i.writeOperand(dst, resultUint, state)
 
-	fmt.Printf(
-		"FMUL: %s = %s(%f) * %s(%f) => %f (0x%08x)\n",
-		dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
-	)
+	// fmt.Printf(
+	// 	"FMUL: %s = %s(%f) * %s(%f) => %f (0x%08x)\n",
+	// 	dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
+	// )
 	state.PC++
 }
 
@@ -805,10 +806,10 @@ func (i instEmulator) runFDiv(inst []string, state *coreState) {
 	resultUint := float2Uint(resultFloat)
 	i.writeOperand(dst, resultUint, state)
 
-	fmt.Printf(
-		"FDIV: %s = %s(%f) / %s(%f) => %f (0x%08x)\n",
-		dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
-	)
+	// fmt.Printf(
+	// 	"FDIV: %s = %s(%f) / %s(%f) => %f (0x%08x)\n",
+	// 	dst, src1, src1Float, src2, src2Float, resultFloat, resultUint,
+	// )
 	state.PC++
 }
 
@@ -829,10 +830,10 @@ func (i instEmulator) runFAdd_Const(inst []string, state *coreState) {
 	resultUint := float2Uint(resultFloat)
 	i.writeOperand(dst, resultUint, state)
 
-	fmt.Printf(
-		"FADD_CONST: %s = %s(%f) + %f => %f (0x%08x)\n",
-		dst, src, uint2Float(srcVal), imme, resultFloat, resultUint,
-	)
+	// fmt.Printf(
+	// 	"FADD_CONST: %s = %s(%f) + %f => %f (0x%08x)\n",
+	// 	dst, src, uint2Float(srcVal), imme, resultFloat, resultUint,
+	// )
 	state.PC++
 }
 
@@ -845,10 +846,10 @@ func (i instEmulator) runFInc(inst []string, state *coreState) {
 	resultUint := float2Uint(resultFloat)
 	i.writeOperand(dst, resultUint, state)
 
-	fmt.Printf(
-		"FINC: %s = %s(%f) + 1.0 => %f (0x%08x)\n",
-		dst, dst, uint2Float(dstVal), resultFloat, resultUint,
-	)
+	// fmt.Printf(
+	// 	"FINC: %s = %s(%f) + 1.0 => %f (0x%08x)\n",
+	// 	dst, dst, uint2Float(dstVal), resultFloat, resultUint,
+	// )
 	state.PC++
 }
 
@@ -869,10 +870,10 @@ func (i instEmulator) runFMul_Const(inst []string, state *coreState) {
 	resultUint := float2Uint(resultFloat)
 	i.writeOperand(dst, resultUint, state)
 
-	fmt.Printf(
-		"FADD_CONST: %s = %s(%f) * %f => %f (0x%08x)\n",
-		dst, src, uint2Float(srcVal), imme, resultFloat, resultUint,
-	)
+	// fmt.Printf(
+	// 	"FADD_CONST: %s = %s(%f) * %f => %f (0x%08x)\n",
+	// 	dst, src, uint2Float(srcVal), imme, resultFloat, resultUint,
+	// )
 	state.PC++
 }
 
@@ -891,7 +892,7 @@ func (i instEmulator) runLLS(inst []string, state *coreState) {
 	result := srcVal << shift
 	i.writeOperand(dst, result, state)
 
-	fmt.Printf("LLS: %s = %s << %d => Result: %d\n", dst, src, shift, result)
+	//fmt.Printf("LLS: %s = %s << %d => Result: %d\n", dst, src, shift, result)
 	state.PC++
 }
 
@@ -909,7 +910,7 @@ func (i instEmulator) runLRS(inst []string, state *coreState) {
 	result := srcVal >> shift
 	i.writeOperand(dst, result, state)
 
-	fmt.Printf("LRS: %s = %s >> %d => Result: %d\n", dst, src, shift, result)
+	//fmt.Printf("LRS: %s = %s >> %d => Result: %d\n", dst, src, shift, result)
 	state.PC++
 }
 
@@ -923,7 +924,7 @@ func (i instEmulator) runOR(inst []string, state *coreState) {
 	result := srcVal1 | srcVal2
 	i.writeOperand(dst, result, state)
 
-	fmt.Printf("OR: %s = %s | %s => Result: %d\n", dst, src1, src2, result)
+	//fmt.Printf("OR: %s = %s | %s => Result: %d\n", dst, src1, src2, result)
 	state.PC++
 }
 
@@ -937,7 +938,7 @@ func (i instEmulator) runXOR(inst []string, state *coreState) {
 	result := srcVal1 ^ srcVal2
 	i.writeOperand(dst, result, state)
 
-	fmt.Printf("XOR: %s = %s ^ %s => Result: %d\n", dst, src1, src2, result)
+	//fmt.Printf("XOR: %s = %s ^ %s => Result: %d\n", dst, src1, src2, result)
 	state.PC++
 }
 
@@ -949,7 +950,7 @@ func (i instEmulator) runNOT(inst []string, state *coreState) {
 	result := ^srcVal
 	i.writeOperand(dst, result, state)
 
-	fmt.Printf("NOT: %s = ~%s => Result: %d\n", dst, src, result)
+	//fmt.Printf("NOT: %s = ~%s => Result: %d\n", dst, src, result)
 	state.PC++
 }
 
@@ -963,7 +964,7 @@ func (i instEmulator) runAND(inst []string, state *coreState) {
 	result := srcVal1 & srcVal2
 	i.writeOperand(dst, result, state)
 
-	fmt.Printf("AND: %s = %s & %s => Result: %d\n", dst, src1, src2, result)
+	//fmt.Printf("AND: %s = %s & %s => Result: %d\n", dst, src1, src2, result)
 	state.PC++
 }
 
@@ -1181,7 +1182,7 @@ func (i instEmulator) runRecvSend(inst []string, state *coreState) {
 	srcColorIndex := i.getColorIndex(srcParts[1])
 	dstColorIndex := i.getColorIndex(dstParts[1])
 	if !state.RecvBufHeadReady[srcColorIndex][srcIndex] {
-		fmt.Printf("recvbufhead not ready\n")
+		//fmt.Printf("recvbufhead not ready\n")
 		return
 	}
 
@@ -1190,7 +1191,7 @@ func (i instEmulator) runRecvSend(inst []string, state *coreState) {
 
 	i.writeOperand(dstReg, val, state)
 	if state.SendBufHeadBusy[dstColorIndex][dstIndex] {
-		fmt.Printf("sendbufhead busy\n")
+		//fmt.Printf("sendbufhead busy\n")
 		return
 	}
 	state.SendBufHeadBusy[dstColorIndex][dstIndex] = true

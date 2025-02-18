@@ -1,4 +1,4 @@
-Monitoring simulation with http://localhost:45883
+Monitoring simulation with http://localhost:42701
 Core [0][0] receive WriteMemory(x=0, y=0)
 Core [0][0] write memory[0] = 2
 Core [0][1] receive WriteMemory(x=0, y=1)
@@ -11,243 +11,181 @@ Core [1][1] write memory[0] = 8
   0.000000, Feed in 2 to Device.Tile[2][1].Core.South
   1.000000, Feed in 3 to Device.Tile[2][0].Core.South
   1.000000, Feed in 4 to Device.Tile[2][1].Core.South
-Running instruction: RECV_SEND, NORTH_R, $1, SOUTH_R
-recvbufhead not ready
+  1.000000, Device.Tile[2][1].Core, inst: RECV_SEND, NORTH_R, $1, SOUTH_R inst_length: 31
   1.000000, Device.Tile[2][1].Core, Recv 2 Driver.DeviceSouth[1]->Device.Tile[2][1].Core.South, Color 0
-Running instruction: RECV_SEND, NORTH_R, $1, SOUTH_R
-recvbufhead not ready
+  1.000000, Device.Tile[2][0].Core, inst: RECV_SEND, NORTH_R, $1, SOUTH_R inst_length: 31
   1.000000, Device.Tile[2][0].Core, Recv 1 Driver.DeviceSouth[0]->Device.Tile[2][0].Core.South, Color 0
-Running instruction: RECV_SEND, NORTH_R, $1, SOUTH_R
-Updated register $1 to value 2 at PC 0
+  2.000000, Device.Tile[2][1].Core, inst: RECV_SEND, NORTH_R, $1, SOUTH_R inst_length: 31
   2.000000, Device.Tile[2][1].Core, Inst RECV_SEND, NORTH_R, $1, SOUTH_R
   2.000000, Device.Tile[2][1].Core, Recv 4 Driver.DeviceSouth[1]->Device.Tile[2][1].Core.South, Color 2
-Running instruction: RECV_SEND, NORTH_R, $1, SOUTH_R
-Updated register $1 to value 1 at PC 0
+  2.000000, Device.Tile[2][0].Core, inst: RECV_SEND, NORTH_R, $1, SOUTH_R inst_length: 31
   2.000000, Device.Tile[2][0].Core, Inst RECV_SEND, NORTH_R, $1, SOUTH_R
   2.000000, Device.Tile[2][0].Core, Recv 3 Driver.DeviceSouth[0]->Device.Tile[2][0].Core.South, Color 2
   3.000000, Device.Tile[2][0].Core, Send 1 Device.Tile[2][0].Core.North->Device.Tile[1][0].Core.South, Color 0
-Running instruction: RECV_SEND, NORTH_B, $2, SOUTH_B
-Updated register $2 to value 3 at PC 1
+  3.000000, Device.Tile[2][0].Core, inst: RECV_SEND, NORTH_B, $2, SOUTH_B inst_length: 31
   3.000000, Device.Tile[2][0].Core, Inst RECV_SEND, NORTH_B, $2, SOUTH_B
   3.000000, Device.Tile[2][1].Core, Send 2 Device.Tile[2][1].Core.North->Device.Tile[1][1].Core.South, Color 0
-Running instruction: RECV_SEND, NORTH_B, $2, SOUTH_B
-Updated register $2 to value 4 at PC 1
+  3.000000, Device.Tile[2][1].Core, inst: RECV_SEND, NORTH_B, $2, SOUTH_B inst_length: 31
   3.000000, Device.Tile[2][1].Core, Inst RECV_SEND, NORTH_B, $2, SOUTH_B
   4.000000, Device.Tile[2][0].Core, Send 3 Device.Tile[2][0].Core.North->Device.Tile[1][0].Core.South, Color 2
-Running instruction: SLEEP
-Running instruction: WAIT, $1, NET_RECV_SOUTH, R
+  4.000000, Device.Tile[2][0].Core, inst: SLEEP inst_length: 5
+  4.000000, Device.Tile[1][1].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
   4.000000, Device.Tile[1][1].Core, Recv 2 Device.Tile[2][1].Core.North->Device.Tile[1][1].Core.South, Color 0
-Running instruction: WAIT, $1, NET_RECV_SOUTH, R
+  4.000000, Device.Tile[1][0].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
   4.000000, Device.Tile[1][0].Core, Recv 1 Device.Tile[2][0].Core.North->Device.Tile[1][0].Core.South, Color 0
   4.000000, Device.Tile[2][1].Core, Send 4 Device.Tile[2][1].Core.North->Device.Tile[1][1].Core.South, Color 2
-Running instruction: SLEEP
-Running instruction: WAIT, $1, NET_RECV_SOUTH, R
-Updated register $1 to value 1 at PC 0
+  4.000000, Device.Tile[2][1].Core, inst: SLEEP inst_length: 5
+  5.000000, Device.Tile[1][0].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
   5.000000, Device.Tile[1][0].Core, Inst WAIT, $1, NET_RECV_SOUTH, R
   5.000000, Device.Tile[1][0].Core, Recv 3 Device.Tile[2][0].Core.North->Device.Tile[1][0].Core.South, Color 2
-Running instruction: SLEEP
-Running instruction: WAIT, $1, NET_RECV_SOUTH, R
-Updated register $1 to value 2 at PC 0
+  5.000000, Device.Tile[2][0].Core, inst: SLEEP inst_length: 5
+  5.000000, Device.Tile[1][1].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
   5.000000, Device.Tile[1][1].Core, Inst WAIT, $1, NET_RECV_SOUTH, R
   5.000000, Device.Tile[1][1].Core, Recv 4 Device.Tile[2][1].Core.North->Device.Tile[1][1].Core.South, Color 2
-Running instruction: SLEEP
-Running instruction: WAIT, $2, NET_RECV_WEST, R
-Running instruction: SLEEP
-Running instruction: SLEEP
-Running instruction: SEND, NET_SEND_NORTH, $1, R
-SEND: Stored value 1 in send buffer for color 0 and destination index 0
+  5.000000, Device.Tile[2][1].Core, inst: SLEEP inst_length: 5
+  6.000000, Device.Tile[1][1].Core, inst: WAIT, $2, NET_RECV_WEST, R inst_length: 26
+  6.000000, Device.Tile[2][1].Core, inst: SLEEP inst_length: 5
+  6.000000, Device.Tile[2][0].Core, inst: SLEEP inst_length: 5
+  6.000000, Device.Tile[1][0].Core, inst: SEND, NET_SEND_NORTH, $1, R inst_length: 27
   6.000000, Device.Tile[1][0].Core, Inst SEND, NET_SEND_NORTH, $1, R
   7.000000, Device.Tile[1][0].Core, Send 1 Device.Tile[1][0].Core.North->Device.Tile[0][0].Core.South, Color 0
-Running instruction: LD, $0, 0x0
-Updated register $0 to value 4 at PC 2
+  7.000000, Device.Tile[1][0].Core, inst: LD, $0, 0x0 inst_length: 11
   7.000000, Device.Tile[1][0].Core, Inst LD, $0, 0x0
-Running instruction: MUL, $2, $1, $0
-Updated register $2 to value 4 at PC 3
-Mul Instruction, Data are 1 and 4, Res is 4
+  8.000000, Device.Tile[1][0].Core, inst: MUL, $2, $1, $0 inst_length: 15
   8.000000, Device.Tile[1][0].Core, Inst MUL, $2, $1, $0
-Running instruction: WAIT, $1, NET_RECV_SOUTH, R
+  8.000000, Device.Tile[0][0].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
   8.000000, Device.Tile[0][0].Core, Recv 1 Device.Tile[1][0].Core.North->Device.Tile[0][0].Core.South, Color 0
-Running instruction: SEND, NET_SEND_EAST, $2, R
-SEND: Stored value 4 in send buffer for color 0 and destination index 1
+  9.000000, Device.Tile[1][0].Core, inst: SEND, NET_SEND_EAST, $2, R inst_length: 26
   9.000000, Device.Tile[1][0].Core, Inst SEND, NET_SEND_EAST, $2, R
-Running instruction: WAIT, $1, NET_RECV_SOUTH, R
-Updated register $1 to value 1 at PC 0
+  9.000000, Device.Tile[0][0].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
   9.000000, Device.Tile[0][0].Core, Inst WAIT, $1, NET_RECV_SOUTH, R
  10.000000, Device.Tile[1][0].Core, Send 4 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 0
-Running instruction: WAIT, $3, NET_RECV_SOUTH, B
-Updated register $3 to value 3 at PC 5
+ 10.000000, Device.Tile[1][0].Core, inst: WAIT, $3, NET_RECV_SOUTH, B inst_length: 27
  10.000000, Device.Tile[1][0].Core, Inst WAIT, $3, NET_RECV_SOUTH, B
-Running instruction: LD, $0, 0x0
-Updated register $0 to value 2 at PC 1
+ 10.000000, Device.Tile[0][0].Core, inst: LD, $0, 0x0 inst_length: 11
  10.000000, Device.Tile[0][0].Core, Inst LD, $0, 0x0
-Running instruction: SEND, NET_SEND_NORTH, $3, B
-SEND: Stored value 3 in send buffer for color 2 and destination index 0
+ 11.000000, Device.Tile[1][0].Core, inst: SEND, NET_SEND_NORTH, $3, B inst_length: 27
  11.000000, Device.Tile[1][0].Core, Inst SEND, NET_SEND_NORTH, $3, B
-Running instruction: WAIT, $2, NET_RECV_WEST, R
+ 11.000000, Device.Tile[1][1].Core, inst: WAIT, $2, NET_RECV_WEST, R inst_length: 26
  11.000000, Device.Tile[1][1].Core, Recv 4 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 0
-Running instruction: MUL, $2, $1, $0
-Updated register $2 to value 2 at PC 2
-Mul Instruction, Data are 1 and 2, Res is 2
+ 11.000000, Device.Tile[0][0].Core, inst: MUL, $2, $1, $0 inst_length: 15
  11.000000, Device.Tile[0][0].Core, Inst MUL, $2, $1, $0
-Running instruction: WAIT, $2, NET_RECV_WEST, R
-Updated register $2 to value 4 at PC 1
+ 12.000000, Device.Tile[1][1].Core, inst: WAIT, $2, NET_RECV_WEST, R inst_length: 26
  12.000000, Device.Tile[1][1].Core, Inst WAIT, $2, NET_RECV_WEST, R
-Running instruction: SEND, NET_SEND_EAST, $2, R
-SEND: Stored value 2 in send buffer for color 0 and destination index 1
+ 12.000000, Device.Tile[0][0].Core, inst: SEND, NET_SEND_EAST, $2, R inst_length: 26
  12.000000, Device.Tile[0][0].Core, Inst SEND, NET_SEND_EAST, $2, R
  12.000000, Device.Tile[1][0].Core, Send 3 Device.Tile[1][0].Core.North->Device.Tile[0][0].Core.South, Color 2
-Running instruction: LD, $4, 0x0
-Updated register $4 to value 4 at PC 7
+ 12.000000, Device.Tile[1][0].Core, inst: LD, $4, 0x0 inst_length: 11
  12.000000, Device.Tile[1][0].Core, Inst LD, $4, 0x0
  13.000000, Device.Tile[0][0].Core, Send 2 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 0
-Running instruction: WAIT, $3, NET_RECV_SOUTH, B
+ 13.000000, Device.Tile[0][0].Core, inst: WAIT, $3, NET_RECV_SOUTH, B inst_length: 27
  13.000000, Device.Tile[0][0].Core, Recv 3 Device.Tile[1][0].Core.North->Device.Tile[0][0].Core.South, Color 2
-Running instruction: MUL, $5, $4, $3
-Updated register $5 to value 12 at PC 8
-Mul Instruction, Data are 4 and 3, Res is 12
+ 13.000000, Device.Tile[1][0].Core, inst: MUL, $5, $4, $3 inst_length: 15
  13.000000, Device.Tile[1][0].Core, Inst MUL, $5, $4, $3
-Running instruction: SEND, NET_SEND_NORTH, $1, R
-SEND: Stored value 2 in send buffer for color 0 and destination index 0
+ 13.000000, Device.Tile[1][1].Core, inst: SEND, NET_SEND_NORTH, $1, R inst_length: 27
  13.000000, Device.Tile[1][1].Core, Inst SEND, NET_SEND_NORTH, $1, R
-Running instruction: SEND, NET_SEND_EAST, $5, B
-SEND: Stored value 12 in send buffer for color 2 and destination index 1
+ 14.000000, Device.Tile[1][0].Core, inst: SEND, NET_SEND_EAST, $5, B inst_length: 26
  14.000000, Device.Tile[1][0].Core, Inst SEND, NET_SEND_EAST, $5, B
-Running instruction: WAIT, $1, NET_RECV_SOUTH, R
+ 14.000000, Device.Tile[0][1].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
  14.000000, Device.Tile[0][1].Core, Recv 2 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 0
-Running instruction: WAIT, $3, NET_RECV_SOUTH, B
-Updated register $3 to value 3 at PC 4
+ 14.000000, Device.Tile[0][0].Core, inst: WAIT, $3, NET_RECV_SOUTH, B inst_length: 27
  14.000000, Device.Tile[0][0].Core, Inst WAIT, $3, NET_RECV_SOUTH, B
  14.000000, Device.Tile[1][1].Core, Send 2 Device.Tile[1][1].Core.North->Device.Tile[0][1].Core.South, Color 0
-Running instruction: LD, $0, 0x0
-Updated register $0 to value 8 at PC 3
+ 14.000000, Device.Tile[1][1].Core, inst: LD, $0, 0x0 inst_length: 11
  14.000000, Device.Tile[1][1].Core, Inst LD, $0, 0x0
-Running instruction: LD, $4, 0x0
-Updated register $4 to value 2 at PC 5
+ 15.000000, Device.Tile[0][0].Core, inst: LD, $4, 0x0 inst_length: 11
  15.000000, Device.Tile[0][0].Core, Inst LD, $4, 0x0
-Running instruction: MAC, $2, $1, $0
-Updated register $2 to value 20 at PC 4
-Mac Instruction, Data are 2 and 8, Res is 20
-MAC: $2 += $1 * $0 => Result: 20
+ 15.000000, Device.Tile[1][1].Core, inst: MAC, $2, $1, $0 inst_length: 15
  15.000000, Device.Tile[1][1].Core, Inst MAC, $2, $1, $0
  15.000000, Device.Tile[1][0].Core, Send 12 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 2
-Running instruction: SLEEP
-Running instruction: WAIT, $1, NET_RECV_SOUTH, R
+ 15.000000, Device.Tile[1][0].Core, inst: SLEEP inst_length: 5
+ 15.000000, Device.Tile[0][1].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
  15.000000, Device.Tile[0][1].Core, Recv 2 Device.Tile[1][1].Core.North->Device.Tile[0][1].Core.South, Color 0
-Running instruction: SEND, NET_SEND_EAST, $2, R
-SEND: Stored value 20 in send buffer for color 0 and destination index 1
+ 16.000000, Device.Tile[1][1].Core, inst: SEND, NET_SEND_EAST, $2, R inst_length: 26
  16.000000, Device.Tile[1][1].Core, Inst SEND, NET_SEND_EAST, $2, R
  16.000000, Device.Tile[1][1].Core, Recv 12 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 2
-Running instruction: SLEEP
-Running instruction: MUL, $5, $4, $3
-Updated register $5 to value 6 at PC 6
-Mul Instruction, Data are 2 and 3, Res is 6
+ 16.000000, Device.Tile[1][0].Core, inst: SLEEP inst_length: 5
+ 16.000000, Device.Tile[0][0].Core, inst: MUL, $5, $4, $3 inst_length: 15
  16.000000, Device.Tile[0][0].Core, Inst MUL, $5, $4, $3
-Running instruction: WAIT, $1, NET_RECV_SOUTH, R
-Updated register $1 to value 2 at PC 0
+ 16.000000, Device.Tile[0][1].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
  16.000000, Device.Tile[0][1].Core, Inst WAIT, $1, NET_RECV_SOUTH, R
-Running instruction: SEND, NET_SEND_EAST, $5, B
-SEND: Stored value 6 in send buffer for color 2 and destination index 1
+ 17.000000, Device.Tile[0][0].Core, inst: SEND, NET_SEND_EAST, $5, B inst_length: 26
  17.000000, Device.Tile[0][0].Core, Inst SEND, NET_SEND_EAST, $5, B
-Running instruction: WAIT, $2, NET_RECV_WEST, R
-Updated register $2 to value 2 at PC 1
+ 17.000000, Device.Tile[0][1].Core, inst: WAIT, $2, NET_RECV_WEST, R inst_length: 26
  17.000000, Device.Tile[0][1].Core, Inst WAIT, $2, NET_RECV_WEST, R
  17.000000, Device.Tile[1][1].Core, Send 20 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 0
-Running instruction: WAIT, $3, NET_RECV_SOUTH, B
-Updated register $3 to value 4 at PC 6
+ 17.000000, Device.Tile[1][1].Core, inst: WAIT, $3, NET_RECV_SOUTH, B inst_length: 27
  17.000000, Device.Tile[1][1].Core, Inst WAIT, $3, NET_RECV_SOUTH, B
-Running instruction: SLEEP
-Running instruction: WAIT, $5, NET_RECV_WEST, B
-Updated register $5 to value 12 at PC 7
+ 17.000000, Device.Tile[1][0].Core, inst: SLEEP inst_length: 5
+ 18.000000, Device.Tile[1][1].Core, inst: WAIT, $5, NET_RECV_WEST, B inst_length: 26
  18.000000, Device.Tile[1][1].Core, Inst WAIT, $5, NET_RECV_WEST, B
-Running instruction: WAIT, $1, NET_RECV_WEST, R
+ 18.000000, Device.Tile[1][2].Core, inst: WAIT, $1, NET_RECV_WEST, R inst_length: 26
  18.000000, Device.Tile[1][2].Core, Recv 20 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 0
  18.000000, Device.Tile[0][0].Core, Send 6 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 2
-Running instruction: SLEEP
-Running instruction: LD, $0, 0x0
-Updated register $0 to value 6 at PC 2
+ 18.000000, Device.Tile[0][0].Core, inst: SLEEP inst_length: 5
+ 18.000000, Device.Tile[0][1].Core, inst: LD, $0, 0x0 inst_length: 11
  18.000000, Device.Tile[0][1].Core, Inst LD, $0, 0x0
-Running instruction: WAIT, $1, NET_RECV_WEST, R
-Updated register $1 to value 20 at PC 0
+ 19.000000, Device.Tile[1][2].Core, inst: WAIT, $1, NET_RECV_WEST, R inst_length: 26
  19.000000, Device.Tile[1][2].Core, Inst WAIT, $1, NET_RECV_WEST, R
-Running instruction: SLEEP
-Running instruction: SEND, NET_SEND_NORTH, $3, B
-SEND: Stored value 4 in send buffer for color 2 and destination index 0
+ 19.000000, Device.Tile[0][0].Core, inst: SLEEP inst_length: 5
+ 19.000000, Device.Tile[1][1].Core, inst: SEND, NET_SEND_NORTH, $3, B inst_length: 27
  19.000000, Device.Tile[1][1].Core, Inst SEND, NET_SEND_NORTH, $3, B
-Running instruction: MAC, $2, $1, $0
-Updated register $2 to value 14 at PC 3
-Mac Instruction, Data are 2 and 6, Res is 14
-MAC: $2 += $1 * $0 => Result: 14
+ 19.000000, Device.Tile[0][1].Core, inst: MAC, $2, $1, $0 inst_length: 15
  19.000000, Device.Tile[0][1].Core, Inst MAC, $2, $1, $0
  19.000000, Device.Tile[0][1].Core, Recv 6 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 2
  20.000000, Device.Tile[1][1].Core, Send 4 Device.Tile[1][1].Core.North->Device.Tile[0][1].Core.South, Color 2
-Running instruction: LD, $4, 0x0
-Updated register $4 to value 8 at PC 9
+ 20.000000, Device.Tile[1][1].Core, inst: LD, $4, 0x0 inst_length: 11
  20.000000, Device.Tile[1][1].Core, Inst LD, $4, 0x0
-Running instruction: SEND, NET_SEND_EAST, $2, R
-SEND: Stored value 14 in send buffer for color 0 and destination index 1
+ 20.000000, Device.Tile[0][1].Core, inst: SEND, NET_SEND_EAST, $2, R inst_length: 26
  20.000000, Device.Tile[0][1].Core, Inst SEND, NET_SEND_EAST, $2, R
-Running instruction: ST, $1, 0X00
+ 20.000000, Device.Tile[1][2].Core, inst: ST, $1, 0X00 inst_length: 12
  20.000000, Device.Tile[1][2].Core, Inst ST, $1, 0X00
-Running instruction: SLEEP
-Running instruction: WAIT, $2, NET_RECV_WEST, B
+ 20.000000, Device.Tile[0][0].Core, inst: SLEEP inst_length: 5
+ 21.000000, Device.Tile[1][2].Core, inst: WAIT, $2, NET_RECV_WEST, B inst_length: 26
  21.000000, Device.Tile[0][1].Core, Send 14 Device.Tile[0][1].Core.East->Device.Tile[0][2].Core.West, Color 0
-Running instruction: WAIT, $3, NET_RECV_SOUTH, B
+ 21.000000, Device.Tile[0][1].Core, inst: WAIT, $3, NET_RECV_SOUTH, B inst_length: 27
  21.000000, Device.Tile[0][1].Core, Recv 4 Device.Tile[1][1].Core.North->Device.Tile[0][1].Core.South, Color 2
-Running instruction: MAC, $5, $4, $3
-Updated register $5 to value 44 at PC 10
-Mac Instruction, Data are 8 and 4, Res is 44
-MAC: $5 += $4 * $3 => Result: 44
+ 21.000000, Device.Tile[1][1].Core, inst: MAC, $5, $4, $3 inst_length: 15
  21.000000, Device.Tile[1][1].Core, Inst MAC, $5, $4, $3
-Running instruction: WAIT, $3, NET_RECV_SOUTH, B
-Updated register $3 to value 4 at PC 5
+ 22.000000, Device.Tile[0][1].Core, inst: WAIT, $3, NET_RECV_SOUTH, B inst_length: 27
  22.000000, Device.Tile[0][1].Core, Inst WAIT, $3, NET_RECV_SOUTH, B
-Running instruction: WAIT, $1, NET_RECV_WEST, R
+ 22.000000, Device.Tile[0][2].Core, inst: WAIT, $1, NET_RECV_WEST, R inst_length: 26
  22.000000, Device.Tile[0][2].Core, Recv 14 Device.Tile[0][1].Core.East->Device.Tile[0][2].Core.West, Color 0
-Running instruction: SEND, NET_SEND_EAST, $5, B
-SEND: Stored value 44 in send buffer for color 2 and destination index 1
+ 22.000000, Device.Tile[1][1].Core, inst: SEND, NET_SEND_EAST, $5, B inst_length: 26
  22.000000, Device.Tile[1][1].Core, Inst SEND, NET_SEND_EAST, $5, B
-Running instruction: WAIT, $1, NET_RECV_WEST, R
-Updated register $1 to value 14 at PC 0
+ 23.000000, Device.Tile[0][2].Core, inst: WAIT, $1, NET_RECV_WEST, R inst_length: 26
  23.000000, Device.Tile[0][2].Core, Inst WAIT, $1, NET_RECV_WEST, R
  23.000000, Device.Tile[1][1].Core, Send 44 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 2
-Running instruction: SLEEP
-Running instruction: WAIT, $5, NET_RECV_WEST, B
-Updated register $5 to value 6 at PC 6
+ 23.000000, Device.Tile[1][1].Core, inst: SLEEP inst_length: 5
+ 23.000000, Device.Tile[0][1].Core, inst: WAIT, $5, NET_RECV_WEST, B inst_length: 26
  23.000000, Device.Tile[0][1].Core, Inst WAIT, $5, NET_RECV_WEST, B
-Running instruction: ST, $1, 0X00
+ 24.000000, Device.Tile[0][2].Core, inst: ST, $1, 0X00 inst_length: 12
  24.000000, Device.Tile[0][2].Core, Inst ST, $1, 0X00
-Running instruction: SLEEP
-Running instruction: LD, $4, 0x0
-Updated register $4 to value 6 at PC 7
+ 24.000000, Device.Tile[1][1].Core, inst: SLEEP inst_length: 5
+ 24.000000, Device.Tile[0][1].Core, inst: LD, $4, 0x0 inst_length: 11
  24.000000, Device.Tile[0][1].Core, Inst LD, $4, 0x0
-Running instruction: WAIT, $2, NET_RECV_WEST, B
+ 24.000000, Device.Tile[1][2].Core, inst: WAIT, $2, NET_RECV_WEST, B inst_length: 26
  24.000000, Device.Tile[1][2].Core, Recv 44 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 2
-Running instruction: MAC, $5, $4, $3
-Updated register $5 to value 30 at PC 8
-Mac Instruction, Data are 6 and 4, Res is 30
-MAC: $5 += $4 * $3 => Result: 30
+ 25.000000, Device.Tile[0][1].Core, inst: MAC, $5, $4, $3 inst_length: 15
  25.000000, Device.Tile[0][1].Core, Inst MAC, $5, $4, $3
-Running instruction: WAIT, $2, NET_RECV_WEST, B
-Updated register $2 to value 44 at PC 2
+ 25.000000, Device.Tile[1][2].Core, inst: WAIT, $2, NET_RECV_WEST, B inst_length: 26
  25.000000, Device.Tile[1][2].Core, Inst WAIT, $2, NET_RECV_WEST, B
-Running instruction: WAIT, $2, NET_RECV_WEST, B
-Running instruction: SLEEP
-Running instruction: ST, $2, 0X01
+ 25.000000, Device.Tile[0][2].Core, inst: WAIT, $2, NET_RECV_WEST, B inst_length: 26
+ 25.000000, Device.Tile[1][1].Core, inst: SLEEP inst_length: 5
+ 26.000000, Device.Tile[1][2].Core, inst: ST, $2, 0X01 inst_length: 12
  26.000000, Device.Tile[1][2].Core, Inst ST, $2, 0X01
-Running instruction: SEND, NET_SEND_EAST, $5, B
-SEND: Stored value 30 in send buffer for color 2 and destination index 1
+ 26.000000, Device.Tile[0][1].Core, inst: SEND, NET_SEND_EAST, $5, B inst_length: 26
  26.000000, Device.Tile[0][1].Core, Inst SEND, NET_SEND_EAST, $5, B
-Running instruction: SLEEP
+ 27.000000, Device.Tile[1][2].Core, inst: SLEEP inst_length: 5
  27.000000, Device.Tile[0][1].Core, Send 30 Device.Tile[0][1].Core.East->Device.Tile[0][2].Core.West, Color 2
-Running instruction: SLEEP
-Running instruction: WAIT, $2, NET_RECV_WEST, B
+ 27.000000, Device.Tile[0][1].Core, inst: SLEEP inst_length: 5
+ 28.000000, Device.Tile[0][2].Core, inst: WAIT, $2, NET_RECV_WEST, B inst_length: 26
  28.000000, Device.Tile[0][2].Core, Recv 30 Device.Tile[0][1].Core.East->Device.Tile[0][2].Core.West, Color 2
-Running instruction: SLEEP
-Running instruction: WAIT, $2, NET_RECV_WEST, B
-Updated register $2 to value 30 at PC 2
+ 28.000000, Device.Tile[0][1].Core, inst: SLEEP inst_length: 5
+ 29.000000, Device.Tile[0][2].Core, inst: WAIT, $2, NET_RECV_WEST, B inst_length: 26
  29.000000, Device.Tile[0][2].Core, Inst WAIT, $2, NET_RECV_WEST, B
-Running instruction: SLEEP
-Running instruction: ST, $2, 0X01
+ 29.000000, Device.Tile[0][1].Core, inst: SLEEP inst_length: 5
+ 30.000000, Device.Tile[0][2].Core, inst: ST, $2, 0X01 inst_length: 12
  30.000000, Device.Tile[0][2].Core, Inst ST, $2, 0X01
-Running instruction: SLEEP
+ 31.000000, Device.Tile[0][2].Core, inst: SLEEP inst_length: 5
 [1 2 3 4] * [2 4 6 8] = [14 30 20 44]

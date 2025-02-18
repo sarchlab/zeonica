@@ -1,106 +1,195 @@
 ===== Tile[0][0] =====
+  8.000000, Device.Tile[0][0].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
   8.000000, Device.Tile[0][0].Core, Recv 1 Device.Tile[1][0].Core.North->Device.Tile[0][0].Core.South, Color 0
+  9.000000, Device.Tile[0][0].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
   9.000000, Device.Tile[0][0].Core, Inst WAIT, $1, NET_RECV_SOUTH, R
+ 10.000000, Device.Tile[0][0].Core, inst: LD, $0, 0x0 inst_length: 11
  10.000000, Device.Tile[0][0].Core, Inst LD, $0, 0x0
+ 11.000000, Device.Tile[0][0].Core, inst: MUL, $2, $1, $0 inst_length: 15
  11.000000, Device.Tile[0][0].Core, Inst MUL, $2, $1, $0
+ 12.000000, Device.Tile[0][0].Core, inst: SEND, NET_SEND_EAST, $2, R inst_length: 26
  12.000000, Device.Tile[0][0].Core, Inst SEND, NET_SEND_EAST, $2, R
  13.000000, Device.Tile[0][0].Core, Send 2 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 0
+ 13.000000, Device.Tile[0][0].Core, inst: WAIT, $3, NET_RECV_SOUTH, B inst_length: 27
  13.000000, Device.Tile[0][0].Core, Recv 3 Device.Tile[1][0].Core.North->Device.Tile[0][0].Core.South, Color 2
+ 14.000000, Device.Tile[0][0].Core, inst: WAIT, $3, NET_RECV_SOUTH, B inst_length: 27
  14.000000, Device.Tile[0][0].Core, Inst WAIT, $3, NET_RECV_SOUTH, B
+ 15.000000, Device.Tile[0][0].Core, inst: LD, $4, 0x0 inst_length: 11
  15.000000, Device.Tile[0][0].Core, Inst LD, $4, 0x0
+ 16.000000, Device.Tile[0][0].Core, inst: MUL, $5, $4, $3 inst_length: 15
  16.000000, Device.Tile[0][0].Core, Inst MUL, $5, $4, $3
+ 17.000000, Device.Tile[0][0].Core, inst: SEND, NET_SEND_EAST, $5, B inst_length: 26
  17.000000, Device.Tile[0][0].Core, Inst SEND, NET_SEND_EAST, $5, B
  18.000000, Device.Tile[0][0].Core, Send 6 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 2
+ 18.000000, Device.Tile[0][0].Core, inst: SLEEP inst_length: 5
+ 19.000000, Device.Tile[0][0].Core, inst: SLEEP inst_length: 5
+ 20.000000, Device.Tile[0][0].Core, inst: SLEEP inst_length: 5
 
 ===== Tile[0][1] =====
+ 14.000000, Device.Tile[0][1].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
  14.000000, Device.Tile[0][1].Core, Recv 2 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 0
+ 15.000000, Device.Tile[0][1].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
  15.000000, Device.Tile[0][1].Core, Recv 2 Device.Tile[1][1].Core.North->Device.Tile[0][1].Core.South, Color 0
+ 16.000000, Device.Tile[0][1].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
  16.000000, Device.Tile[0][1].Core, Inst WAIT, $1, NET_RECV_SOUTH, R
+ 17.000000, Device.Tile[0][1].Core, inst: WAIT, $2, NET_RECV_WEST, R inst_length: 26
  17.000000, Device.Tile[0][1].Core, Inst WAIT, $2, NET_RECV_WEST, R
+ 18.000000, Device.Tile[0][1].Core, inst: LD, $0, 0x0 inst_length: 11
  18.000000, Device.Tile[0][1].Core, Inst LD, $0, 0x0
+ 19.000000, Device.Tile[0][1].Core, inst: MAC, $2, $1, $0 inst_length: 15
  19.000000, Device.Tile[0][1].Core, Inst MAC, $2, $1, $0
  19.000000, Device.Tile[0][1].Core, Recv 6 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 2
+ 20.000000, Device.Tile[0][1].Core, inst: SEND, NET_SEND_EAST, $2, R inst_length: 26
  20.000000, Device.Tile[0][1].Core, Inst SEND, NET_SEND_EAST, $2, R
  21.000000, Device.Tile[0][1].Core, Send 14 Device.Tile[0][1].Core.East->Device.Tile[0][2].Core.West, Color 0
+ 21.000000, Device.Tile[0][1].Core, inst: WAIT, $3, NET_RECV_SOUTH, B inst_length: 27
  21.000000, Device.Tile[0][1].Core, Recv 4 Device.Tile[1][1].Core.North->Device.Tile[0][1].Core.South, Color 2
+ 22.000000, Device.Tile[0][1].Core, inst: WAIT, $3, NET_RECV_SOUTH, B inst_length: 27
  22.000000, Device.Tile[0][1].Core, Inst WAIT, $3, NET_RECV_SOUTH, B
+ 23.000000, Device.Tile[0][1].Core, inst: WAIT, $5, NET_RECV_WEST, B inst_length: 26
  23.000000, Device.Tile[0][1].Core, Inst WAIT, $5, NET_RECV_WEST, B
+ 24.000000, Device.Tile[0][1].Core, inst: LD, $4, 0x0 inst_length: 11
  24.000000, Device.Tile[0][1].Core, Inst LD, $4, 0x0
+ 25.000000, Device.Tile[0][1].Core, inst: MAC, $5, $4, $3 inst_length: 15
  25.000000, Device.Tile[0][1].Core, Inst MAC, $5, $4, $3
+ 26.000000, Device.Tile[0][1].Core, inst: SEND, NET_SEND_EAST, $5, B inst_length: 26
  26.000000, Device.Tile[0][1].Core, Inst SEND, NET_SEND_EAST, $5, B
  27.000000, Device.Tile[0][1].Core, Send 30 Device.Tile[0][1].Core.East->Device.Tile[0][2].Core.West, Color 2
+ 27.000000, Device.Tile[0][1].Core, inst: SLEEP inst_length: 5
+ 28.000000, Device.Tile[0][1].Core, inst: SLEEP inst_length: 5
+ 29.000000, Device.Tile[0][1].Core, inst: SLEEP inst_length: 5
 
 ===== Tile[0][2] =====
+ 22.000000, Device.Tile[0][2].Core, inst: WAIT, $1, NET_RECV_WEST, R inst_length: 26
  22.000000, Device.Tile[0][2].Core, Recv 14 Device.Tile[0][1].Core.East->Device.Tile[0][2].Core.West, Color 0
+ 23.000000, Device.Tile[0][2].Core, inst: WAIT, $1, NET_RECV_WEST, R inst_length: 26
  23.000000, Device.Tile[0][2].Core, Inst WAIT, $1, NET_RECV_WEST, R
+ 24.000000, Device.Tile[0][2].Core, inst: ST, $1, 0X00 inst_length: 12
  24.000000, Device.Tile[0][2].Core, Inst ST, $1, 0X00
+ 25.000000, Device.Tile[0][2].Core, inst: WAIT, $2, NET_RECV_WEST, B inst_length: 26
+ 28.000000, Device.Tile[0][2].Core, inst: WAIT, $2, NET_RECV_WEST, B inst_length: 26
  28.000000, Device.Tile[0][2].Core, Recv 30 Device.Tile[0][1].Core.East->Device.Tile[0][2].Core.West, Color 2
+ 29.000000, Device.Tile[0][2].Core, inst: WAIT, $2, NET_RECV_WEST, B inst_length: 26
  29.000000, Device.Tile[0][2].Core, Inst WAIT, $2, NET_RECV_WEST, B
+ 30.000000, Device.Tile[0][2].Core, inst: ST, $2, 0X01 inst_length: 12
  30.000000, Device.Tile[0][2].Core, Inst ST, $2, 0X01
+ 31.000000, Device.Tile[0][2].Core, inst: SLEEP inst_length: 5
 
 ===== Tile[1][0] =====
+  4.000000, Device.Tile[1][0].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
   4.000000, Device.Tile[1][0].Core, Recv 1 Device.Tile[2][0].Core.North->Device.Tile[1][0].Core.South, Color 0
+  5.000000, Device.Tile[1][0].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
   5.000000, Device.Tile[1][0].Core, Inst WAIT, $1, NET_RECV_SOUTH, R
   5.000000, Device.Tile[1][0].Core, Recv 3 Device.Tile[2][0].Core.North->Device.Tile[1][0].Core.South, Color 2
+  6.000000, Device.Tile[1][0].Core, inst: SEND, NET_SEND_NORTH, $1, R inst_length: 27
   6.000000, Device.Tile[1][0].Core, Inst SEND, NET_SEND_NORTH, $1, R
   7.000000, Device.Tile[1][0].Core, Send 1 Device.Tile[1][0].Core.North->Device.Tile[0][0].Core.South, Color 0
+  7.000000, Device.Tile[1][0].Core, inst: LD, $0, 0x0 inst_length: 11
   7.000000, Device.Tile[1][0].Core, Inst LD, $0, 0x0
+  8.000000, Device.Tile[1][0].Core, inst: MUL, $2, $1, $0 inst_length: 15
   8.000000, Device.Tile[1][0].Core, Inst MUL, $2, $1, $0
+  9.000000, Device.Tile[1][0].Core, inst: SEND, NET_SEND_EAST, $2, R inst_length: 26
   9.000000, Device.Tile[1][0].Core, Inst SEND, NET_SEND_EAST, $2, R
  10.000000, Device.Tile[1][0].Core, Send 4 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 0
+ 10.000000, Device.Tile[1][0].Core, inst: WAIT, $3, NET_RECV_SOUTH, B inst_length: 27
  10.000000, Device.Tile[1][0].Core, Inst WAIT, $3, NET_RECV_SOUTH, B
+ 11.000000, Device.Tile[1][0].Core, inst: SEND, NET_SEND_NORTH, $3, B inst_length: 27
  11.000000, Device.Tile[1][0].Core, Inst SEND, NET_SEND_NORTH, $3, B
  12.000000, Device.Tile[1][0].Core, Send 3 Device.Tile[1][0].Core.North->Device.Tile[0][0].Core.South, Color 2
+ 12.000000, Device.Tile[1][0].Core, inst: LD, $4, 0x0 inst_length: 11
  12.000000, Device.Tile[1][0].Core, Inst LD, $4, 0x0
+ 13.000000, Device.Tile[1][0].Core, inst: MUL, $5, $4, $3 inst_length: 15
  13.000000, Device.Tile[1][0].Core, Inst MUL, $5, $4, $3
+ 14.000000, Device.Tile[1][0].Core, inst: SEND, NET_SEND_EAST, $5, B inst_length: 26
  14.000000, Device.Tile[1][0].Core, Inst SEND, NET_SEND_EAST, $5, B
  15.000000, Device.Tile[1][0].Core, Send 12 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 2
+ 15.000000, Device.Tile[1][0].Core, inst: SLEEP inst_length: 5
+ 16.000000, Device.Tile[1][0].Core, inst: SLEEP inst_length: 5
+ 17.000000, Device.Tile[1][0].Core, inst: SLEEP inst_length: 5
 
 ===== Tile[1][1] =====
+  4.000000, Device.Tile[1][1].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
   4.000000, Device.Tile[1][1].Core, Recv 2 Device.Tile[2][1].Core.North->Device.Tile[1][1].Core.South, Color 0
+  5.000000, Device.Tile[1][1].Core, inst: WAIT, $1, NET_RECV_SOUTH, R inst_length: 27
   5.000000, Device.Tile[1][1].Core, Inst WAIT, $1, NET_RECV_SOUTH, R
   5.000000, Device.Tile[1][1].Core, Recv 4 Device.Tile[2][1].Core.North->Device.Tile[1][1].Core.South, Color 2
+  6.000000, Device.Tile[1][1].Core, inst: WAIT, $2, NET_RECV_WEST, R inst_length: 26
+ 11.000000, Device.Tile[1][1].Core, inst: WAIT, $2, NET_RECV_WEST, R inst_length: 26
  11.000000, Device.Tile[1][1].Core, Recv 4 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 0
+ 12.000000, Device.Tile[1][1].Core, inst: WAIT, $2, NET_RECV_WEST, R inst_length: 26
  12.000000, Device.Tile[1][1].Core, Inst WAIT, $2, NET_RECV_WEST, R
+ 13.000000, Device.Tile[1][1].Core, inst: SEND, NET_SEND_NORTH, $1, R inst_length: 27
  13.000000, Device.Tile[1][1].Core, Inst SEND, NET_SEND_NORTH, $1, R
  14.000000, Device.Tile[1][1].Core, Send 2 Device.Tile[1][1].Core.North->Device.Tile[0][1].Core.South, Color 0
+ 14.000000, Device.Tile[1][1].Core, inst: LD, $0, 0x0 inst_length: 11
  14.000000, Device.Tile[1][1].Core, Inst LD, $0, 0x0
+ 15.000000, Device.Tile[1][1].Core, inst: MAC, $2, $1, $0 inst_length: 15
  15.000000, Device.Tile[1][1].Core, Inst MAC, $2, $1, $0
+ 16.000000, Device.Tile[1][1].Core, inst: SEND, NET_SEND_EAST, $2, R inst_length: 26
  16.000000, Device.Tile[1][1].Core, Inst SEND, NET_SEND_EAST, $2, R
  16.000000, Device.Tile[1][1].Core, Recv 12 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 2
  17.000000, Device.Tile[1][1].Core, Send 20 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 0
+ 17.000000, Device.Tile[1][1].Core, inst: WAIT, $3, NET_RECV_SOUTH, B inst_length: 27
  17.000000, Device.Tile[1][1].Core, Inst WAIT, $3, NET_RECV_SOUTH, B
+ 18.000000, Device.Tile[1][1].Core, inst: WAIT, $5, NET_RECV_WEST, B inst_length: 26
  18.000000, Device.Tile[1][1].Core, Inst WAIT, $5, NET_RECV_WEST, B
+ 19.000000, Device.Tile[1][1].Core, inst: SEND, NET_SEND_NORTH, $3, B inst_length: 27
  19.000000, Device.Tile[1][1].Core, Inst SEND, NET_SEND_NORTH, $3, B
  20.000000, Device.Tile[1][1].Core, Send 4 Device.Tile[1][1].Core.North->Device.Tile[0][1].Core.South, Color 2
+ 20.000000, Device.Tile[1][1].Core, inst: LD, $4, 0x0 inst_length: 11
  20.000000, Device.Tile[1][1].Core, Inst LD, $4, 0x0
+ 21.000000, Device.Tile[1][1].Core, inst: MAC, $5, $4, $3 inst_length: 15
  21.000000, Device.Tile[1][1].Core, Inst MAC, $5, $4, $3
+ 22.000000, Device.Tile[1][1].Core, inst: SEND, NET_SEND_EAST, $5, B inst_length: 26
  22.000000, Device.Tile[1][1].Core, Inst SEND, NET_SEND_EAST, $5, B
  23.000000, Device.Tile[1][1].Core, Send 44 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 2
+ 23.000000, Device.Tile[1][1].Core, inst: SLEEP inst_length: 5
+ 24.000000, Device.Tile[1][1].Core, inst: SLEEP inst_length: 5
+ 25.000000, Device.Tile[1][1].Core, inst: SLEEP inst_length: 5
 
 ===== Tile[1][2] =====
+ 18.000000, Device.Tile[1][2].Core, inst: WAIT, $1, NET_RECV_WEST, R inst_length: 26
  18.000000, Device.Tile[1][2].Core, Recv 20 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 0
+ 19.000000, Device.Tile[1][2].Core, inst: WAIT, $1, NET_RECV_WEST, R inst_length: 26
  19.000000, Device.Tile[1][2].Core, Inst WAIT, $1, NET_RECV_WEST, R
+ 20.000000, Device.Tile[1][2].Core, inst: ST, $1, 0X00 inst_length: 12
  20.000000, Device.Tile[1][2].Core, Inst ST, $1, 0X00
+ 21.000000, Device.Tile[1][2].Core, inst: WAIT, $2, NET_RECV_WEST, B inst_length: 26
+ 24.000000, Device.Tile[1][2].Core, inst: WAIT, $2, NET_RECV_WEST, B inst_length: 26
  24.000000, Device.Tile[1][2].Core, Recv 44 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 2
+ 25.000000, Device.Tile[1][2].Core, inst: WAIT, $2, NET_RECV_WEST, B inst_length: 26
  25.000000, Device.Tile[1][2].Core, Inst WAIT, $2, NET_RECV_WEST, B
+ 26.000000, Device.Tile[1][2].Core, inst: ST, $2, 0X01 inst_length: 12
  26.000000, Device.Tile[1][2].Core, Inst ST, $2, 0X01
+ 27.000000, Device.Tile[1][2].Core, inst: SLEEP inst_length: 5
 
 ===== Tile[2][0] =====
+  1.000000, Device.Tile[2][0].Core, inst: RECV_SEND, NORTH_R, $1, SOUTH_R inst_length: 31
   1.000000, Device.Tile[2][0].Core, Recv 1 Driver.DeviceSouth[0]->Device.Tile[2][0].Core.South, Color 0
+  2.000000, Device.Tile[2][0].Core, inst: RECV_SEND, NORTH_R, $1, SOUTH_R inst_length: 31
   2.000000, Device.Tile[2][0].Core, Inst RECV_SEND, NORTH_R, $1, SOUTH_R
   2.000000, Device.Tile[2][0].Core, Recv 3 Driver.DeviceSouth[0]->Device.Tile[2][0].Core.South, Color 2
   3.000000, Device.Tile[2][0].Core, Send 1 Device.Tile[2][0].Core.North->Device.Tile[1][0].Core.South, Color 0
+  3.000000, Device.Tile[2][0].Core, inst: RECV_SEND, NORTH_B, $2, SOUTH_B inst_length: 31
   3.000000, Device.Tile[2][0].Core, Inst RECV_SEND, NORTH_B, $2, SOUTH_B
   4.000000, Device.Tile[2][0].Core, Send 3 Device.Tile[2][0].Core.North->Device.Tile[1][0].Core.South, Color 2
+  4.000000, Device.Tile[2][0].Core, inst: SLEEP inst_length: 5
+  5.000000, Device.Tile[2][0].Core, inst: SLEEP inst_length: 5
+  6.000000, Device.Tile[2][0].Core, inst: SLEEP inst_length: 5
 
 ===== Tile[2][1] =====
+  1.000000, Device.Tile[2][1].Core, inst: RECV_SEND, NORTH_R, $1, SOUTH_R inst_length: 31
   1.000000, Device.Tile[2][1].Core, Recv 2 Driver.DeviceSouth[1]->Device.Tile[2][1].Core.South, Color 0
+  2.000000, Device.Tile[2][1].Core, inst: RECV_SEND, NORTH_R, $1, SOUTH_R inst_length: 31
   2.000000, Device.Tile[2][1].Core, Inst RECV_SEND, NORTH_R, $1, SOUTH_R
   2.000000, Device.Tile[2][1].Core, Recv 4 Driver.DeviceSouth[1]->Device.Tile[2][1].Core.South, Color 2
   3.000000, Device.Tile[2][1].Core, Send 2 Device.Tile[2][1].Core.North->Device.Tile[1][1].Core.South, Color 0
+  3.000000, Device.Tile[2][1].Core, inst: RECV_SEND, NORTH_B, $2, SOUTH_B inst_length: 31
   3.000000, Device.Tile[2][1].Core, Inst RECV_SEND, NORTH_B, $2, SOUTH_B
   4.000000, Device.Tile[2][1].Core, Send 4 Device.Tile[2][1].Core.North->Device.Tile[1][1].Core.South, Color 2
+  4.000000, Device.Tile[2][1].Core, inst: SLEEP inst_length: 5
+  5.000000, Device.Tile[2][1].Core, inst: SLEEP inst_length: 5
+  6.000000, Device.Tile[2][1].Core, inst: SLEEP inst_length: 5
 
 ===== Matrix Multiplication Output =====
 [1 2 3 4] * [2 4 6 8] = [14 30 20 44]

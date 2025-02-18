@@ -63,22 +63,8 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 		Tiles:  make([][]*tile, d.height),
 	}
 
-	// TODO: Do not use noc connection. Create direct connections instead.
-	// nocConnector := mesh.NewConnector().
-	// 	WithEngine(d.engine).
-	// 	WithFreq(d.freq).
-	// 	WithSwitchLatency(1).
-	// 	WithBandwidth(1)
-	// if d.monitor != nil {
-	// 	nocConnector = nocConnector.WithMonitor(d.monitor)
-	// }
-	// nocConnector.CreateNetwork(name + ".Mesh")
-
 	d.createTiles(dev, name)
 	d.connectTiles(dev)
-	// d.setRemotePorts(dev)
-
-	// nocConnector.EstablishNetwork()
 
 	return dev
 }

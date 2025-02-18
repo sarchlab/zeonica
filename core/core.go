@@ -55,6 +55,47 @@ func (c *Core) SetRemotePort(side cgra.Side, remote sim.RemotePort) {
 
 // MapProgram sets the program that the core needs to run.
 func (c *Core) MapProgram(program []string, x int, y int) {
+	//adding more code blocks
+	// var codeBlocks [][]string
+	// currentBlock := []string{}
+
+	// for _, line := range program {
+	// 	line = strings.TrimSpace(line)
+	// 	if line == "" {
+	// 		continue
+	// 	}
+
+	// 	if strings.HasPrefix(line, "[") {
+	// 		// start a new block
+	// 		currentBlock = []string{}
+	// 		line = strings.TrimPrefix(line, "[")
+	// 	}
+
+	// 	if strings.HasSuffix(line, "]") {
+	// 		// end the current block
+	// 		line = strings.TrimSuffix(line, "]")
+	// 		if line != "" {
+	// 			currentBlock = append(currentBlock, line)
+	// 		}
+	// 		codeBlocks = append(codeBlocks, currentBlock)
+	// 		currentBlock = []string{}
+	// 	} else if len(currentBlock) > 0 || line != "" {
+	// 		// in line instruction
+	// 		operations := strings.Split(line, ";")
+	// 		for _, op := range operations {
+	// 			op = strings.TrimSpace(op)
+	// 			if op != "" {
+	// 				currentBlock = append(currentBlock, op)
+	// 			}
+	// 		}
+	// 	} else {
+	// 		// single line instruction
+	// 		codeBlocks = append(codeBlocks, []string{line})
+	// 	}
+	// }
+
+	//original code
+	//c.state.Code = codeBlocks
 	c.state.Code = program
 	c.state.PC = 0
 	c.state.TileX = uint32(x)
@@ -151,8 +192,11 @@ func (c *Core) runProgram() bool {
 	if int(c.state.PC) >= len(c.state.Code) {
 		return false
 	}
+	// operations := c.state.Code[c.state.PC]
+	// madeProgress := false
 	inst := c.state.Code[c.state.PC]
-	//fmt.Printf("%10f, %s, inst: %s inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), inst, len(inst))
+
+	fmt.Printf("%10f, %s, inst: %s inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), inst, len(inst))
 	for inst[len(inst)-1] == ':' {
 		c.state.PC++
 		inst = c.state.Code[c.state.PC]
@@ -175,6 +219,30 @@ func (c *Core) runProgram() bool {
 	// }
 
 	return true
+
+	//try to run multiple instructions in one cycle
+	// for _, inst := range operations {
+	// 	inst = strings.TrimSpace(inst)
+	// 	if inst == "" {
+	// 		continue
+	// 	}
+
+	// 	// deal with label such as "loop:"
+	// 	for strings.HasSuffix(inst, ":") {
+	// 		c.state.PC++
+	// 		if int(c.state.PC) >= len(c.state.Code) {
+	// 			return false
+	// 		}
+	// 		operations = c.state.Code[c.state.PC]
+	// 		inst = operations[0]
+	// 	}
+
+	// 	// run single instruction
+	// 	fmt.Printf("%10f, %s, Executing: %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
+	// 	c.emu.RunInst(inst, &c.state)
+	// 	madeProgress = true
+	// }
+	// return madeProgress
 }
 
 // Distributor for always executing part, these parts are not controlled by cycles.
