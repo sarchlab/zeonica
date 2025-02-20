@@ -88,6 +88,7 @@ func matrixMulti(driver api.Driver) {
 	driver.Run()
 	//driver.FeedIn(src2[:], cgra.North, [2]int{0, width}, width, "B") //for output signal
 	//driver.Collect(dst, cgra.South, [2]int{0, height}, height, "B")  //for output
+	//              ReadMemory(y, x, addr)
 	dst[0] = driver.ReadMemory(2, 0, 0)
 	dst[1] = driver.ReadMemory(2, 0, 1)
 	dst[2] = driver.ReadMemory(2, 1, 0)

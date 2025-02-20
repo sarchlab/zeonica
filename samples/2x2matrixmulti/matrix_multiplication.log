@@ -1,4 +1,4 @@
-Monitoring simulation with http://localhost:42701
+Monitoring simulation with http://localhost:33933
 Core [0][0] receive WriteMemory(x=0, y=0)
 Core [0][0] write memory[0] = 2
 Core [0][1] receive WriteMemory(x=0, y=1)

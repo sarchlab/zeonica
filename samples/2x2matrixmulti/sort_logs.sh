@@ -41,4 +41,5 @@ done <<< "$CORES"
 echo "===== Matrix Multiplication Output =====" >> "$OUTPUT_FILE"
 grep -E "^\[[0-9]+( [0-9]+)*\] \* \[[0-9]+( [0-9]+)*\] = \[[0-9]+( [0-9]+)*\]$" "$LOG_FILE" >> "$OUTPUT_FILE"
 
+grep -E 'Device\.Tile\[[0-9]+\]\[[0-9]+\]\.Core, (Send|Recv)' "$LOG_FILE" >> "check_sequence.log"
 echo "Sorted logs saved to $OUTPUT_FILE"
