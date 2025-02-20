@@ -1,0 +1,80 @@
+Monitoring simulation with http://localhost:36751
+Feeding in weight data...
+&{{2 0xc00030c6c0 0xc0002fcb40 0 0 0 0} 2 0}
+  0.000000, Feed in 2 to Device.Tile[0][0].Core.West
+&{{4 0xc00030c750 0xc0002fd0e0 0 0 0 0} 2 0}
+  0.000000, Feed in 2 to Device.Tile[1][0].Core.West
+Updated register $0 to value 0 at PC 0
+MOV Instruction: Moving 0 into $0
+  1.000000, Device.Tile[1][0].Core, Inst MOV, $0, 0
+Core (0, 1) Register values:
+  1.000000, Device.Tile[1][0].Core, Recv 2 Driver.DeviceWest[1]->Device.Tile[1][0].Core.West, Color 0
+Updated register $0 to value 0 at PC 0
+MOV Instruction: Moving 0 into $0
+  1.000000, Device.Tile[0][0].Core, Inst MOV, $0, 0
+Core (0, 0) Register values:
+  1.000000, Device.Tile[0][0].Core, Recv 2 Driver.DeviceWest[0]->Device.Tile[0][0].Core.West, Color 0
+  2.000000, Device.Tile[1][0].Core, Inst TRIGGER_ONE_SIDE, WEIGHT_COPY, WEST_R
+Core (0, 1) Register values:
+  2.000000, Device.Tile[0][0].Core, Inst TRIGGER_ONE_SIDE, WEIGHT_COPY, WEST_R
+Core (0, 0) Register values:
+Updated register $1 to value 2 at PC 6
+  3.000000, Device.Tile[1][0].Core, Inst     WAIT, $1, NET_RECV_WEST, R
+Core (0, 1) Register values:
+  $1 : 2
+Updated register $1 to value 2 at PC 6
+  3.000000, Device.Tile[0][0].Core, Inst     WAIT, $1, NET_RECV_WEST, R
+Core (0, 0) Register values:
+  $1 : 2
+SEND: Stored value 2 in send buffer for color 0 and destination index 1
+  4.000000, Device.Tile[1][0].Core, Inst     SEND, NET_SEND_EAST, $1, R
+Core (0, 1) Register values:
+  $1 : 2
+SEND: Stored value 2 in send buffer for color 0 and destination index 1
+  4.000000, Device.Tile[0][0].Core, Inst     SEND, NET_SEND_EAST, $1, R
+Core (0, 0) Register values:
+  $1 : 2
+  5.000000, Device.Tile[1][0].Core, Send 2 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 0
+  5.000000, Device.Tile[0][0].Core, Send 2 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 0
+Updated register $0 to value 0 at PC 0
+MOV Instruction: Moving 0 into $0
+  8.000000, Device.Tile[1][1].Core, Inst MOV, $0, 0
+Core (1, 1) Register values:
+Updated register $0 to value 0 at PC 0
+MOV Instruction: Moving 0 into $0
+  8.000000, Device.Tile[0][1].Core, Inst MOV, $0, 0
+Core (1, 0) Register values:
+  9.000000, Device.Tile[0][1].Core, Inst TRIGGER_ONE_SIDE, WEIGHT_COPY, WEST_R
+Core (1, 0) Register values:
+  9.000000, Device.Tile[1][1].Core, Inst TRIGGER_ONE_SIDE, WEIGHT_COPY, WEST_R
+Core (1, 1) Register values:
+ 10.000000, Device.Tile[1][1].Core, Inst TRIGGER_ONE_SIDE, INPUT_FORWARD, WEST_B
+Core (1, 1) Register values:
+ 10.000000, Device.Tile[0][1].Core, Inst TRIGGER_ONE_SIDE, INPUT_FORWARD, WEST_B
+Core (1, 0) Register values:
+ 11.000000, Device.Tile[0][1].Core, Inst TRIGGER_ONE_SIDE, OUTPUT, NORTH_R
+Core (1, 0) Register values:
+ 11.000000, Device.Tile[1][1].Core, Inst TRIGGER_ONE_SIDE, OUTPUT, NORTH_R
+Core (1, 1) Register values:
+ 16.000000, Device.Tile[0][1].Core, Recv 2 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 0
+ 16.000000, Device.Tile[1][1].Core, Recv 2 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 0
+Feeding in input data...
+&{{72 0xc00030c6c0 0xc0002fcb40 1.7e-08 0 0 0} 3 2}
+ 17.000000, Feed in 3 to Device.Tile[0][0].Core.West
+&{{74 0xc00030c750 0xc0002fd0e0 1.7e-08 0 0 0} 3 2}
+ 17.000000, Feed in 3 to Device.Tile[1][0].Core.West
+ 18.000000, Device.Tile[1][0].Core, Recv 3 Driver.DeviceWest[1]->Device.Tile[1][0].Core.West, Color 2
+ 18.000000, Device.Tile[0][0].Core, Recv 3 Driver.DeviceWest[0]->Device.Tile[0][0].Core.West, Color 2
+Feeding in bias data...
+&{{84 0xc00030c360 0xc0002fca20 1.9e-08 0 0 0} 1 0}
+ 19.000000, Feed in 1 to Device.Tile[0][0].Core.North
+&{{86 0xc00030c3f0 0xc0002fccf0 1.9e-08 0 0 0} 1 0}
+ 19.000000, Feed in 1 to Device.Tile[0][1].Core.North
+ 20.000000, Device.Tile[0][1].Core, Recv 1 Driver.DeviceNorth[1]->Device.Tile[0][1].Core.North, Color 0
+ 20.000000, Device.Tile[0][0].Core, Recv 1 Driver.DeviceNorth[0]->Device.Tile[0][0].Core.North, Color 0
+Collecting input layer output...
+&{{96 0xc00030c360 0xc0002fca20 2.1e-08 0 0 0} 1 0}
+ 21.000000, Feed in 1 to Device.Tile[0][0].Core.North
+&{{98 0xc00030c3f0 0xc0002fccf0 2.1e-08 0 0 0} 1 0}
+ 21.000000, Feed in 1 to Device.Tile[0][1].Core.North
+Input Layer Output: [0 0]

@@ -1,0 +1,6 @@
+WAIT, $3, NET_RECV_NORTH, R
+MOV, $0, $3
+MOV, $1, 2
+ADDI, $2, $0, $1
+SEND, NET_SEND_SOUTH, $2, B
+SLEEP

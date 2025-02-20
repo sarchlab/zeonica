@@ -7,7 +7,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	sim "github.com/sarchlab/akita/v3/sim"
+	sim "github.com/sarchlab/akita/v4/sim"
 	cgra "github.com/sarchlab/zeonica/cgra"
 )
 
@@ -115,15 +115,15 @@ func (mr *MockTileMockRecorder) GetPort(arg0 interface{}) *gomock.Call {
 }
 
 // MapProgram mocks base method.
-func (m *MockTile) MapProgram(arg0 []string) {
+func (m *MockTile) MapProgram(arg0 []string, arg1, arg2 int) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "MapProgram", arg0)
+	m.ctrl.Call(m, "MapProgram", arg0, arg1, arg2)
 }
 
 // MapProgram indicates an expected call of MapProgram.
-func (mr *MockTileMockRecorder) MapProgram(arg0 interface{}) *gomock.Call {
+func (mr *MockTileMockRecorder) MapProgram(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MapProgram", reflect.TypeOf((*MockTile)(nil).MapProgram), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MapProgram", reflect.TypeOf((*MockTile)(nil).MapProgram), arg0, arg1, arg2)
 }
 
 // SetRemotePort mocks base method.

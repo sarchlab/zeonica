@@ -4,21 +4,21 @@ import (
 	_ "embed"
 	"fmt"
 
-	"github.com/sarchlab/akita/v3/sim"
+	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/api"
 	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/config"
 	"github.com/tebeka/atexit"
 )
 
-var width = 16
-var height = 16
+var width = 4
+var height = 4
 
 //go:embed passthrough.cgraasm
 var passThroughKernel string
 
 func passThrough(driver api.Driver) {
-	length := 1024
+	length := 8
 	src := make([]uint32, length)
 	dst := make([]uint32, length)
 
@@ -26,9 +26,8 @@ func passThrough(driver api.Driver) {
 		src[i] = uint32(i)
 	}
 
-	driver.FeedIn(src, cgra.West, [2]int{0, height}, height)
-	driver.Collect(dst, cgra.East, [2]int{0, height}, height)
-
+	driver.FeedIn(src, cgra.West, [2]int{0, height}, height, "R")
+	driver.Collect(dst, cgra.East, [2]int{0, height}, height, "R")
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			driver.MapProgram(passThroughKernel, [2]int{x, y})

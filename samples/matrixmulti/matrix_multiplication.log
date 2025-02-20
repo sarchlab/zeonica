@@ -1,0 +1,202 @@
+Monitoring simulation with http://localhost:34581
+&{{2 0xc00038c360 0xc00037ca20 0 0 0 0} 9 0}
+  0.000000, Feed in 9 to Device.Tile[0][0].Core.North
+&{{4 0xc00038c3f0 0xc00037ccf0 0 0 0 0} 0 0}
+  0.000000, Feed in 0 to Device.Tile[0][1].Core.North
+&{{6 0xc00038c6c0 0xc00037cb40 0 0 0 0} 1 0}
+  0.000000, Feed in 1 to Device.Tile[0][0].Core.West
+&{{8 0xc00038c750 0xc00037d0e0 0 0 0 0} 0 0}
+  0.000000, Feed in 0 to Device.Tile[1][0].Core.West
+&{{18 0xc00038c360 0xc00037ca20 1e-09 0 0 0} 8 0}
+  1.000000, Feed in 8 to Device.Tile[0][0].Core.North
+&{{19 0xc00038c3f0 0xc00037ccf0 1e-09 0 0 0} 6 0}
+  1.000000, Feed in 6 to Device.Tile[0][1].Core.North
+&{{20 0xc00038c6c0 0xc00037cb40 1e-09 0 0 0} 2 0}
+  1.000000, Feed in 2 to Device.Tile[0][0].Core.West
+&{{21 0xc00038c750 0xc00037d0e0 1e-09 0 0 0} 4 0}
+  1.000000, Feed in 4 to Device.Tile[1][0].Core.West
+  1.000000, Device.Tile[0][1].Core, Inst     TRIGGER_TWO_SIDE, COMPUTE, WEST_R, NORTH_R
+  1.000000, Device.Tile[0][1].Core, Recv 0 Driver.DeviceNorth[1]->Device.Tile[0][1].Core.North, Color 0
+  1.000000, Device.Tile[0][0].Core, Inst     TRIGGER_TWO_SIDE, COMPUTE, WEST_R, NORTH_R
+  1.000000, Device.Tile[0][0].Core, Recv 9 Driver.DeviceNorth[0]->Device.Tile[0][0].Core.North, Color 0
+  1.000000, Device.Tile[0][0].Core, Recv 1 Driver.DeviceWest[0]->Device.Tile[0][0].Core.West, Color 0
+  1.000000, Device.Tile[1][0].Core, Inst     TRIGGER_TWO_SIDE, COMPUTE, WEST_R, NORTH_R
+  1.000000, Device.Tile[1][0].Core, Recv 0 Driver.DeviceWest[1]->Device.Tile[1][0].Core.West, Color 0
+  2.000000, Device.Tile[0][0].Core, Inst     TRIGGER_ONE_SIDE, SHIFT, NORTH_B 
+  2.000000, Device.Tile[1][0].Core, Inst     TRIGGER_ONE_SIDE, SHIFT, NORTH_B 
+&{{32 0xc00038c360 0xc00037ca20 2e-09 0 0 0} 0 0}
+  2.000000, Feed in 0 to Device.Tile[0][0].Core.North
+&{{33 0xc00038c3f0 0xc00037ccf0 2e-09 0 0 0} 5 0}
+  2.000000, Feed in 5 to Device.Tile[0][1].Core.North
+&{{34 0xc00038c6c0 0xc00037cb40 2e-09 0 0 0} 0 0}
+  2.000000, Feed in 0 to Device.Tile[0][0].Core.West
+&{{35 0xc00038c750 0xc00037d0e0 2e-09 0 0 0} 5 0}
+  2.000000, Feed in 5 to Device.Tile[1][0].Core.West
+  2.000000, Device.Tile[0][1].Core, Inst     TRIGGER_ONE_SIDE, SHIFT, NORTH_B 
+  3.000000, Device.Tile[0][0].Core, Inst     SLEEP
+Updated register $1 to value 9 at PC 5
+  4.000000, Device.Tile[0][0].Core, Inst     RECV_SEND, SOUTH_R, $1, NORTH_R
+  4.000000, Device.Tile[0][0].Core, Recv 8 Driver.DeviceNorth[0]->Device.Tile[0][0].Core.North, Color 0
+  5.000000, Device.Tile[0][0].Core, Send 9 Device.Tile[0][0].Core.South->Device.Tile[1][0].Core.North, Color 0
+Updated register $2 to value 1 at PC 6
+  5.000000, Device.Tile[0][0].Core, Inst     RECV_SEND, EAST_R, $2, WEST_R
+  5.000000, Device.Tile[0][0].Core, Recv 2 Driver.DeviceWest[0]->Device.Tile[0][0].Core.West, Color 0
+  6.000000, Device.Tile[0][0].Core, Send 1 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 0
+Updated register $3 to value 9 at PC 7
+Mac Instruction, Data are 9 and 1, Res is 9
+MAC: $3 += $1 * $2 => Result: 9
+  6.000000, Device.Tile[0][0].Core, Inst     MAC, $3, $1, $2
+  7.000000, Device.Tile[0][0].Core, Inst     SLEEP
+Updated register $1 to value 8 at PC 5
+  8.000000, Device.Tile[0][0].Core, Inst     RECV_SEND, SOUTH_R, $1, NORTH_R
+  8.000000, Device.Tile[0][0].Core, Recv 0 Driver.DeviceNorth[0]->Device.Tile[0][0].Core.North, Color 0
+  9.000000, Device.Tile[0][0].Core, Send 8 Device.Tile[0][0].Core.South->Device.Tile[1][0].Core.North, Color 0
+Updated register $2 to value 2 at PC 6
+  9.000000, Device.Tile[0][0].Core, Inst     RECV_SEND, EAST_R, $2, WEST_R
+  9.000000, Device.Tile[0][0].Core, Recv 0 Driver.DeviceWest[0]->Device.Tile[0][0].Core.West, Color 0
+ 10.000000, Device.Tile[0][0].Core, Send 2 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 0
+Updated register $3 to value 25 at PC 7
+Mac Instruction, Data are 8 and 2, Res is 25
+MAC: $3 += $1 * $2 => Result: 25
+ 10.000000, Device.Tile[0][0].Core, Inst     MAC, $3, $1, $2
+ 11.000000, Device.Tile[0][0].Core, Inst     SLEEP
+Updated register $1 to value 0 at PC 5
+ 12.000000, Device.Tile[0][0].Core, Inst     RECV_SEND, SOUTH_R, $1, NORTH_R
+ 13.000000, Device.Tile[0][0].Core, Send 0 Device.Tile[0][0].Core.South->Device.Tile[1][0].Core.North, Color 0
+Updated register $2 to value 0 at PC 6
+ 13.000000, Device.Tile[0][0].Core, Inst     RECV_SEND, EAST_R, $2, WEST_R
+ 14.000000, Device.Tile[0][0].Core, Send 0 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 0
+Updated register $3 to value 25 at PC 7
+Mac Instruction, Data are 0 and 0, Res is 25
+MAC: $3 += $1 * $2 => Result: 25
+ 14.000000, Device.Tile[0][0].Core, Inst     MAC, $3, $1, $2
+ 16.000000, Device.Tile[1][0].Core, Recv 9 Device.Tile[0][0].Core.South->Device.Tile[1][0].Core.North, Color 0
+ 17.000000, Device.Tile[1][0].Core, Inst     SLEEP
+ 17.000000, Device.Tile[0][1].Core, Recv 1 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 0
+Updated register $1 to value 9 at PC 5
+ 18.000000, Device.Tile[1][0].Core, Inst     RECV_SEND, SOUTH_R, $1, NORTH_R
+ 18.000000, Device.Tile[0][1].Core, Inst     SLEEP
+Updated register $1 to value 0 at PC 5
+ 19.000000, Device.Tile[0][1].Core, Inst     RECV_SEND, SOUTH_R, $1, NORTH_R
+ 19.000000, Device.Tile[0][1].Core, Recv 6 Driver.DeviceNorth[1]->Device.Tile[0][1].Core.North, Color 0
+ 19.000000, Device.Tile[1][0].Core, Send 9 Device.Tile[1][0].Core.South->Driver.DeviceSouth[0], Color 0
+Updated register $2 to value 0 at PC 6
+ 19.000000, Device.Tile[1][0].Core, Inst     RECV_SEND, EAST_R, $2, WEST_R
+ 19.000000, Device.Tile[1][0].Core, Recv 8 Device.Tile[0][0].Core.South->Device.Tile[1][0].Core.North, Color 0
+ 19.000000, Device.Tile[1][0].Core, Recv 4 Driver.DeviceWest[1]->Device.Tile[1][0].Core.West, Color 0
+ 20.000000, Device.Tile[1][0].Core, Send 0 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 0
+Updated register $3 to value 0 at PC 7
+Mac Instruction, Data are 9 and 0, Res is 0
+MAC: $3 += $1 * $2 => Result: 0
+ 20.000000, Device.Tile[1][0].Core, Inst     MAC, $3, $1, $2
+Updated register $2 to value 1 at PC 6
+ 20.000000, Device.Tile[0][1].Core, Inst     RECV_SEND, EAST_R, $2, WEST_R
+ 20.000000, Device.Tile[0][1].Core, Recv 2 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 0
+ 21.000000, Device.Tile[0][1].Core, Send 1 Device.Tile[0][1].Core.East->Driver.DeviceEast[0], Color 0
+ 21.000000, Device.Tile[0][1].Core, Send 0 Device.Tile[0][1].Core.South->Device.Tile[1][1].Core.North, Color 0
+Updated register $3 to value 0 at PC 7
+Mac Instruction, Data are 0 and 1, Res is 0
+MAC: $3 += $1 * $2 => Result: 0
+ 21.000000, Device.Tile[0][1].Core, Inst     MAC, $3, $1, $2
+ 21.000000, Device.Tile[1][0].Core, Inst     SLEEP
+ 22.000000, Device.Tile[0][1].Core, Inst     SLEEP
+Updated register $1 to value 8 at PC 5
+ 22.000000, Device.Tile[1][0].Core, Inst     RECV_SEND, SOUTH_R, $1, NORTH_R
+ 22.000000, Device.Tile[1][0].Core, Recv 0 Device.Tile[0][0].Core.South->Device.Tile[1][0].Core.North, Color 0
+ 23.000000, Device.Tile[1][1].Core, Inst     TRIGGER_TWO_SIDE, COMPUTE, WEST_R, NORTH_R
+Updated register $1 to value 6 at PC 5
+ 23.000000, Device.Tile[0][1].Core, Inst     RECV_SEND, SOUTH_R, $1, NORTH_R
+ 23.000000, Device.Tile[0][1].Core, Recv 5 Driver.DeviceNorth[1]->Device.Tile[0][1].Core.North, Color 0
+ 23.000000, Device.Tile[1][0].Core, Send 8 Device.Tile[1][0].Core.South->Driver.DeviceSouth[0], Color 0
+Updated register $2 to value 4 at PC 6
+ 23.000000, Device.Tile[1][0].Core, Inst     RECV_SEND, EAST_R, $2, WEST_R
+ 23.000000, Device.Tile[1][0].Core, Recv 5 Driver.DeviceWest[1]->Device.Tile[1][0].Core.West, Color 0
+ 24.000000, Device.Tile[1][0].Core, Send 4 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 0
+Updated register $3 to value 32 at PC 7
+Mac Instruction, Data are 8 and 4, Res is 32
+MAC: $3 += $1 * $2 => Result: 32
+ 24.000000, Device.Tile[1][0].Core, Inst     MAC, $3, $1, $2
+ 24.000000, Device.Tile[1][1].Core, Inst     TRIGGER_ONE_SIDE, SHIFT, NORTH_B 
+Updated register $2 to value 2 at PC 6
+ 24.000000, Device.Tile[0][1].Core, Inst     RECV_SEND, EAST_R, $2, WEST_R
+ 24.000000, Device.Tile[0][1].Core, Recv 0 Device.Tile[0][0].Core.East->Device.Tile[0][1].Core.West, Color 0
+ 25.000000, Device.Tile[0][1].Core, Send 2 Device.Tile[0][1].Core.East->Driver.DeviceEast[0], Color 0
+Updated register $3 to value 12 at PC 7
+Mac Instruction, Data are 6 and 2, Res is 12
+MAC: $3 += $1 * $2 => Result: 12
+ 25.000000, Device.Tile[0][1].Core, Inst     MAC, $3, $1, $2
+ 25.000000, Device.Tile[1][0].Core, Inst     SLEEP
+Updated register $1 to value 0 at PC 5
+ 26.000000, Device.Tile[1][0].Core, Inst     RECV_SEND, SOUTH_R, $1, NORTH_R
+ 26.000000, Device.Tile[0][1].Core, Send 6 Device.Tile[0][1].Core.South->Device.Tile[1][1].Core.North, Color 0
+ 26.000000, Device.Tile[0][1].Core, Inst     SLEEP
+Updated register $2 to value 5 at PC 6
+ 27.000000, Device.Tile[1][0].Core, Inst     RECV_SEND, EAST_R, $2, WEST_R
+Updated register $1 to value 5 at PC 5
+ 27.000000, Device.Tile[0][1].Core, Inst     RECV_SEND, SOUTH_R, $1, NORTH_R
+ 28.000000, Device.Tile[1][0].Core, Send 5 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 0
+Updated register $3 to value 32 at PC 7
+Mac Instruction, Data are 0 and 5, Res is 32
+MAC: $3 += $1 * $2 => Result: 32
+ 28.000000, Device.Tile[1][0].Core, Inst     MAC, $3, $1, $2
+Updated register $2 to value 0 at PC 6
+ 28.000000, Device.Tile[0][1].Core, Inst     RECV_SEND, EAST_R, $2, WEST_R
+ 29.000000, Device.Tile[0][1].Core, Send 5 Device.Tile[0][1].Core.South->Device.Tile[1][1].Core.North, Color 0
+Updated register $3 to value 12 at PC 7
+Mac Instruction, Data are 5 and 0, Res is 12
+MAC: $3 += $1 * $2 => Result: 12
+ 29.000000, Device.Tile[0][1].Core, Inst     MAC, $3, $1, $2
+ 31.000000, Device.Tile[1][1].Core, Recv 0 Device.Tile[0][1].Core.South->Device.Tile[1][1].Core.North, Color 0
+ 31.000000, Device.Tile[1][1].Core, Recv 0 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 0
+ 32.000000, Device.Tile[1][1].Core, Inst     SLEEP
+Updated register $1 to value 0 at PC 5
+ 33.000000, Device.Tile[1][1].Core, Inst     RECV_SEND, SOUTH_R, $1, NORTH_R
+ 34.000000, Device.Tile[1][1].Core, Send 0 Device.Tile[1][1].Core.South->Driver.DeviceSouth[1], Color 0
+Updated register $2 to value 0 at PC 6
+ 34.000000, Device.Tile[1][1].Core, Inst     RECV_SEND, EAST_R, $2, WEST_R
+ 34.000000, Device.Tile[1][1].Core, Recv 4 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 0
+ 35.000000, Device.Tile[1][1].Core, Send 0 Device.Tile[1][1].Core.East->Driver.DeviceEast[1], Color 0
+Updated register $3 to value 0 at PC 7
+Mac Instruction, Data are 0 and 0, Res is 0
+MAC: $3 += $1 * $2 => Result: 0
+ 35.000000, Device.Tile[1][1].Core, Inst     MAC, $3, $1, $2
+ 35.000000, Device.Tile[1][1].Core, Recv 6 Device.Tile[0][1].Core.South->Device.Tile[1][1].Core.North, Color 0
+ 36.000000, Device.Tile[1][1].Core, Inst     SLEEP
+Updated register $1 to value 6 at PC 5
+ 37.000000, Device.Tile[1][1].Core, Inst     RECV_SEND, SOUTH_R, $1, NORTH_R
+ 38.000000, Device.Tile[1][1].Core, Send 6 Device.Tile[1][1].Core.South->Driver.DeviceSouth[1], Color 0
+Updated register $2 to value 4 at PC 6
+ 38.000000, Device.Tile[1][1].Core, Inst     RECV_SEND, EAST_R, $2, WEST_R
+ 38.000000, Device.Tile[1][1].Core, Recv 5 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 0
+ 39.000000, Device.Tile[1][1].Core, Send 4 Device.Tile[1][1].Core.East->Driver.DeviceEast[1], Color 0
+Updated register $3 to value 24 at PC 7
+Mac Instruction, Data are 6 and 4, Res is 24
+MAC: $3 += $1 * $2 => Result: 24
+ 39.000000, Device.Tile[1][1].Core, Inst     MAC, $3, $1, $2
+ 40.000000, Device.Tile[1][1].Core, Recv 5 Device.Tile[0][1].Core.South->Device.Tile[1][1].Core.North, Color 0
+ 41.000000, Device.Tile[1][1].Core, Inst     SLEEP
+Updated register $1 to value 5 at PC 5
+ 42.000000, Device.Tile[1][1].Core, Inst     RECV_SEND, SOUTH_R, $1, NORTH_R
+Updated register $2 to value 5 at PC 6
+ 43.000000, Device.Tile[1][1].Core, Inst     RECV_SEND, EAST_R, $2, WEST_R
+Updated register $3 to value 49 at PC 7
+Mac Instruction, Data are 5 and 5, Res is 49
+MAC: $3 += $1 * $2 => Result: 49
+ 44.000000, Device.Tile[1][1].Core, Inst     MAC, $3, $1, $2
+&{{308 0xc00038c360 0xc00037ca20 4.5e-08 0 0 0} 9 2}
+ 45.000000, Feed in 9 to Device.Tile[0][0].Core.North
+&{{310 0xc00038c3f0 0xc00037ccf0 4.5e-08 0 0 0} 0 2}
+ 45.000000, Feed in 0 to Device.Tile[0][1].Core.North
+&{{323 0xc00038c360 0xc00037ca20 4.6e-08 0 0 0} 8 2}
+ 46.000000, Feed in 8 to Device.Tile[0][0].Core.North
+&{{324 0xc00038c3f0 0xc00037ccf0 4.6e-08 0 0 0} 6 2}
+ 46.000000, Feed in 6 to Device.Tile[0][1].Core.North
+ 46.000000, Device.Tile[1][0].Core, Send 0 Device.Tile[1][0].Core.South->Driver.DeviceSouth[0], Color 0
+ 46.000000, Device.Tile[0][0].Core, Recv 9 Driver.DeviceNorth[0]->Device.Tile[0][0].Core.North, Color 2
+ 46.000000, Device.Tile[0][1].Core, Recv 0 Driver.DeviceNorth[1]->Device.Tile[0][1].Core.North, Color 2
+ 46.000000, Device.Tile[1][1].Core, Send 5 Device.Tile[1][1].Core.South->Driver.DeviceSouth[1], Color 0
+&{{337 0xc00038c360 0xc00037ca20 4.7e-08 0 0 0} 0 2}
+ 47.000000, Feed in 0 to Device.Tile[0][0].Core.North
+&{{338 0xc00038c3f0 0xc00037ccf0 4.7e-08 0 0 0} 5 2}
+ 47.000000, Feed in 5 to Device.Tile[0][1].Core.North
+[9 0 8 6 0 5]

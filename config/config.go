@@ -4,18 +4,25 @@ package config
 import (
 	"fmt"
 
-	"github.com/sarchlab/akita/v3/noc/networking/mesh"
-	"github.com/sarchlab/akita/v3/sim"
+	"github.com/sarchlab/akita/v4/monitoring"
+	"github.com/sarchlab/akita/v4/sim"
+	"github.com/sarchlab/akita/v4/sim/directconnection"
 	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/core"
 )
 
 // DeviceBuilder can build CGRA devices.
 type DeviceBuilder struct {
-	engine        sim.Engine
-	freq          sim.Freq
+	engine  sim.Engine
+	freq    sim.Freq
+	monitor *monitoring.Monitor
+	//portFactory   portFactory
 	width, height int
 }
+
+// type portFactory interface {
+// 	make(c sim.Component, name string) sim.Port
+// }
 
 // WithEngine sets the engine that drives the device simulation.
 func (d DeviceBuilder) WithEngine(engine sim.Engine) DeviceBuilder {
@@ -26,6 +33,12 @@ func (d DeviceBuilder) WithEngine(engine sim.Engine) DeviceBuilder {
 // WithFreq sets the frequency of the device.
 func (d DeviceBuilder) WithFreq(freq sim.Freq) DeviceBuilder {
 	d.freq = freq
+	return d
+}
+
+// WithMonitor sets the monitor that monitors the device.
+func (d DeviceBuilder) WithMonitor(monitor *monitoring.Monitor) DeviceBuilder {
+	d.monitor = monitor
 	return d
 }
 
@@ -50,17 +63,8 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 		Tiles:  make([][]*tile, d.height),
 	}
 
-	nocConnector := mesh.NewConnector().
-		WithEngine(d.engine).
-		WithFreq(d.freq).
-		WithSwitchLatency(1).
-		WithBandwidth(1)
-	nocConnector.CreateNetwork(name + ".Mesh")
-
-	d.createTiles(dev, name, nocConnector)
-	d.setRemovePorts(dev)
-
-	nocConnector.EstablishNetwork()
+	d.createTiles(dev, name)
+	d.connectTiles(dev)
 
 	return dev
 }
@@ -68,60 +72,66 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 func (d DeviceBuilder) createTiles(
 	dev *device,
 	name string,
-	nocConnector *mesh.Connector,
 ) {
 	for y := 0; y < d.height; y++ {
 		dev.Tiles[y] = make([]*tile, d.width)
 		for x := 0; x < d.width; x++ {
 			tile := &tile{}
-			coreName := fmt.Sprintf("%s.Tile[%d][%d].Core", name, x, y)
+			coreName := fmt.Sprintf("%s.Tile[%d][%d].Core", name, y, x)
 			tile.Core = core.Builder{}.
 				WithEngine(d.engine).
 				WithFreq(d.freq).
 				Build(coreName)
 
-			dev.Tiles[y][x] = tile
+			if d.monitor != nil {
+				d.monitor.RegisterComponent(tile.Core)
+			}
 
-			nocConnector.AddTile(
-				[3]int{x, y, 0},
-				[]sim.Port{
-					tile.Core.GetPortByName(cgra.East.Name()),
-					tile.Core.GetPortByName(cgra.West.Name()),
-					tile.Core.GetPortByName(cgra.North.Name()),
-					tile.Core.GetPortByName(cgra.South.Name()),
-				})
+			tile.Core.MapProgram(nil, x, y)
+
+			dev.Tiles[y][x] = tile
 		}
 	}
 }
 
-func (d DeviceBuilder) setRemovePorts(dev *device) {
+func (d DeviceBuilder) connectTiles(dev *device) {
 	for y := 0; y < d.height; y++ {
 		for x := 0; x < d.width; x++ {
-			tile := dev.Tiles[y][x]
-
-			if x > 0 {
-				westTile := dev.Tiles[y][x-1]
-				tile.SetRemotePort(cgra.West,
-					westTile.Core.GetPortByName(cgra.East.Name()))
-			}
-
-			if y > 0 {
-				northTile := dev.Tiles[y-1][x]
-				tile.SetRemotePort(cgra.North,
-					northTile.Core.GetPortByName(cgra.South.Name()))
-			}
-
+			currentTile := dev.Tiles[y][x]
+			// connect to the East tile
 			if x < d.width-1 {
 				eastTile := dev.Tiles[y][x+1]
-				tile.SetRemotePort(cgra.East,
-					eastTile.Core.GetPortByName(cgra.West.Name()))
+				d.connectTilePorts(currentTile, cgra.East, eastTile, cgra.West)
 			}
-
+			// connect to the South tile
 			if y < d.height-1 {
 				southTile := dev.Tiles[y+1][x]
-				tile.SetRemotePort(cgra.South,
-					southTile.Core.GetPortByName(cgra.North.Name()))
+				d.connectTilePorts(currentTile, cgra.South, southTile, cgra.North)
 			}
 		}
 	}
+}
+
+func (d DeviceBuilder) connectTilePorts(srcTile *tile,
+	srcSide cgra.Side,
+	dstTile *tile,
+	dstSide cgra.Side) {
+
+	srcPort := srcTile.GetPort(srcSide)
+	dstPort := dstTile.GetPort(dstSide)
+
+	connName := fmt.Sprintf("%s.%s.%s.%s",
+		srcTile.Core.Name(), srcSide.Name(),
+		dstTile.Core.Name(), dstSide.Name(),
+	)
+	conn := directconnection.MakeBuilder().
+		WithEngine(d.engine).
+		WithFreq(d.freq).
+		Build(connName)
+
+	conn.PlugIn(srcPort)
+	conn.PlugIn(dstPort)
+
+	srcTile.SetRemotePort(srcSide, dstPort.AsRemote())
+	dstTile.SetRemotePort(dstSide, srcPort.AsRemote())
 }

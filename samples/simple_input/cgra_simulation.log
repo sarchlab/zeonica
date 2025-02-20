@@ -1,0 +1,63 @@
+Monitoring simulation with http://localhost:36173
+Feeding in weight data...
+&{{2 0xc0002d54d0 0xc0002d4990 0 0 0 0} 1 2}
+  0.000000, Feed in 1 to Device.Tile[0][0].Core.North
+&{{4 0xc0002d5710 0xc0002d4ab0 0 0 0 0} 2 0}
+  0.000000, Feed in 2 to Device.Tile[0][0].Core.West
+&{{6 0xc0002d57a0 0xc0002d4d80 0 0 0 0} 2 0}
+  0.000000, Feed in 2 to Device.Tile[1][0].Core.West
+&{{14 0xc0002d5710 0xc0002d4ab0 1e-09 0 0 0} 3 2}
+  1.000000, Feed in 3 to Device.Tile[0][0].Core.West
+&{{15 0xc0002d57a0 0xc0002d4d80 1e-09 0 0 0} 3 2}
+  1.000000, Feed in 3 to Device.Tile[1][0].Core.West
+  1.000000, Device.Tile[1][0].Core, Recv 2 Driver.DeviceWest[1]->Device.Tile[1][0].Core.West, Color 0
+  1.000000, Device.Tile[0][0].Core, Recv 1 Driver.DeviceNorth[0]->Device.Tile[0][0].Core.North, Color 2
+  1.000000, Device.Tile[0][0].Core, Recv 2 Driver.DeviceWest[0]->Device.Tile[0][0].Core.West, Color 0
+  2.000000, Device.Tile[1][0].Core, Recv 3 Driver.DeviceWest[1]->Device.Tile[1][0].Core.West, Color 2
+Updated register $3 to value 1 at PC 0
+RECV Instruction: Received 1 from NORTH buffer, stored in $3
+  2.000000, Device.Tile[0][0].Core, Inst RECV, $3, NORTH, B
+  2.000000, Device.Tile[0][0].Core, Recv 3 Driver.DeviceWest[0]->Device.Tile[0][0].Core.West, Color 2
+Updated register $1 to value 2 at PC 1
+  3.000000, Device.Tile[0][0].Core, Inst RECV_SEND, EAST_R, $1, WEST_R
+  4.000000, Device.Tile[0][0].Core, Send 2 Device.Tile[0][0].Core.East->Driver.DeviceEast[0], Color 0
+Updated register $2 to value 3 at PC 2
+  4.000000, Device.Tile[0][0].Core, Inst RECV_SEND, EAST_B, $2, WEST_B
+  5.000000, Device.Tile[0][0].Core, Send 3 Device.Tile[0][0].Core.East->Driver.DeviceEast[0], Color 2
+Updated register $0 to value 6 at PC 3
+Mac Instruction, Data are 2 and 3, Res is 6
+MAC: $0 += $1 * $2 => Result: 6
+  5.000000, Device.Tile[0][0].Core, Inst MAC, $0, $1, $2
+IADD: Adding 1 (src1) + 6 (src2) = 7
+Updated register $0 to value 7 at PC 4
+  6.000000, Device.Tile[0][0].Core, Inst ADDI, $0, $3, $0
+SEND: Stored value 7 in send buffer for color 2 and destination index 2
+  7.000000, Device.Tile[0][0].Core, Inst SEND, NET_SEND_SOUTH, $0, B
+  8.000000, Device.Tile[0][0].Core, Send 7 Device.Tile[0][0].Core.South->Device.Tile[1][0].Core.North, Color 2
+Updated register $0 to value 0 at PC 6
+MOV Instruction: Moving 0 into $0
+  8.000000, Device.Tile[0][0].Core, Inst MOV, $0, 0
+ 19.000000, Device.Tile[1][0].Core, Recv 7 Device.Tile[0][0].Core.South->Device.Tile[1][0].Core.North, Color 2
+Updated register $3 to value 7 at PC 0
+RECV Instruction: Received 7 from NORTH buffer, stored in $3
+ 20.000000, Device.Tile[1][0].Core, Inst RECV, $3, NORTH, B
+Updated register $1 to value 2 at PC 1
+ 21.000000, Device.Tile[1][0].Core, Inst RECV_SEND, EAST_R, $1, WEST_R
+ 22.000000, Device.Tile[1][0].Core, Send 2 Device.Tile[1][0].Core.East->Driver.DeviceEast[1], Color 0
+Updated register $2 to value 3 at PC 2
+ 22.000000, Device.Tile[1][0].Core, Inst RECV_SEND, EAST_B, $2, WEST_B
+ 23.000000, Device.Tile[1][0].Core, Send 3 Device.Tile[1][0].Core.East->Driver.DeviceEast[1], Color 2
+Updated register $0 to value 6 at PC 3
+Mac Instruction, Data are 2 and 3, Res is 6
+MAC: $0 += $1 * $2 => Result: 6
+ 23.000000, Device.Tile[1][0].Core, Inst MAC, $0, $1, $2
+IADD: Adding 7 (src1) + 6 (src2) = 13
+Updated register $0 to value 13 at PC 4
+ 24.000000, Device.Tile[1][0].Core, Inst ADDI, $0, $3, $0
+SEND: Stored value 13 in send buffer for color 2 and destination index 2
+ 25.000000, Device.Tile[1][0].Core, Inst SEND, NET_SEND_SOUTH, $0, B
+ 26.000000, Device.Tile[1][0].Core, Send 13 Device.Tile[1][0].Core.South->Driver.DeviceSouth[0], Color 2
+Updated register $0 to value 0 at PC 6
+MOV Instruction: Moving 0 into $0
+ 26.000000, Device.Tile[1][0].Core, Inst MOV, $0, 0
+Input Layer Output: [0]

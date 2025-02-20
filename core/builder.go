@@ -1,7 +1,7 @@
 package core
 
 import (
-	"github.com/sarchlab/akita/v3/sim"
+	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
 )
 
@@ -30,11 +30,20 @@ func (b Builder) Build(name string) *Core {
 	c.TickingComponent = sim.NewTickingComponent(name, b.engine, b.freq, c)
 	c.state = coreState{
 		Registers:        make([]uint32, 64),
-		RecvBufHead:      make([]uint32, 4),
-		RecvBufHeadReady: make([]bool, 4),
-		SendBufHead:      make([]uint32, 4),
-		SendBufHeadBusy:  make([]bool, 4),
+		Memory:           make([]uint32, 1024),
+		RecvBufHead:      make([][]uint32, 4),
+		RecvBufHeadReady: make([][]bool, 4),
+		SendBufHead:      make([][]uint32, 4),
+		SendBufHeadBusy:  make([][]bool, 4),
 	}
+
+	for i := 0; i < 4; i++ {
+		c.state.RecvBufHead[i] = make([]uint32, 4)
+		c.state.RecvBufHeadReady[i] = make([]bool, 4)
+		c.state.SendBufHead[i] = make([]uint32, 4)
+		c.state.SendBufHeadBusy[i] = make([]bool, 4)
+	}
+
 	c.ports = make(map[cgra.Side]*portPair)
 
 	b.makePort(c, cgra.North)
@@ -46,7 +55,7 @@ func (b Builder) Build(name string) *Core {
 }
 
 func (b *Builder) makePort(c *Core, side cgra.Side) {
-	localPort := sim.NewLimitNumMsgPort(c, 1, c.Name()+"."+side.Name())
+	localPort := sim.NewPort(c, 1, 1, c.Name()+"."+side.Name())
 	c.ports[side] = &portPair{
 		local: localPort,
 	}

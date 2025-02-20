@@ -1,14 +1,20 @@
 package config
 
 import (
-	"github.com/sarchlab/akita/v3/sim"
+	"fmt"
+
+	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
 )
 
 type tileCore interface {
 	sim.Component
-	MapProgram(program []string)
-	SetRemotePort(side cgra.Side, port sim.Port)
+	MapProgram(program []string, x int, y int)
+	SetRemotePort(side cgra.Side, port sim.RemotePort)
+	GetMemory(x int, y int, addr uint32) uint32
+	WriteMemory(x int, y int, data uint32, baseAddr uint32)
+	GetTileX() int
+	GetTileY() int
 }
 
 type tile struct {
@@ -31,14 +37,35 @@ func (t tile) GetPort(side cgra.Side) sim.Port {
 	}
 }
 
+func (t tile) GetTileX() int {
+	return t.Core.GetTileX()
+}
+
+func (t tile) GetTileY() int {
+	return t.Core.GetTileY()
+}
+func (t tile) String() string {
+	return fmt.Sprintf("Tile(%d, %d)", t.Core.GetTileX(), t.Core.GetTileY())
+}
+
+// getMemory returns the memory of the tile.
+func (t tile) GetMemory(x int, y int, addr uint32) uint32 {
+	return t.Core.GetMemory(x, y, addr)
+}
+
+// writeMemory writes the memory of the tile.
+func (t tile) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
+	t.Core.WriteMemory(x, y, data, baseAddr)
+}
+
 // SetRemotePort sets the port that the core can send data to.
-func (t tile) SetRemotePort(side cgra.Side, port sim.Port) {
+func (t tile) SetRemotePort(side cgra.Side, port sim.RemotePort) {
 	t.Core.SetRemotePort(side, port)
 }
 
 // MapProgram sets the program that the tile needs to run.
-func (t tile) MapProgram(program []string) {
-	t.Core.MapProgram(program)
+func (t tile) MapProgram(program []string, x int, y int) {
+	t.Core.MapProgram(program, x, y)
 }
 
 // A Device is a CGRA device that includes a large number of tiles. Tiles can be
@@ -60,7 +87,10 @@ func (d *device) GetTile(x, y int) cgra.Tile {
 }
 
 // GetSidePorts returns the ports on the given side of the device.
-func (d *device) GetSidePorts(side cgra.Side, portRange [2]int) []sim.Port {
+func (d *device) GetSidePorts(
+	side cgra.Side,
+	portRange [2]int,
+) []sim.Port {
 	ports := make([]sim.Port, 0)
 
 	switch side {

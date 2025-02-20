@@ -1,12 +1,12 @@
 package api
 
-import "github.com/sarchlab/akita/v3/sim"
+import "github.com/sarchlab/akita/v4/sim"
 
 type defaultPortFactory struct {
 }
 
 func (f defaultPortFactory) make(c sim.Component, name string) sim.Port {
-	return sim.NewLimitNumMsgPort(c, 1, name)
+	return sim.NewPort(c, 1, 1, name)
 }
 
 // DriverBuilder creates a new instance of Driver.
