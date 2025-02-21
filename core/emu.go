@@ -25,10 +25,8 @@ type coreState struct {
 	PC           uint32
 	TileX, TileY uint32
 	Registers    []uint32
-	// still consider using outside block to control pc
-	//Code         [][]string
-	Memory []uint32
-	Code   []string
+	Memory       []uint32
+	Code         []string
 
 	RecvBufHead      [][]uint32 //[Color][Direction]
 	RecvBufHeadReady [][]bool
@@ -382,6 +380,20 @@ func (i instEmulator) Jump(dst string, state *coreState) {
 		}
 	}
 }
+
+// func (i instEmulator) Jump(dst string, state *coreState) {
+// 	target := dst + ":"
+// 	for pc := 0; pc < len(state.Code); pc++ {
+// 		line := strings.TrimSpace(state.Code[pc])
+
+// 		if line == target {
+// 			state.PC = uint32(pc) + 1
+// 			return
+// 		}
+// 	}
+
+// 	panic(fmt.Sprintf("jump target not found: %s", target))
+// }
 
 func (i instEmulator) readOperand(operand string, state *coreState) (value uint32) {
 	// if strings.HasPrefix(operand, "$") {

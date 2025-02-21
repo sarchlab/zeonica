@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
@@ -53,13 +54,78 @@ func (c *Core) SetRemotePort(side cgra.Side, remote sim.RemotePort) {
 	c.ports[side].remote = remote
 }
 
+func (c *Core) runProgram() bool {
+	if int(c.state.PC) >= len(c.state.Code) {
+		return false
+	}
+
+	line := c.state.Code[c.state.PC]
+	madeProgress := false
+
+	if strings.HasPrefix(line, "BLOCK:") {
+		// This is a block of instructions
+		block := strings.TrimPrefix(line, "BLOCK:")
+		instructions := strings.Split(block, ";")
+		startPC := c.state.PC
+
+		for _, inst := range instructions {
+			inst = strings.TrimSpace(inst)
+			fmt.Printf("%10f, %s, inst: %s\n",
+				c.Engine.CurrentTime()*1e9, c.Name(), inst)
+
+			prevPC := c.state.PC
+			c.emu.RunInst(inst, &c.state)
+			c.state.PC = prevPC // Reset PC after each instruction in the block
+			madeProgress = true
+
+			// Check if the instruction was a jump
+			if c.state.PC != prevPC {
+				return madeProgress // Exit if a jump occurred
+			}
+		}
+		c.state.PC = startPC + 1
+	} else {
+		// This is a normal instruction
+		fmt.Printf("%10f, %s, inst: %s\n",
+			c.Engine.CurrentTime()*1e9, c.Name(), line)
+		c.emu.RunInst(line, &c.state)
+		madeProgress = true
+	}
+	return madeProgress
+}
+
 // MapProgram sets the program that the core needs to run.
 func (c *Core) MapProgram(program []string, x int, y int) {
-	c.state.Code = program
+	mergedCode := make([]string, 0)
+
+	for _, line := range program {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			// This is a block
+			block := strings.Trim(line, "[]")
+			mergedCode = append(mergedCode, "BLOCK:"+block)
+		} else {
+			// This is a normal instruction
+			mergedCode = append(mergedCode, line)
+		}
+	}
+
+	c.state.Code = mergedCode
 	c.state.PC = 0
 	c.state.TileX = uint32(x)
 	c.state.TileY = uint32(y)
 }
+
+// func (c *Core) MapProgram(program []string, x int, y int) {
+// 	c.state.Code = program
+// 	c.state.PC = 0
+// 	c.state.TileX = uint32(x)
+// 	c.state.TileY = uint32(y)
+// }
 
 // Tick runs the program for one cycle.
 func (c *Core) Tick() (madeProgress bool) {
@@ -147,80 +213,35 @@ func (c *Core) doRecv() bool {
 	return madeProgress
 }
 
-func (c *Core) runProgram() bool {
-	if int(c.state.PC) >= len(c.state.Code) {
-		return false
-	}
-	inst := c.state.Code[c.state.PC]
-
-	fmt.Printf("%10f, %s, inst: %s inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), inst, len(inst))
-	for inst[len(inst)-1] == ':' {
-		c.state.PC++
-		inst = c.state.Code[c.state.PC]
-	}
-	prevPC := c.state.PC
-	//fmt.Printf("start run inst \n")
-	c.emu.RunInst(inst, &c.state)
-	nextPC := c.state.PC
-	//fmt.Printf("end run inst, current PC = %d\n", nextPC)
-	if prevPC == nextPC {
-		return false
-	}
-	fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
-	//debug reg value
-	//fmt.Printf("Core (%d, %d) Register values:\n", c.state.TileX, c.state.TileY)
-	// for i, val := range c.state.Registers {
-	// 	if val != 0 { // Only print registers that are used
-	// 		fmt.Printf("  $%-2d: %d\n", i, val) // More readable formatting
-	// 	}
-	// }
-
-	return true
-}
-
-// Distributor for always executing part, these parts are not controlled by cycles.
-// func (c *Core) AlwaysPart() bool {
-// 	madeProgress := true //If madeprogress, tick, otherwise, wait
+// func (c *Core) runProgram() bool {
 // 	if int(c.state.PC) >= len(c.state.Code) {
 // 		return false
 // 	}
-
 // 	inst := c.state.Code[c.state.PC]
+
+// 	fmt.Printf("%10f, %s, inst: %s inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), inst, len(inst))
 // 	for inst[len(inst)-1] == ':' {
 // 		c.state.PC++
 // 		inst = c.state.Code[c.state.PC]
 // 	}
-
-// 	for strings.HasPrefix(inst, "@") {
-// 		prevPC := c.state.PC
-// 		parts := strings.Split(inst, ",")
-// 		instName := parts[0]
-// 		instName = strings.TrimLeft(instName, "@")
-
-// 		switch instName {
-// 		case "ROUTER_FORWARD":
-// 			madeProgress = c.Router(parts[1], parts[2], parts[3]) || madeProgress
-// 		case "WAIT_AND":
-// 			c.WaitAnd(parts[1], parts[2], parts[3]) //Pending modification
-// 		default:
-// 			panic("Invalid Instruction")
-// 		}
-
-// 		c.state.PC++
-// 		nextPC := c.state.PC
-// 		if prevPC == nextPC {
-// 			return false
-// 		}
-
-// 		fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
-// 		if int(c.state.PC) >= len(c.state.Code) {
-// 			return false
-// 		}
-
-// 		inst = c.state.Code[c.state.PC]
+// 	prevPC := c.state.PC
+// 	//fmt.Printf("start run inst \n")
+// 	c.emu.RunInst(inst, &c.state)
+// 	nextPC := c.state.PC
+// 	//fmt.Printf("end run inst, current PC = %d\n", nextPC)
+// 	if prevPC == nextPC {
+// 		return false
 // 	}
+// 	fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
+// 	//debug reg value
+// 	//fmt.Printf("Core (%d, %d) Register values:\n", c.state.TileX, c.state.TileY)
+// 	// for i, val := range c.state.Registers {
+// 	// 	if val != 0 { // Only print registers that are used
+// 	// 		fmt.Printf("  $%-2d: %d\n", i, val) // More readable formatting
+// 	// 	}
+// 	// }
 
-// 	return madeProgress
+// 	return true
 // }
 
 // If data from two sources is not ready, wait to ready.
@@ -306,3 +327,48 @@ func (c *Core) getIndex(side string) int {
 
 	return srcIndex
 }
+
+// Distributor for always executing part, these parts are not controlled by cycles.
+// func (c *Core) AlwaysPart() bool {
+// 	madeProgress := true //If madeprogress, tick, otherwise, wait
+// 	if int(c.state.PC) >= len(c.state.Code) {
+// 		return false
+// 	}
+
+// 	inst := c.state.Code[c.state.PC]
+// 	for inst[len(inst)-1] == ':' {
+// 		c.state.PC++
+// 		inst = c.state.Code[c.state.PC]
+// 	}
+
+// 	for strings.HasPrefix(inst, "@") {
+// 		prevPC := c.state.PC
+// 		parts := strings.Split(inst, ",")
+// 		instName := parts[0]
+// 		instName = strings.TrimLeft(instName, "@")
+
+// 		switch instName {
+// 		case "ROUTER_FORWARD":
+// 			madeProgress = c.Router(parts[1], parts[2], parts[3]) || madeProgress
+// 		case "WAIT_AND":
+// 			c.WaitAnd(parts[1], parts[2], parts[3]) //Pending modification
+// 		default:
+// 			panic("Invalid Instruction")
+// 		}
+
+// 		c.state.PC++
+// 		nextPC := c.state.PC
+// 		if prevPC == nextPC {
+// 			return false
+// 		}
+
+// 		fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
+// 		if int(c.state.PC) >= len(c.state.Code) {
+// 			return false
+// 		}
+
+// 		inst = c.state.Code[c.state.PC]
+// 	}
+
+// 	return madeProgress
+// }

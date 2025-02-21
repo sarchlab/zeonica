@@ -1,0 +1,2 @@
+[RECV, $0, SOUTH, R; RECV, $1, WEST, R; MUL, $2, $1, $0; SEND, NET_SEND_EAST, $2, R]
+SLEEP
