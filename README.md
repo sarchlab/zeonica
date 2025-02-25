@@ -51,6 +51,22 @@ Here is the instruction list
 * RECV_SEND:Receive, store in register and send the data in one cycle.
 * SLEEP:Try each trigger stored in trigger queue. If one is triggered, jump to the specific block queue. Otherwise, keep trying. PC will not add 1.
 
+### Instruction Combination (**Not developed yet.**)
+You can combine different instructions using `{}`
+e.g.
+```
+{
+    MAC, $3, $1, $2
+    MOV, SOUTH_B, NORTH_B
+}
+```
+
+- Data race will arise error.
+  e.g. the bypass and computation instruction has the same destination
+- The combination of different instructions is user-defined behaviour
+  We support the combination of any combination of the instructions and can simulate their behaviour.
+  User should guarantee the combinations are legal on their own hardware.
+
 ### Example: Pass-through left to right
 
 ```assembly
