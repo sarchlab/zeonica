@@ -34,3 +34,23 @@
  24.000000, Device.Tile[1][2].Core, Recv 44 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 2
  27.000000, Device.Tile[0][1].Core, Send 30 Device.Tile[0][1].Core.East->Device.Tile[0][2].Core.West, Color 2
  28.000000, Device.Tile[0][2].Core, Recv 30 Device.Tile[0][1].Core.East->Device.Tile[0][2].Core.West, Color 2
+  1.000000, Device.Tile[2][1].Core, Recv 2 Driver.DeviceSouth[1]->Device.Tile[2][1].Core.South, Color 0
+  1.000000, Device.Tile[2][0].Core, Recv 1 Driver.DeviceSouth[0]->Device.Tile[2][0].Core.South, Color 0
+  2.000000, Device.Tile[2][1].Core, Recv 4 Driver.DeviceSouth[1]->Device.Tile[2][1].Core.South, Color 2
+  2.000000, Device.Tile[2][0].Core, Recv 3 Driver.DeviceSouth[0]->Device.Tile[2][0].Core.South, Color 2
+  3.000000, Device.Tile[2][0].Core, Send 1 Device.Tile[2][0].Core.North->Device.Tile[1][0].Core.South, Color 0
+  3.000000, Device.Tile[2][1].Core, Send 2 Device.Tile[2][1].Core.North->Device.Tile[1][1].Core.South, Color 0
+  4.000000, Device.Tile[2][0].Core, Send 3 Device.Tile[2][0].Core.North->Device.Tile[1][0].Core.South, Color 2
+  4.000000, Device.Tile[1][1].Core, Recv 2 Device.Tile[2][1].Core.North->Device.Tile[1][1].Core.South, Color 0
+  4.000000, Device.Tile[1][0].Core, Recv 1 Device.Tile[2][0].Core.North->Device.Tile[1][0].Core.South, Color 0
+  4.000000, Device.Tile[2][1].Core, Send 4 Device.Tile[2][1].Core.North->Device.Tile[1][1].Core.South, Color 2
+  5.000000, Device.Tile[1][0].Core, Recv 3 Device.Tile[2][0].Core.North->Device.Tile[1][0].Core.South, Color 2
+  5.000000, Device.Tile[1][1].Core, Recv 4 Device.Tile[2][1].Core.North->Device.Tile[1][1].Core.South, Color 2
+  6.000000, Device.Tile[1][0].Core, Send 1 Device.Tile[1][0].Core.North->Device.Tile[0][0].Core.South, Color 0
+  7.000000, Device.Tile[1][0].Core, Send 0 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 2
+  7.000000, Device.Tile[0][0].Core, Recv 1 Device.Tile[1][0].Core.North->Device.Tile[0][0].Core.South, Color 0
+  7.000000, Device.Tile[1][1].Core, Send 0 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 0
+  8.000000, Device.Tile[1][2].Core, Recv 0 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 0
+  8.000000, Device.Tile[1][1].Core, Send 0 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 2
+  8.000000, Device.Tile[1][1].Core, Recv 0 Device.Tile[1][0].Core.East->Device.Tile[1][1].Core.West, Color 2
+  9.000000, Device.Tile[1][2].Core, Recv 0 Device.Tile[1][1].Core.East->Device.Tile[1][2].Core.West, Color 2

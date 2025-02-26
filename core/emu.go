@@ -35,6 +35,9 @@ type coreState struct {
 
 	routingRules []*routingRule
 	triggers     []*Trigger
+
+	BlockPhase    string // Current phase(RCV/CMP/SND）
+	BlockProgress int
 }
 
 type instEmulator struct {
@@ -203,11 +206,18 @@ func (i instEmulator) runWait(inst []string, state *coreState) {
 	srcIndex := i.getDirecIndex(direction)
 
 	if !state.RecvBufHeadReady[colorIndex][srcIndex] {
+		// fmt.Print("[DEBUG] WAIT: Data not ready, stalling\n")
 		return
 	}
 
+	// data := state.RecvBufHead[colorIndex][srcIndex]
 	state.RecvBufHeadReady[colorIndex][srcIndex] = false
 	i.writeOperand(dst, state.RecvBufHead[colorIndex][srcIndex], state)
+	// fmt.Printf(
+	// 	"[DEBUG] WAIT: Wrote %d to %s from %s\n",
+	// 	data, dst, src,
+	// )
+
 	state.PC++
 }
 
@@ -623,11 +633,11 @@ func (i instEmulator) runMul(inst []string, state *coreState) {
 
 	srcVal1 := i.readOperand(src1, state)
 	srcVal2 := i.readOperand(src2, state)
-	dstVal := i.readOperand(dst, state)
-	dstVal = srcVal1 * srcVal2
+	//dstVal := i.readOperand(dst, state)
+	dstVal := srcVal1 * srcVal2
 	i.writeOperand(dst, dstVal, state)
 
-	//fmt.Printf("Mul Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
+	fmt.Printf("Mul Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
 
 	state.PC++
 }

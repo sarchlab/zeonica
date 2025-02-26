@@ -34,7 +34,7 @@ func matrixMulti(driver api.Driver) {
 	driver.FeedIn(src1[:], cgra.South, [2]int{0, 1}, 1, "R")
 	driver.FeedIn(src2[:], cgra.West, [2]int{0, 1}, 1, "R")
 	driver.Run()
-	driver.FeedIn(src1[:], cgra.West, [2]int{0, 1}, 1, "R") //for output signal
+	driver.FeedIn(src2[:], cgra.West, [2]int{0, 1}, 1, "R") //for output signal
 	driver.Collect(dst, cgra.East, [2]int{0, 1}, 1, "R")    //for output
 	driver.Run()
 	fmt.Println(dst)

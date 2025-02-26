@@ -22,6 +22,36 @@ type Core struct {
 	emu   instEmulator
 }
 
+// var computeInstructions = map[string]bool{
+// 	"MUL":           true,
+// 	"ADDI":          true,
+// 	"SUB":           true,
+// 	"DIV":           true,
+// 	"MUL_CONST":     true,
+// 	"MUL_CONST_ADD": true,
+// 	"MUL_SUB":       true,
+// 	"MAC":           true,
+// 	"LLS":           true,
+// 	"LRS":           true,
+// 	"AND":           true,
+// 	"OR":            true,
+// 	"XOR":           true,
+// 	"NOT":           true,
+// 	"LD":            true,
+// 	"ST":            true,
+// 	"FMUL":          true,
+// 	"FADD":          true,
+// 	"FADD_CONST":    true,
+// 	"FSUB":          true,
+// 	"FDIV":          true,
+// 	"FMUL_CONST":    true,
+// 	"FINC":          true,
+// 	"PAS":           true,
+// 	"START":         true,
+// 	"NAH":           true,
+// 	"SEL":           true,
+// }
+
 func (c *Core) GetTileX() int {
 	return int(c.state.TileX)
 }
@@ -54,49 +84,14 @@ func (c *Core) SetRemotePort(side cgra.Side, remote sim.RemotePort) {
 	c.ports[side].remote = remote
 }
 
-func (c *Core) runProgram() bool {
-	if int(c.state.PC) >= len(c.state.Code) {
-		return false
-	}
-
-	line := c.state.Code[c.state.PC]
-	madeProgress := false
-
-	if strings.HasPrefix(line, "BLOCK:") {
-		// This is a block of instructions
-		block := strings.TrimPrefix(line, "BLOCK:")
-		instructions := strings.Split(block, ";")
-		startPC := c.state.PC
-
-		for _, inst := range instructions {
-			inst = strings.TrimSpace(inst)
-			fmt.Printf("%10f, %s, inst: %s\n",
-				c.Engine.CurrentTime()*1e9, c.Name(), inst)
-
-			prevPC := c.state.PC
-			c.emu.RunInst(inst, &c.state)
-			c.state.PC = prevPC // Reset PC after each instruction in the block
-			madeProgress = true
-
-			// Check if the instruction was a jump
-			if c.state.PC != prevPC {
-				return madeProgress // Exit if a jump occurred
-			}
-		}
-		c.state.PC = startPC + 1
-	} else {
-		// This is a normal instruction
-		fmt.Printf("%10f, %s, inst: %s\n",
-			c.Engine.CurrentTime()*1e9, c.Name(), line)
-		c.emu.RunInst(line, &c.state)
-		madeProgress = true
-	}
-	return madeProgress
-}
-
 // MapProgram sets the program that the core needs to run.
+// core.go
+// core.go - MapProgram
 func (c *Core) MapProgram(program []string, x int, y int) {
 	mergedCode := make([]string, 0)
+	var rcvInstructions []string
+	var cmpInstructions []string
+	var sndInstructions []string
 
 	for _, line := range program {
 		line = strings.TrimSpace(line)
@@ -105,11 +100,59 @@ func (c *Core) MapProgram(program []string, x int, y int) {
 		}
 
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			// This is a block
 			block := strings.Trim(line, "[]")
-			mergedCode = append(mergedCode, "BLOCK:"+block)
+			phaseParts := strings.Split(block, "|")
+			for _, phasePart := range phaseParts {
+				phasePart = strings.TrimSpace(phasePart)
+				if phasePart == "" {
+					continue
+				}
+
+				parts := strings.SplitN(phasePart, ":", 2)
+				if len(parts) != 2 {
+					panic(fmt.Sprintf("Block invalid format: %s", phasePart))
+				}
+				phaseName := strings.TrimSpace(parts[0])
+				instructions := strings.TrimSpace(parts[1])
+
+				var phaseInstrs []string
+				for _, instr := range strings.Split(instructions, ";") {
+					instr = strings.TrimSpace(instr)
+					if instr != "" {
+						phaseInstrs = append(phaseInstrs, instr)
+					}
+				}
+
+				switch phaseName {
+				case "RCV":
+					if len(phaseInstrs) > 4 {
+						panic("At most 4 instructions in RCV phase")
+					}
+					rcvInstructions = phaseInstrs
+				case "CMP":
+					if len(phaseInstrs) != 1 {
+						panic("At most 1 instruction in CMP phase")
+					}
+					cmpInstructions = phaseInstrs
+				case "SND":
+					if len(phaseInstrs) > 4 {
+						panic("At most 4 instructions in SND phase")
+					}
+					sndInstructions = phaseInstrs
+				default:
+					panic(fmt.Sprintf("Unknown phase name: %s", phaseName))
+				}
+			}
+
+			mergedCode = append(mergedCode, fmt.Sprintf(
+				"BLOCK:%s;%s;%s",
+				strings.Join(rcvInstructions, ";"),
+				strings.Join(cmpInstructions, ";"),
+				strings.Join(sndInstructions, ";"),
+			))
+			//fmt.Printf("Merged code: %s\n", mergedCode[len(mergedCode)-1])
+			rcvInstructions, cmpInstructions, sndInstructions = nil, nil, nil
 		} else {
-			// This is a normal instruction
 			mergedCode = append(mergedCode, line)
 		}
 	}
@@ -120,12 +163,58 @@ func (c *Core) MapProgram(program []string, x int, y int) {
 	c.state.TileY = uint32(y)
 }
 
-// func (c *Core) MapProgram(program []string, x int, y int) {
-// 	c.state.Code = program
-// 	c.state.PC = 0
-// 	c.state.TileX = uint32(x)
-// 	c.state.TileY = uint32(y)
-// }
+func (c *Core) runProgram() bool {
+	if int(c.state.PC) >= len(c.state.Code) {
+		return false
+	}
+
+	line := c.state.Code[c.state.PC]
+	madeProgress := false
+
+	for line[len(line)-1] == ':' {
+		c.state.PC++
+		line = c.state.Code[c.state.PC]
+	}
+
+	if strings.HasPrefix(line, "BLOCK:") {
+		// This is a block of instructions
+		block := strings.TrimPrefix(line, "BLOCK:")
+		instructions := strings.Split(block, ";")
+		startPC := c.state.PC
+
+		for _, inst := range instructions {
+			inst = strings.TrimSpace(inst)
+
+			if inst == "" {
+				continue
+			}
+			fmt.Printf("%10f, %s, inst: %s\n",
+				c.Engine.CurrentTime()*1e9, c.Name(), inst)
+
+			prevPC := c.state.PC
+			c.emu.RunInst(inst, &c.state)
+			if c.state.PC == prevPC {
+				return madeProgress // wait to continue
+			}
+			madeProgress = true
+		}
+		if c.state.PC == startPC {
+			c.state.PC = startPC + 1
+		}
+	} else {
+		// This is a normal instruction
+		prevPC := c.state.PC
+		c.emu.RunInst(line, &c.state)
+		nextPC := c.state.PC
+		if prevPC == nextPC {
+			return madeProgress
+		}
+		fmt.Printf("%10f, %s, inst: %s\n",
+			c.Engine.CurrentTime()*1e9, c.Name(), line)
+		madeProgress = true
+	}
+	return madeProgress
+}
 
 // Tick runs the program for one cycle.
 func (c *Core) Tick() (madeProgress bool) {
@@ -158,7 +247,6 @@ func (c *Core) doSend() bool {
 			if err != nil {
 				continue
 			}
-
 			fmt.Printf("%10f, %s, Send %d %s->%s, Color %d\n",
 				c.Engine.CurrentTime()*1e9,
 				c.Name(),
@@ -212,37 +300,6 @@ func (c *Core) doRecv() bool {
 
 	return madeProgress
 }
-
-// func (c *Core) runProgram() bool {
-// 	if int(c.state.PC) >= len(c.state.Code) {
-// 		return false
-// 	}
-// 	inst := c.state.Code[c.state.PC]
-
-// 	fmt.Printf("%10f, %s, inst: %s inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), inst, len(inst))
-// 	for inst[len(inst)-1] == ':' {
-// 		c.state.PC++
-// 		inst = c.state.Code[c.state.PC]
-// 	}
-// 	prevPC := c.state.PC
-// 	//fmt.Printf("start run inst \n")
-// 	c.emu.RunInst(inst, &c.state)
-// 	nextPC := c.state.PC
-// 	//fmt.Printf("end run inst, current PC = %d\n", nextPC)
-// 	if prevPC == nextPC {
-// 		return false
-// 	}
-// 	fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
-// 	//debug reg value
-// 	//fmt.Printf("Core (%d, %d) Register values:\n", c.state.TileX, c.state.TileY)
-// 	// for i, val := range c.state.Registers {
-// 	// 	if val != 0 { // Only print registers that are used
-// 	// 		fmt.Printf("  $%-2d: %d\n", i, val) // More readable formatting
-// 	// 	}
-// 	// }
-
-// 	return true
-// }
 
 // If data from two sources is not ready, wait to ready.
 func (c *Core) WaitAnd(src1 string, src2 string, color string) {
