@@ -2,7 +2,9 @@
 package cgra
 
 import (
+	"fmt"
 	"github.com/sarchlab/akita/v4/sim"
+	"sync"
 )
 
 // Side defines the side of a tile.
@@ -10,24 +12,43 @@ type Side int
 
 const (
 	North Side = iota
-	East
-	South
 	West
+	South
+	East
+)
+
+var (
+	sideNames   = []string{"North", "West", "South", "East"}
+	sideNamesMu sync.RWMutex
 )
 
 // Name returns the name of the side.
 func (s Side) Name() string {
-	switch s {
-	case North:
-		return "North"
-	case West:
-		return "West"
-	case South:
-		return "South"
-	case East:
-		return "East"
-	default:
-		panic("invalid side")
+	sideNamesMu.RLock()
+	defer sideNamesMu.RUnlock()
+	if int(s) < len(sideNames) {
+		return sideNames[s]
+	}
+	return fmt.Sprintf("Side %d", s)
+}
+
+func AddSide(name string) Side {
+	sideNamesMu.Lock()
+	defer sideNamesMu.Unlock()
+	sideNames = append(sideNames, name)
+	return Side(len(sideNames) - 1)
+}
+
+func SetSideName(s Side, name string) {
+	sideNamesMu.Lock()
+	defer sideNamesMu.Unlock()
+	if int(s) < len(sideNames) {
+		sideNames[s] = name
+	} else {
+		for i := len(sideNames); i <= int(s); i++ {
+			sideNames = append(sideNames, fmt.Sprintf("Side %d", i))
+		}
+		sideNames[s] = name
 	}
 }
 

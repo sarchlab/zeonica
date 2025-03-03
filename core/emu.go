@@ -21,12 +21,6 @@ type routingRule struct {
 // 	branch string
 // }
 
-type Registers struct {
-}
-
-type Memory struct {
-}
-
 type coreState struct {
 	PC           uint32
 	TileX, TileY uint32

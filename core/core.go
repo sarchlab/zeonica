@@ -16,7 +16,8 @@ type portPair struct {
 type Core struct {
 	*sim.TickingComponent
 
-	ports map[int]*portPair
+	ports           map[cgra.Side]*portPair
+	additionalPorts map[int]*portPair
 
 	freq sim.Freq
 
