@@ -11,6 +11,7 @@ type tileCore interface {
 	sim.Component
 	MapProgram(program []string, x int, y int)
 	SetRemotePort(side cgra.Side, port sim.RemotePort)
+	SetCustomRemotePort(dir int, port sim.RemotePort)
 	GetMemory(x int, y int, addr uint32) uint32
 	WriteMemory(x int, y int, data uint32, baseAddr uint32)
 	GetTileX() int
@@ -21,19 +22,30 @@ type tile struct {
 	Core tileCore
 }
 
-// GetPort returns the of the tile by the side.
-func (t tile) GetPort(side cgra.Side) sim.Port {
-	switch side {
-	case cgra.North:
-		return t.Core.GetPortByName("North")
-	case cgra.West:
-		return t.Core.GetPortByName("West")
-	case cgra.South:
-		return t.Core.GetPortByName("South")
-	case cgra.East:
-		return t.Core.GetPortByName("East")
+func (t tile) GetPort(dir interface{}) sim.Port {
+	switch v := dir.(type) {
+	case cgra.Side:
+		// default direction
+		switch v {
+		case cgra.North:
+			return t.Core.GetPortByName("North")
+		case cgra.West:
+			return t.Core.GetPortByName("West")
+		case cgra.South:
+			return t.Core.GetPortByName("South")
+		case cgra.East:
+			return t.Core.GetPortByName("East")
+		default:
+			panic("invalid cgra.Side")
+		}
+	case int:
+		// custom direction
+		if v >= 4 {
+			return t.Core.GetPortByName(fmt.Sprintf("CustomDir%d", v))
+		}
+		panic(fmt.Sprintf("invalid direction number: %d (0-3 are reserved)", v))
 	default:
-		panic("invalid side")
+		panic("invalid direction type")
 	}
 }
 
@@ -61,6 +73,10 @@ func (t tile) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
 // SetRemotePort sets the port that the core can send data to.
 func (t tile) SetRemotePort(side cgra.Side, port sim.RemotePort) {
 	t.Core.SetRemotePort(side, port)
+}
+
+func (t tile) SetCustomRemotePort(dir int, port sim.RemotePort) {
+	t.Core.SetCustomRemotePort(dir, port)
 }
 
 // MapProgram sets the program that the tile needs to run.

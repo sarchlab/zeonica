@@ -1,4 +1,3 @@
-// Package config provides a default configuration for the CGRA device.
 package config
 
 import (
@@ -11,18 +10,41 @@ import (
 	"github.com/sarchlab/zeonica/core"
 )
 
-// DeviceBuilder can build CGRA devices.
-type DeviceBuilder struct {
-	engine  sim.Engine
-	freq    sim.Freq
-	monitor *monitoring.Monitor
-	//portFactory   portFactory
-	width, height int
+type ConnectionRule struct {
+	FromX, FromY int // src tile coordinates
+	FromDir      int // src direction
+	ToX, ToY     int // dst tile coordinates
+	ToDir        int // dst direction
 }
 
-// type portFactory interface {
-// 	make(c sim.Component, name string) sim.Port
-// }
+// DeviceBuilder can build CGRA devices.
+type DeviceBuilder struct {
+	engine            sim.Engine
+	freq              sim.Freq
+	monitor           *monitoring.Monitor
+	width, height     int
+	tileDirections    int
+	customConnections []ConnectionRule
+}
+
+func (b DeviceBuilder) WithCustomConnection(fromX, fromY, fromDir int, toX, toY, toDir int) DeviceBuilder {
+	b.customConnections = append(b.customConnections, ConnectionRule{
+		FromX:   fromX,
+		FromY:   fromY,
+		FromDir: fromDir,
+		ToX:     toX,
+		ToY:     toY,
+		ToDir:   toDir,
+	})
+	return b
+}
+
+func (b DeviceBuilder) WithTileDirections(
+	total int,
+) DeviceBuilder {
+	b.tileDirections = total
+	return b
+}
 
 // WithEngine sets the engine that drives the device simulation.
 func (d DeviceBuilder) WithEngine(engine sim.Engine) DeviceBuilder {
@@ -79,6 +101,7 @@ func (d DeviceBuilder) createTiles(
 			tile := &tile{}
 			coreName := fmt.Sprintf("%s.Tile[%d][%d].Core", name, y, x)
 			tile.Core = core.Builder{}.
+				WithDirections(d.tileDirections).
 				WithEngine(d.engine).
 				WithFreq(d.freq).
 				Build(coreName)
@@ -98,15 +121,32 @@ func (d DeviceBuilder) connectTiles(dev *device) {
 	for y := 0; y < d.height; y++ {
 		for x := 0; x < d.width; x++ {
 			currentTile := dev.Tiles[y][x]
-			// connect to the East tile
+
+			// default 4 way
 			if x < d.width-1 {
 				eastTile := dev.Tiles[y][x+1]
 				d.connectTilePorts(currentTile, cgra.East, eastTile, cgra.West)
 			}
-			// connect to the South tile
 			if y < d.height-1 {
 				southTile := dev.Tiles[y+1][x]
 				d.connectTilePorts(currentTile, cgra.South, southTile, cgra.North)
+			}
+
+			// customize direction
+			if d.tileDirections > 4 {
+				for _, rule := range d.customConnections {
+					if rule.FromX >= 0 && rule.FromX < d.width &&
+						rule.FromY >= 0 && rule.FromY < d.height &&
+						rule.ToX >= 0 && rule.ToX < d.width &&
+						rule.ToY >= 0 && rule.ToY < d.height {
+
+						srcTile := dev.Tiles[rule.FromY][rule.FromX]
+						dstTile := dev.Tiles[rule.ToY][rule.ToX]
+
+						// Connect the tiles with custom ports
+						d.connectTilePorts(srcTile, cgra.Side(rule.FromDir), dstTile, cgra.Side(rule.ToDir))
+					}
+				}
 			}
 		}
 	}
