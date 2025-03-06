@@ -1,8 +1,6 @@
 package core
 
 import (
-	"fmt"
-
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
 )
@@ -61,5 +59,24 @@ func (b Builder) Build(name string) *Core {
 		c.state.SendBufHeadBusy[i] = make([]bool, b.numDirections)
 	}
 
+	c.ports = make(map[cgra.Side]*portPair)
+
+	for i := 0; i < b.numDirections; i++ {
+		b.makePort(c, cgra.Side(i))
+	}
+
 	return c
 }
+
+func (b *Builder) makePort(c *Core, side cgra.Side) {
+	localPort := sim.NewPort(c, 1, 1, c.Name()+"."+side.Name()) //string
+	c.ports[side] = &portPair{
+		local: localPort,
+	}
+	c.AddPort(side.Name(), localPort)
+}
+
+/*
+create a port for core's each id
+
+*/

@@ -116,9 +116,9 @@ func (d DeviceBuilder) createTiles(
 			tile := &tile{}
 			coreName := fmt.Sprintf("%s.Tile[%d][%d].Core", name, y, x)
 			tile.Core = core.Builder{}.
-				WithDirections(d.tileDirections).
 				WithEngine(d.engine).
 				WithFreq(d.freq).
+				WithDirections(d.tileDirections).
 				Build(coreName)
 
 			if d.monitor != nil {

@@ -11,7 +11,6 @@ type tileCore interface {
 	sim.Component
 	MapProgram(program []string, x int, y int)
 	SetRemotePort(side cgra.Side, port sim.RemotePort)
-	SetCustomRemotePort(dir int, port sim.RemotePort)
 	GetMemory(x int, y int, addr uint32) uint32
 	WriteMemory(x int, y int, data uint32, baseAddr uint32)
 	GetTileX() int
@@ -75,10 +74,6 @@ func (t tile) SetRemotePort(side cgra.Side, port sim.RemotePort) {
 	t.Core.SetRemotePort(side, port)
 }
 
-func (t tile) SetCustomRemotePort(dir int, port sim.RemotePort) {
-	t.Core.SetCustomRemotePort(dir, port)
-}
-
 // MapProgram sets the program that the tile needs to run.
 func (t tile) MapProgram(program []string, x int, y int) {
 	t.Core.MapProgram(program, x, y)
@@ -90,6 +85,7 @@ type device struct {
 	Name          string
 	Width, Height int
 	Tiles         [][]*tile
+	Directions    int
 }
 
 // GetSize returns the width and height of the device.
