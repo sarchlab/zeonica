@@ -1,11 +1,6 @@
 package core
 
 import (
-	"fmt"
-	"math"
-	"strconv"
-	"strings"
-
 	"github.com/sarchlab/zeonica/cgra"
 )
 
@@ -15,9 +10,9 @@ type routingRule struct {
 	color string
 }
 
-type Context struct {
-	content string
-}
+// type Context struct {
+// 	content string
+// }
 
 // type Trigger struct {
 // 	src    [4]bool
@@ -32,7 +27,7 @@ type coreState struct {
 	Memory       []uint32
 	Code         []string
 	//consider adding new feature
-	ConfigMem []*Context
+	// ConfigMem []*Context
 
 	RecvBufHead      [][]uint32 //[Color][Direction]
 	RecvBufHeadReady [][]bool

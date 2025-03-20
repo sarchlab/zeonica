@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"

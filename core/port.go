@@ -303,7 +303,7 @@ type ExtPort struct {
 
 func NewExtPort(
 	comp sim.Component,
-	incomingBufCap, sendBufCap int,
+	incomingBufCap, sendBufCap int, maxChannels int,
 	name string,
 ) Port {
 	return &ExtPort{
@@ -312,6 +312,7 @@ func NewExtPort(
 		comp:         comp,
 		incomingBuf:  sim.NewBuffer(name+".Incoming", incomingBufCap),
 		sendChannels: make(map[int]sim.Buffer),
+		maxChannels:  maxChannels,
 		sendBufSize:  sendBufCap,
 	}
 }
@@ -343,6 +344,10 @@ func (p *ExtPort) Send(msg sim.Msg) *sim.SendError {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
+	//adding channel ID to the msg
+	//trafficClass
+	msg.Meta().TrafficClass = p.currentChannel
+
 	p.msgMustBeValid(msg)
 
 	buf, exists := p.sendChannels[p.currentChannel]
@@ -353,7 +358,7 @@ func (p *ExtPort) Send(msg sim.Msg) *sim.SendError {
 			return sim.NewSendError() // do not create new channel
 		}
 		buf = sim.NewBuffer(
-			fmt.Sprintf("%s.Send-Ch%d", p.name, p.currentChannel),
+			fmt.Sprintf("%s.Send.Ch%d", p.name, p.currentChannel),
 			p.sendBufSize,
 		)
 		p.sendChannels[p.currentChannel] = buf
