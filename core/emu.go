@@ -25,10 +25,8 @@ type coreState struct {
 	PC           uint32
 	TileX, TileY uint32
 	Registers    []uint32
-	// still consider using outside block to control pc
-	//Code         [][]string
-	Memory []uint32
-	Code   []string
+	Memory       []uint32
+	Code         []string
 
 	RecvBufHead      [][]uint32 //[Color][Direction]
 	RecvBufHeadReady [][]bool
