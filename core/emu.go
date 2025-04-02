@@ -9,20 +9,23 @@ import (
 	"github.com/sarchlab/zeonica/cgra"
 )
 
-type routingRule struct {
-	src   cgra.Side
-	dst   cgra.Side
-	color string
-}
+// type routingRule struct {
+// 	src      cgra.Side
+// 	dst      cgra.Side
+// 	srcColor string
+// 	dstColor string
+// }
 
-type Trigger struct {
-	src    [4]bool
-	color  int
-	branch string
-}
+// type Trigger struct {
+// 	src    [4]bool
+// 	color  int
+// 	branch string
+// }
 
 type coreState struct {
 	PC           uint32
+	blockMode    bool
+	instStalled  bool
 	TileX, TileY uint32
 	Registers    []uint32
 	Memory       []uint32
@@ -33,15 +36,39 @@ type coreState struct {
 	SendBufHead      [][]uint32
 	SendBufHeadBusy  [][]bool
 
-	routingRules []*routingRule
-	triggers     []*Trigger
+	// routingRules []*routingRule
+	// triggers []*Trigger
 }
 
 type instEmulator struct {
 }
 
+func splitInstLine(line string) []string {
+	var tokens []string
+	start := 0
+	bracketDepth := 0
+	for i, ch := range line {
+		switch ch {
+		case '[':
+			bracketDepth++
+		case ']':
+			bracketDepth--
+		case ',':
+			if bracketDepth == 0 {
+				// split outside brackets
+				tokens = append(tokens, strings.TrimSpace(line[start:i]))
+				start = i + 1
+			}
+		}
+	}
+	// Add the last token
+	tokens = append(tokens, strings.TrimSpace(line[start:]))
+	return tokens
+}
+
 func (i instEmulator) RunInst(inst string, state *coreState) {
-	tokens := strings.Split(inst, ",")
+	//tokens := strings.Split(inst, ",")
+	tokens := splitInstLine(inst)
 	for i := range tokens {
 		tokens[i] = strings.TrimSpace(tokens[i])
 	}
@@ -50,30 +77,14 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 	if strings.Contains(instName, "CMP") {
 		instName = "CMP"
 	}
-	// alwaysflag := false
-	// if strings.HasPrefix(instName, "@") && !alwaysflag {
-	// 	instName = "SENDREC"
-	// 	alwaysflag = true
-	// 	i.runAlwaysSendRec(tokens, state)
-	// }
 
 	instFuncs := map[string]func([]string, *coreState){
-		//Original Instruction
-		"WAIT":             i.runWait,
-		"SEND":             i.runSend,
-		"RECV":             i.runRecv,
-		"JNE":              i.runJne,
-		"JEQ":              i.runJeq,
-		"DONE":             func(_ []string, _ *coreState) { i.runDone() }, // Since runDone might not have parameters
-		"CONFIG_ROUTING":   i.runConfigRouting,
-		"TRIGGER_SEND":     i.runTriggerSend,
-		"TRIGGER_TWO_SIDE": i.runTriggerTwoSide, // must be from two direction
-		"TRIGGER_ONE_SIDE": i.runTriggerOneSide,
-		"IDLE":             func(_ []string, state *coreState) { i.runIdle(state) },
-		"RECV_SEND":        i.runRecvSend,
-		"SEND_RECV":        i.runSendRecv,
-		"SLEEP":            i.runSleep,
-		"MOV":              i.runMov,
+		"JNE":  i.runJne,
+		"JEQ":  i.runJeq,
+		"DONE": func(_ []string, _ *coreState) { i.runDone() }, // Since runDone might not have parameters
+
+		"IDLE": func(_ []string, state *coreState) { i.runIdle(state) },
+		"MOV":  i.runMov,
 
 		//Arithmetic: MUL_CONST, MUL_CONST_ADD, MUL_SUB, DIV
 		"MAC":           i.runMac,
@@ -95,14 +106,15 @@ func (i instEmulator) RunInst(inst string, state *coreState) {
 
 		//Comparison: EQ, EQ_CONST, LT, LTE, GT, GTE, most is already in parseAndCompareI
 		"CMP": i.runCmp,
+
 		//Control Flow: BRH, RET, BRH_START
 		"JMP": i.runJmp,
-		// "BRH": ,
-		// "RET": ,
-		// "BRH_START": ,
+
 		//ld, st, ld_const, str_const,
-		"LD": i.runLoad,
-		"ST": i.runStore, //able to load store imm as well
+		"LD":  i.runLoad,
+		"ST":  i.runStore, //able to load store imm as well
+		"LDI": i.runLoadImm,
+		"STI": i.runStoreImm,
 
 		//Advanced Arithmetic: FADD, FADD_CONST, FINC, FSUB, FMUL, FMUL_CONST
 		"FADD":       i.runFAdd,
@@ -178,6 +190,66 @@ func (i instEmulator) getColorIndex(color string) int {
 	}
 }
 
+func (i instEmulator) readOperandWithIfPred(operand string, state *coreState, ifPred int) (uint32, bool) {
+	val, ready := i.readFlexibleOperand(operand, state)
+	if ifPred == 1 && !ready {
+		// Stall
+		return 0, false
+	}
+	if ifPred == 0 && !ready {
+		// Treat as zero if not ready
+		val = 0
+	}
+	return val, true
+}
+
+// read flexible operand "[$1] or [port, color]"
+func (i instEmulator) readFlexibleOperand(operand string, state *coreState) (value uint32, ready bool) {
+	operand = strings.Trim(operand, "[] ")
+
+	if strings.HasPrefix(operand, "$") {
+		// Register read
+		val := i.readOperand(operand, state)
+		return val, true
+	} else {
+		// Format: PORT, COLOR
+		parts := strings.Split(operand, ",")
+		if len(parts) != 2 {
+			panic(fmt.Sprintf("Invalid operand format for port: %s", operand))
+		}
+		direction := i.getDirecIndex(strings.TrimSpace(parts[0]))
+		color := i.getColorIndex(strings.TrimSpace(parts[1]))
+
+		if !state.RecvBufHeadReady[color][direction] {
+			// Data not arrived yet
+			return 0, false
+		}
+
+		val := state.RecvBufHead[color][direction]
+		if !state.blockMode {
+			state.RecvBufHeadReady[color][direction] = false
+		}
+		return val, true
+	}
+}
+
+// send results to reg OR port
+func (i instEmulator) parseDestPort(dest string) (directionIndex int, colorIndex int, isPort bool) {
+	dest = strings.TrimSpace(dest)
+	if strings.HasPrefix(dest, "$") {
+		return -1, -1, false // register destination
+	}
+
+	dest = strings.Trim(dest, "[] ")
+	parts := strings.Split(dest, ",")
+	if len(parts) != 2 {
+		panic(fmt.Sprintf("Invalid destination port format: %s", dest))
+	}
+	directionIndex = i.getDirecIndex(strings.TrimSpace(parts[0]))
+	colorIndex = i.getColorIndex(strings.TrimSpace(parts[1]))
+	return directionIndex, colorIndex, true
+}
+
 // float32 to uint32
 func float2Uint(f float32) uint32 {
 	return math.Float32bits(f)
@@ -188,118 +260,118 @@ func uint2Float(u uint32) float32 {
 	return math.Float32frombits(u)
 }
 
-/**
- * @description:
- * @prototype:
- */
-func (i instEmulator) runWait(inst []string, state *coreState) {
-	dst := inst[1]
-	src := inst[2]
-	colorIndex := i.getColorIndex(inst[3])
-
-	i.waitSrcMustBeNetRecvReg(src)
-
-	direction := src[9:]
-	srcIndex := i.getDirecIndex(direction)
-
-	if !state.RecvBufHeadReady[colorIndex][srcIndex] {
-		return
-	}
-
-	state.RecvBufHeadReady[colorIndex][srcIndex] = false
-	i.writeOperand(dst, state.RecvBufHead[colorIndex][srcIndex], state)
-	state.PC++
-}
-
 func (i instEmulator) waitSrcMustBeNetRecvReg(src string) {
 	if !strings.HasPrefix(src, "NET_RECV_") {
 		panic("the source of a WAIT instruction must be NET_RECV registers")
 	}
 }
 
-func (i instEmulator) runRecv(inst []string, state *coreState) {
-	// Parse the instruction arguments
-	dstReg := inst[1] // The register to store the received value
-	src := inst[2]    // The source side (e.g., NORTH, SOUTH, WEST, EAST)
-	color := inst[3]  // The color of the message
+func (i instEmulator) readFlexibleOperandMov(token string, state *coreState) (uint32, bool) {
+	token = strings.Trim(token, "[] ")
 
-	// Determine direction and color indices
-	srcIndex := i.getDirecIndex(src)
-	colorIndex := i.getColorIndex(color)
-
-	// Check if the data is ready to be received from the buffer
-	if !state.RecvBufHeadReady[colorIndex][srcIndex] {
-		// If the data is not ready, just return and keep the PC as is.
-		// This effectively stalls until the data is available.
-		return
+	// Immediate operand check
+	if num, err := strconv.ParseUint(token, 10, 32); err == nil {
+		return uint32(num), true // immediate is always ready
 	}
 
-	// Retrieve the data from the buffer and mark it as no longer ready
-	data := state.RecvBufHead[colorIndex][srcIndex]
-	state.RecvBufHeadReady[colorIndex][srcIndex] = false
+	// Register operand check
+	if strings.HasPrefix(token, "$") {
+		val := i.readOperand(token, state)
+		return val, true
+	}
 
-	// Write the received value to the destination register
-	i.writeOperand(dstReg, data, state)
+	// Port operand check
+	parts := strings.Split(token, ",")
+	if len(parts) != 2 {
+		panic(fmt.Sprintf("Invalid port operand format for MOV: %s", token))
+	}
+	dir := i.getDirecIndex(strings.TrimSpace(parts[0]))
+	color := i.getColorIndex(strings.TrimSpace(parts[1]))
 
-	// Advance the program counter to the next instruction
-	state.PC++
+	if !state.RecvBufHeadReady[color][dir] {
+		return 0, false
+	}
 
-	// Debug log to indicate the RECV operation
-	//fmt.Printf("RECV Instruction: Received %d from %s buffer, stored in %s\n", data, src, dstReg)
+	val := state.RecvBufHead[color][dir]
+	if !state.blockMode {
+		state.RecvBufHeadReady[color][dir] = false
+	}
+
+	return val, true
 }
 
-/**
- * @description:
- * @prototype:
- */
-func (i instEmulator) runSend(inst []string, state *coreState) {
-	dst := inst[1]
-	src := inst[2]
-	colorIndex := i.getColorIndex(inst[3])
+func (i instEmulator) writeFlexibleOperandMov(token string, value uint32, state *coreState) bool {
+	token = strings.Trim(token, "[] ")
 
-	i.sendDstMustBeNetSendReg(dst)
-
-	direction := dst[9:]
-	dstIndex := i.getDirecIndex(direction)
-
-	if state.SendBufHeadBusy[colorIndex][dstIndex] {
-		return
+	// Register write
+	if strings.HasPrefix(token, "$") {
+		i.writeOperand(token, value, state)
+		return true
 	}
 
-	state.SendBufHeadBusy[colorIndex][dstIndex] = true
-	val := i.readOperand(src, state)
-	state.SendBufHead[colorIndex][dstIndex] = val
-	//fmt.Printf("SEND: Stored value %v in send buffer for color %d and destination index %d\n", val, colorIndex, dstIndex)
-	state.PC++
+	// Port send
+	parts := strings.Split(token, ",")
+	if len(parts) != 2 {
+		panic(fmt.Sprintf("Invalid port operand format for MOV destination: %s", token))
+	}
+	dir := i.getDirecIndex(strings.TrimSpace(parts[0]))
+	color := i.getColorIndex(strings.TrimSpace(parts[1]))
+
+	if !state.SendBufHeadBusy[color][dir] {
+		state.SendBufHeadBusy[color][dir] = true
+		state.SendBufHead[color][dir] = value
+		return true
+	}
+
+	return false
 }
 
 // runMov handles the MOV instruction for both immediate values and register-to-register moves.
 // Prototype for moving an immediate: MOV, DstReg, Immediate
 // Prototype for register to register: MOV, DstReg, SrcReg
 func (i instEmulator) runMov(inst []string, state *coreState) {
-	dst := inst[1]
-	src := inst[2]
-
-	// Determine if the source is an immediate value or a register
-	var value uint32
-	if strings.HasPrefix(src, "$") {
-		// Source is a register, so read the value from that register
-		value = i.readOperand(src, state)
-	} else {
-		// Source is an immediate value, so parse it from string to uint32
-		immediateValue, err := strconv.ParseUint(src, 10, 32)
-		if err != nil {
-			panic(fmt.Sprintf("invalid immediate value for MOV: %s", src))
-		}
-		value = uint32(immediateValue)
+	if len(inst) != 3 {
+		panic(fmt.Sprintf("Invalid MOV format, expected 3 tokens but got %d", len(inst)))
 	}
 
-	// Write the value into the destination register
-	i.writeOperand(dst, value, state)
+	srcToken := strings.TrimSpace(inst[1])
+	dstToken := strings.TrimSpace(inst[2])
 
-	//fmt.Printf("MOV Instruction: Moving %v into %s\n", value, dst)
+	// Parse source
+	srcRequired := false
+	if strings.HasPrefix(srcToken, "!") {
+		srcRequired = true
+		srcToken = strings.TrimPrefix(srcToken, "!")
+	}
 
-	state.PC++
+	value, ready := i.readFlexibleOperandMov(srcToken, state)
+
+	if srcRequired && !ready {
+		state.instStalled = true
+		fmt.Printf("MOV: Stalled — source %s not ready\n", srcToken)
+		return
+	}
+
+	if !ready {
+		value = 0 // Optional, default zero if not ready
+	}
+
+	// Parse destination
+	dstRequired := false
+	if strings.HasPrefix(dstToken, "!") {
+		dstRequired = true
+		dstToken = strings.TrimPrefix(dstToken, "!")
+	}
+
+	if !i.writeFlexibleOperandMov(dstToken, value, state) {
+		if dstRequired {
+			state.instStalled = true
+			fmt.Printf("MOV: Stalled — destination %s busy\n", dstToken)
+			return
+		}
+	}
+
+	fmt.Printf("MOV: Moved value %d from %s to %s\n", value, srcToken, dstToken)
 }
 
 func (i instEmulator) parseAddress(addrStr string, state *coreState) uint32 {
@@ -344,6 +416,10 @@ func (i instEmulator) runLoad(inst []string, state *coreState) {
 	state.PC++
 }
 
+func (i instEmulator) runLoadImm(inst []string, state *coreState) {
+
+}
+
 func (i instEmulator) runStore(inst []string, state *coreState) {
 	srcReg := inst[1]
 	addrStr := inst[2]
@@ -354,6 +430,10 @@ func (i instEmulator) runStore(inst []string, state *coreState) {
 	value := i.readOperand(srcReg, state)
 	state.Memory[addr] = value
 	state.PC++
+}
+
+func (i instEmulator) runStoreImm(inst []string, state *coreState) {
+
 }
 
 func (i instEmulator) sendDstMustBeNetSendReg(dst string) {
@@ -382,14 +462,6 @@ func (i instEmulator) Jump(dst string, state *coreState) {
 }
 
 func (i instEmulator) readOperand(operand string, state *coreState) (value uint32) {
-	// if strings.HasPrefix(operand, "$") {
-	// 	registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
-	// 	if err != nil {
-	// 		panic("invalid register index")
-	// 	}
-
-	// 	value = state.Registers[registerIndex]
-	// }
 	operand = strings.TrimSpace(operand)
 	if strings.HasPrefix(operand, "$") {
 		registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
@@ -410,14 +482,6 @@ func (i instEmulator) readOperand(operand string, state *coreState) (value uint3
 }
 
 func (i instEmulator) writeOperand(operand string, value uint32, state *coreState) {
-	// if strings.HasPrefix(operand, "$") {
-	// 	registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
-	// 	if err != nil {
-	// 		panic("invalid register index")
-	// 	}
-
-	// 	state.Registers[registerIndex] = value
-	// }
 	operand = strings.TrimSpace(operand)
 	if strings.HasPrefix(operand, "$") {
 		registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
@@ -564,22 +628,55 @@ func (i instEmulator) runJne(inst []string, state *coreState) {
 /**
  * @description:
  * Get data from
- * @prototype: MAC, DstReg, SrcReg1, SrcReg2
+ * @prototype: MAC, ifpred, Dst, Src1, Src2, Src3
+ * src and dst can be either port and color or register
  */
 func (i instEmulator) runMac(inst []string, state *coreState) {
-	dst := inst[1]
-	src1 := inst[2]
-	src2 := inst[3]
+	if len(inst) != 5 {
+		panic(fmt.Sprintf("Invalid MAC format, got %d tokens, expected 5", len(inst)))
+	}
+	// Parse source operands
+	srcVals := make([]uint32, 3)
+	for idx := 0; idx < 3; idx++ {
+		token := strings.TrimSpace(inst[idx+1])
+		required := false
+		if strings.HasPrefix(token, "!") {
+			required = true
+			token = strings.TrimPrefix(token, "!")
+		}
 
-	srcVal1 := i.readOperand(src1, state)
-	srcVal2 := i.readOperand(src2, state)
-	dstVal := i.readOperand(dst, state)
-	dstVal += srcVal1 * srcVal2
-	i.writeOperand(dst, dstVal, state)
+		val, ready := i.readFlexibleOperand(token, state)
+		if required && !ready {
+			state.instStalled = true
+			fmt.Printf("MAC: Stalled — required operand %s not ready\n", token)
+			return
+		}
+		if !ready {
+			val = 0
+		}
+		srcVals[idx] = val
+	}
 
-	// fmt.Printf("Mac Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
-	// fmt.Printf("MAC: %s += %s * %s => Result: %v\n", dst, src1, src2, dstVal)
-	state.PC++
+	// Compute MAC
+	result := srcVals[0]*srcVals[1] + srcVals[2]
+
+	// Destination
+	dst := strings.TrimSpace(inst[4])
+	dirIdx, colorIdx, isPort := i.parseDestPort(dst)
+	if isPort {
+		if !state.SendBufHeadBusy[colorIdx][dirIdx] {
+			state.SendBufHeadBusy[colorIdx][dirIdx] = true
+			state.SendBufHead[colorIdx][dirIdx] = result
+			fmt.Printf("MAC: Sent result %v to [%s]\n", result, dst)
+		} else {
+			state.instStalled = true
+			fmt.Println("MAC: Send buffer busy")
+			return
+		}
+	} else {
+		i.writeOperand(dst, result, state)
+		fmt.Printf("MAC: Wrote result %v to register %s\n", result, dst)
+	}
 }
 
 func (i instEmulator) runMul_Sub(inst []string, state *coreState) {
@@ -594,7 +691,9 @@ func (i instEmulator) runMul_Sub(inst []string, state *coreState) {
 	i.writeOperand(dst, dstVal, state)
 
 	//fmt.Printf("MUL_SUB: %s -= %s * %s => Result: %v\n", dst, src1, src2, dstVal)
-	state.PC++
+	if !state.blockMode {
+		state.PC++
+	}
 }
 
 /**
@@ -603,19 +702,43 @@ func (i instEmulator) runMul_Sub(inst []string, state *coreState) {
  * @prototype: MUL, DstReg, SrcReg1, SrcReg2
  */
 func (i instEmulator) runMul(inst []string, state *coreState) {
-	dst := inst[1]
-	src1 := inst[2]
-	src2 := inst[3]
+	ifPred, err := strconv.Atoi(inst[1]) // ifPred should be either 1 or 0
+	if err != nil {
+		panic(fmt.Sprintf("Invalid IF_PRED value in MAC: %s", inst[1]))
+	}
+	dst := inst[2]
+	src1 := inst[3]
+	src2 := inst[4]
 
-	srcVal1 := i.readOperand(src1, state)
-	srcVal2 := i.readOperand(src2, state)
-	dstVal := i.readOperand(dst, state)
-	dstVal = srcVal1 * srcVal2
-	i.writeOperand(dst, dstVal, state)
+	val1, ready1 := i.readOperandWithIfPred(src1, state, ifPred)
+	val2, ready2 := i.readOperandWithIfPred(src2, state, ifPred)
+	if !ready1 || !ready2 {
+		state.instStalled = true
+		fmt.Println("MUL: Stalled due to missing operands")
+		return
+	}
 
-	//fmt.Printf("Mul Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
+	result := val1 * val2
 
-	state.PC++
+	// Send to reg or port
+	dirIdx, colorIdx, isPort := i.parseDestPort(dst)
+	if isPort {
+		if !state.SendBufHeadBusy[colorIdx][dirIdx] {
+			state.SendBufHeadBusy[colorIdx][dirIdx] = true
+			state.SendBufHead[colorIdx][dirIdx] = result
+			fmt.Printf("MUL result sent %v to [%d,%d]\n", result, dirIdx, colorIdx)
+		} else {
+			state.instStalled = true
+			return
+		}
+	} else {
+		i.writeOperand(dst, result, state)
+		fmt.Printf("MUL result %v written to %s\n", result, dst)
+	}
+
+	if !state.blockMode {
+		state.PC++
+	}
 }
 
 /**
@@ -998,257 +1121,39 @@ func (i instEmulator) runDone() {
 	// Do nothing.
 }
 
-func (i instEmulator) runConfigRouting(inst []string, state *coreState) {
-	src := inst[2]
-	dst := inst[1]
-	color := inst[3]
-
-	rule := &routingRule{
-		src:   cgra.Side(i.getDirecIndex(src)),
-		dst:   cgra.Side(i.getDirecIndex(dst)),
-		color: color,
-	}
-
-	i.addRoutingRule(rule, state)
-	state.PC++
-}
-
-func (i instEmulator) addRoutingRule(rule *routingRule, state *coreState) {
-	for _, r := range state.routingRules {
-		if r.src == rule.src && r.color == rule.color {
-			r.dst = rule.dst
-			return
-		}
-	}
-
-	state.routingRules = append(state.routingRules, rule)
-}
-
-// func (i instEmulator) runRoutingRules(state *coreState) (madeProgress bool) {
-// 	for _, rule := range state.routingRules {
-// 		srcIndex := int(rule.src)
-// 		dstIndex := int(rule.dst)
-// 		colorIndex := i.getColorIndex(rule.color)
-
-// 		if !state.RecvBufHeadReady[colorIndex][srcIndex] {
-// 			continue
-// 		}
-
-// 		if state.SendBufHeadBusy[colorIndex][dstIndex] {
-// 			continue
-// 		}
-
-// 		state.RecvBufHeadReady[colorIndex][srcIndex] = false
-// 		state.SendBufHeadBusy[colorIndex][dstIndex] = true
-// 		state.SendBufHead[colorIndex][dstIndex] =
-// 			state.RecvBufHead[colorIndex][srcIndex]
-// 		madeProgress = true
-
-// 		fmt.Printf("Tile[%d][%d], %s->%s, %s\n",
-// 			state.TileX, state.TileY,
-// 			rule.src.Name(), rule.dst.Name(), rule.color)
-// 	}
-
-// 	return madeProgress
-// }
-
-/**
- * @description: If data is sent to the src side of the current tile, the instruction will receive it,
- *				save it to the register and send the old data to the dst side of the current tile,
- *				with no time consumed. (We need some dummy tail!!!)
- * @prototype: Trigger_Send, dst, reg, src, color
- */
-func (i instEmulator) runTriggerSend(inst []string, state *coreState) {
-	src := inst[1]
-	reg := inst[2]
-	dst := inst[3]
-	color := inst[4]
-
-	srcIndex := i.getDirecIndex(src)
-	dstIndex := i.getDirecIndex(dst)
-	colorIndex := i.getColorIndex(color)
-
-	if state.RecvBufHeadReady[colorIndex][srcIndex] &&
-		state.SendBufHeadBusy[colorIndex][dstIndex] {
-		dataRecv := state.RecvBufHead[colorIndex][srcIndex]
-		dataSend := i.readOperand(reg, state)
-
-		i.writeOperand(reg, dataRecv, state)
-
-		state.RecvBufHeadReady[colorIndex][srcIndex] = false
-		state.SendBufHeadBusy[colorIndex][dstIndex] = true
-		state.SendBufHead[colorIndex][dstIndex] = dataSend
-	}
-	state.PC++
-}
-
-/**
- * @description: When the data from two sides are available, trigger the code block.
- * @prototype: Trigger_Two_Side, $Code_Block$, Src1, Src2
- */
-func (i instEmulator) runTriggerTwoSide(inst []string, state *coreState) {
-	codeBlock := inst[1]
-	src1 := inst[2]
-	src2 := inst[3]
-
-	parts1 := strings.Split(src1, "_")
-	parts2 := strings.Split(src2, "_")
-
-	src1Index := i.getDirecIndex(parts1[0])
-	src2Index := i.getDirecIndex(parts2[0])
-	color1Index := i.getColorIndex(parts1[1])
-	color2Index := i.getColorIndex(parts2[1])
-
-	// Store the trigger into state trigger list whether triggered or not.
-	trigger := &Trigger{
-		color:  color1Index,
-		branch: codeBlock,
-	}
-	trigger.src[src1Index] = true
-	trigger.src[src2Index] = true
-
-	i.addTrigger(trigger, state)
-
-	if state.RecvBufHeadReady[color1Index][src1Index] &&
-		state.RecvBufHeadReady[color2Index][src2Index] {
-		//fmt.Print("Triggered\n")
-		i.Jump(codeBlock, state)
-		return
-	}
-	//fmt.Print("Untriggered\n")
-	state.PC++
-}
-
-/**
- * @description: When the data from the side is available, trigger the code block.
- * @prototype: Trigger_One_Side, $Code_Block$, Src
- */
-func (i instEmulator) runTriggerOneSide(inst []string, state *coreState) {
-	codeBlock := inst[1]
-	src := inst[2]
-
-	parts := strings.Split(src, "_")
-
-	srcIndex := i.getDirecIndex(parts[0])
-	colorIndex := i.getColorIndex(parts[1])
-
-	trigger := &Trigger{
-		color:  colorIndex,
-		branch: codeBlock,
-	}
-	trigger.src[srcIndex] = true
-	if state.RecvBufHeadReady[colorIndex][srcIndex] {
-		i.Jump(codeBlock, state)
-		//fmt.Print("Triggered\n")
-		return
-	}
-	//fmt.Print("Untriggered\n")
-	state.PC++
-}
-
-// Add new trigger or modify existing trigger.
-func (i instEmulator) addTrigger(trigger *Trigger, state *coreState) {
-	for _, t := range state.triggers {
-		if t.src[0] == trigger.src[0] &&
-			t.src[1] == trigger.src[1] &&
-			t.src[2] == trigger.src[2] &&
-			t.src[3] == trigger.src[3] &&
-			t.color == trigger.color {
-			t.branch = trigger.branch
-			return
-		}
-	}
-
-	state.triggers = append(state.triggers, trigger)
-}
-
 // Waste One time click
 func (i instEmulator) runIdle(state *coreState) {
-	state.PC++
-}
-
-// RECV_SEND Dst, DstReg, Src
-func (i instEmulator) runRecvSend(inst []string, state *coreState) {
-	dst := inst[1]
-	dstReg := inst[2]
-	src := inst[3]
-	srcParts := strings.Split(src, "_")
-	dstParts := strings.Split(dst, "_")
-
-	srcIndex := i.getDirecIndex(srcParts[0])
-	dstIndex := i.getDirecIndex(dstParts[0])
-	srcColorIndex := i.getColorIndex(srcParts[1])
-	dstColorIndex := i.getColorIndex(dstParts[1])
-	if !state.RecvBufHeadReady[srcColorIndex][srcIndex] {
-		//fmt.Printf("recvbufhead not ready\n")
-		return
-	}
-
-	val := state.RecvBufHead[srcColorIndex][srcIndex]
-	state.RecvBufHeadReady[srcColorIndex][srcIndex] = false
-
-	i.writeOperand(dstReg, val, state)
-	if state.SendBufHeadBusy[dstColorIndex][dstIndex] {
-		//fmt.Printf("sendbufhead busy\n")
-		return
-	}
-	state.SendBufHeadBusy[dstColorIndex][dstIndex] = true
-	state.SendBufHead[dstColorIndex][dstIndex] = val
 	state.PC++
 }
 
 // Sleep
 // It will go through all the triggers in the codes and to find the first fulfilled one
 // and jump to the branch
-func (i instEmulator) runSleep(inst []string, state *coreState) {
-	for _, t := range state.triggers {
-		flag := true
-		color := t.color
-		branch := t.branch
-		for i := 0; i < 4; i++ {
-			if t.src[i] && !(state.RecvBufHeadReady[color][i]) {
-				flag = false
-			}
-		}
-		if flag {
-			//fmt.Printf("[%d][%d]Sleep: Triggered: %s\n", state.TileX, state.TileY, t.branch)
-			i.Jump(branch, state)
-			return
-		}
-	}
-	//fmt.Printf("[%d][%d]Sleep: Untriggered. PC%d\n", state.TileX, state.TileY, state.PC)
-	// When sleep, register all registers.
-	//No PC++. We want this part is a cycle until one trigger is fulfilled.
+// func (i instEmulator) runSleep(inst []string, state *coreState) {
+// 	for _, t := range state.triggers {
+// 		flag := true
+// 		color := t.color
+// 		branch := t.branch
+// 		for i := 0; i < 4; i++ {
+// 			if t.src[i] && !(state.RecvBufHeadReady[color][i]) {
+// 				flag = false
+// 			}
+// 		}
+// 		if flag {
+// 			//fmt.Printf("[%d][%d]Sleep: Triggered: %s\n", state.TileX, state.TileY, t.branch)
+// 			i.Jump(branch, state)
+// 			return
+// 		}
+// 	}
+// 	//fmt.Printf("[%d][%d]Sleep: Untriggered. PC%d\n", state.TileX, state.TileY, state.PC)
+// 	// When sleep, register all registers.
+// 	//No PC++. We want this part is a cycle until one trigger is fulfilled.
+// }
+
+func (i instEmulator) doRecv(inst []string, state *coreState) {
+
 }
 
-func (i instEmulator) runSendRecv(inst []string, state *coreState) {
-	dst := inst[1]
-	dstReg := inst[2]
-	src := inst[3]
+func (i instEmulator) doSend(inst []string, state *coreState) {
 
-	srcParts := strings.Split(src, "_")
-	dstParts := strings.Split(dst, "_")
-
-	srcIndex := i.getDirecIndex(srcParts[0])
-	dstIndex := i.getDirecIndex(dstParts[0])
-	srcColorIndex := i.getColorIndex(srcParts[1])
-	dstColorIndex := i.getColorIndex(dstParts[1])
-
-	if !state.RecvBufHeadReady[srcColorIndex][srcIndex] {
-		return
-	}
-
-	if state.SendBufHeadBusy[dstColorIndex][dstIndex] {
-		return
-	}
-	sendVal := i.readOperand(dstReg, state)
-
-	state.SendBufHeadBusy[dstColorIndex][dstIndex] = true
-	state.SendBufHead[dstColorIndex][dstIndex] = sendVal
-
-	val := state.RecvBufHead[srcColorIndex][srcIndex]
-	state.RecvBufHeadReady[srcColorIndex][srcIndex] = false
-
-	i.writeOperand(dstReg, val, state)
-	state.PC++
 }

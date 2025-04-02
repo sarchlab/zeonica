@@ -1,0 +1,18 @@
+Monitoring simulation with http://localhost:46207
+  0.000000, Feed in 1 to Device.Tile[0][0].Core.East
+  0.000000, Feed in 1 to Device.Tile[0][0].Core.South
+  0.000000, Feed in 1 to Device.Tile[0][0].Core.West
+MAC: Stalled due to missing operands
+BLOCK stalled on sub-instruction: MAC, 1, [NORTH, R], [SOUTH, R], [EAST, R], [WEST, R]
+  1.000000, Device.Tile[0][0].Core, Recv 1 Driver.DeviceEast[0]->Device.Tile[0][0].Core.East, Color 0
+  1.000000, Device.Tile[0][0].Core, Recv 1 Driver.DeviceSouth[0]->Device.Tile[0][0].Core.South, Color 0
+  1.000000, Device.Tile[0][0].Core, Recv 1 Driver.DeviceWest[0]->Device.Tile[0][0].Core.West, Color 0
+  2.000000, Device.Tile[0][0].Core, Inst MAC, 1, [NORTH, R], [SOUTH, R], [EAST, R], [WEST, R]
+  2.000000, Device.Tile[0][0].Core, Inst MOV_R, 1, [SOUTH, R], [WEST, R]
+  3.000000, Device.Tile[0][0].Core, Send 2 Device.Tile[0][0].Core.North->Driver.DeviceNorth[0], Color 0
+  3.000000, Device.Tile[0][0].Core, Send 1 Device.Tile[0][0].Core.West->Driver.DeviceWest[0], Color 0
+  3.000000, Device.Tile[0][0].Core, Inst MOV, $1, 1
+  4.000000, Device.Tile[0][0].Core, Inst MOV, $2, 2
+  5.000000, Feed in 1 to Device.Tile[0][0].Core.South
+  6.000000, Device.Tile[0][0].Core, Recv 1 Driver.DeviceSouth[0]->Device.Tile[0][0].Core.South, Color 0
+MAC Result: [2]

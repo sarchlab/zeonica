@@ -22,6 +22,9 @@ type Core struct {
 	emu   instEmulator
 }
 
+type Operand struct {
+}
+
 func (c *Core) GetTileX() int {
 	return int(c.state.TileX)
 }
@@ -65,11 +68,125 @@ func (c *Core) MapProgram(program []string, x int, y int) {
 // Tick runs the program for one cycle.
 func (c *Core) Tick() (madeProgress bool) {
 	madeProgress = c.doSend() || madeProgress
-	// madeProgress = c.AlwaysPart() || madeProgress
-	// madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
 	madeProgress = c.runProgram() || madeProgress
 	madeProgress = c.doRecv() || madeProgress
 	return madeProgress
+}
+
+func (c *Core) Comment(code []string) []string {
+	var filteredCode []string
+	for _, line := range code {
+		if idx := strings.Index(line, "//"); idx != -1 {
+			line = strings.TrimSpace(line[:idx])
+		}
+		// Skip empty lines after comment removal.
+		if line == "" {
+			continue
+		}
+		filteredCode = append(filteredCode, line)
+	}
+	return filteredCode
+}
+
+func (c *Core) convertBlockToSingleInstruction(lines []string) string {
+	return "BLOCK: " + strings.Join(lines, "; ")
+}
+
+func (c *Core) convertCombineInstruction(code []string) []string {
+	var parsedInstructions []string
+	var blockLines []string
+	insideBlock := false
+
+	for _, line := range code {
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine == "" {
+			continue
+		}
+
+		if trimmedLine == "{" {
+			insideBlock = true
+			blockLines = []string{}
+			continue
+		}
+
+		if trimmedLine == "}" {
+			insideBlock = false
+			if len(blockLines) > 0 {
+				parsedInstructions = append(parsedInstructions, c.convertBlockToSingleInstruction(blockLines))
+			}
+			continue
+		}
+
+		if insideBlock {
+			blockLines = append(blockLines, trimmedLine)
+		} else {
+			parsedInstructions = append(parsedInstructions, trimmedLine)
+		}
+	}
+
+	return parsedInstructions
+}
+
+func (c *Core) runProgram() bool {
+	filteredCode := c.Comment(c.state.Code)
+	parsedCode := c.convertCombineInstruction(filteredCode)
+
+	if int(c.state.PC) >= len(parsedCode) {
+		return false
+	}
+	inst := parsedCode[c.state.PC]
+
+	// fmt.Printf("%10f, %s, inst: %s inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), inst, len(inst))
+	for inst[len(inst)-1] == ':' {
+		c.state.PC++
+		inst = parsedCode[c.state.PC]
+	}
+
+	//need to determin the entry: block
+
+	prevPC := c.state.PC
+	c.state.blockMode = true
+
+	if strings.HasPrefix(inst, "BLOCK: ") {
+
+		blockInst := strings.TrimPrefix(inst, "BLOCK: ")
+		subInstructions := strings.Split(blockInst, "; ")
+		c.state.blockMode = true
+
+		blockStalled := false
+
+		for _, subInst := range subInstructions {
+			c.state.instStalled = false
+			c.emu.RunInst(subInst, &c.state)
+			if c.state.instStalled {
+				blockStalled = true
+				fmt.Printf("BLOCK stalled on sub-instruction: %s\n", subInst)
+				break
+			}
+			fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), subInst)
+		}
+		c.state.blockMode = false
+		// NOTE: In blockMode, we do not consume RecvBufHead immediately.
+		if !blockStalled {
+			for dir := 0; dir < 4; dir++ {
+				for color := 0; color < 4; color++ {
+					c.state.RecvBufHeadReady[color][dir] = false
+				}
+			}
+			c.state.PC++
+		} else {
+			return false
+		}
+	} else {
+		c.emu.RunInst(inst, &c.state)
+		nextPC := c.state.PC
+		if prevPC == nextPC {
+			return false
+		}
+		fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
+	}
+
+	return true
 }
 
 func (c *Core) doSend() bool {
@@ -147,173 +264,3 @@ func (c *Core) doRecv() bool {
 
 	return madeProgress
 }
-
-func (c *Core) Comment(code []string) []string {
-	var filteredCode []string
-	for _, line := range code {
-		if idx := strings.Index(line, "#"); idx != -1 {
-			line = strings.TrimSpace(line[:idx])
-		}
-		// Skip empty lines after comment removal.
-		if line == "" {
-			continue
-		}
-		filteredCode = append(filteredCode, line)
-	}
-	return filteredCode
-}
-
-func (c *Core) runProgram() bool {
-	filteredCode := c.Comment(c.state.Code)
-
-	if int(c.state.PC) >= len(filteredCode) {
-		return false
-	}
-	inst := filteredCode[c.state.PC]
-
-	fmt.Printf("%10f, %s, inst: %s inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), inst, len(inst))
-	for inst[len(inst)-1] == ':' {
-		c.state.PC++
-		inst = filteredCode[c.state.PC]
-	}
-	prevPC := c.state.PC
-	//fmt.Printf("start run inst \n")
-	c.emu.RunInst(inst, &c.state)
-	nextPC := c.state.PC
-	//fmt.Printf("end run inst, current PC = %d\n", nextPC)
-	if prevPC == nextPC {
-		return false
-	}
-	fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
-
-	return true
-}
-
-// Distributor for always executing part, these parts are not controlled by cycles.
-// func (c *Core) AlwaysPart() bool {
-// 	madeProgress := true //If madeprogress, tick, otherwise, wait
-// 	if int(c.state.PC) >= len(c.state.Code) {
-// 		return false
-// 	}
-
-// 	inst := c.state.Code[c.state.PC]
-// 	for inst[len(inst)-1] == ':' {
-// 		c.state.PC++
-// 		inst = c.state.Code[c.state.PC]
-// 	}
-
-// 	for strings.HasPrefix(inst, "@") {
-// 		prevPC := c.state.PC
-// 		parts := strings.Split(inst, ",")
-// 		instName := parts[0]
-// 		instName = strings.TrimLeft(instName, "@")
-
-// 		switch instName {
-// 		case "ROUTER_FORWARD":
-// 			madeProgress = c.Router(parts[1], parts[2], parts[3]) || madeProgress
-// 		case "WAIT_AND":
-// 			c.WaitAnd(parts[1], parts[2], parts[3]) //Pending modification
-// 		default:
-// 			panic("Invalid Instruction")
-// 		}
-
-// 		c.state.PC++
-// 		nextPC := c.state.PC
-// 		if prevPC == nextPC {
-// 			return false
-// 		}
-
-// 		fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
-// 		if int(c.state.PC) >= len(c.state.Code) {
-// 			return false
-// 		}
-
-// 		inst = c.state.Code[c.state.PC]
-// 	}
-
-// 	return madeProgress
-// }
-
-// If data from two sources is not ready, wait to ready.
-// func (c *Core) WaitAnd(src1 string, src2 string, color string) {
-// 	src1Index := c.getIndex(src1)
-// 	src2Index := c.getIndex(src2)
-// 	colorIndex := c.emu.getColorIndex(color)
-
-// 	if !c.state.RecvBufHeadReady[colorIndex][src1Index] || !c.state.RecvBufHeadReady[colorIndex][src2Index] {
-// 		//c.state.PC = uint32(len(c.state.Code))
-// 		fmt.Printf("%10f, %s, Data from %s and %s is not both available\n", c.Engine.CurrentTime()*1e9, c.Name(), src1, src2)
-// 		//return false
-// 	}
-// 	fmt.Printf("%10f, %s, Wait data from %s and %s\n", c.Engine.CurrentTime()*1e9, c.Name(), src1, src2)
-// 	c.state.PC++
-// 	//return true
-// }
-
-// Wait for data is ready and send.
-// func (c *Core) Router(dst string, src string, color string) bool {
-
-// 	srcIndex := c.getIndex(src)
-// 	dstIndex := c.getIndex(dst)
-// 	colorIndex := c.emu.getColorIndex(color)
-// 	//The data is not ready.
-// 	if !c.state.RecvBufHeadReady[colorIndex][srcIndex] {
-// 		fmt.Printf("Router Src not READY %s\n", c.Name())
-// 		return false
-// 	}
-
-// 	//The receiver is not ready.
-// 	if c.state.SendBufHeadBusy[colorIndex][dstIndex] {
-// 		fmt.Printf("Router Dst not READY %s\n", c.Name())
-// 		return false
-// 	}
-
-// 	c.state.SendBufHeadBusy[colorIndex][dstIndex] = true
-// 	c.state.SendBufHead[colorIndex][dstIndex] = c.state.RecvBufHead[colorIndex][srcIndex]
-// 	fmt.Printf("%10f, %s, ROUTER %d %s->%s\n",
-// 		c.Engine.CurrentTime()*1e9,
-// 		c.Name(),
-// 		c.state.RecvBufHead[colorIndex][srcIndex], c.Name(), dst)
-// 	return true
-// }
-
-// If the source data is available, send the result to next core after computation.
-// If the source data is not available, do nothing.
-// func (c *Core) ConditionSend(dst string, src string, resister int, srcColor int, dstColor int) {
-
-// }
-
-// func (c *Core) RouterSrcMustBeDirection(src string) {
-// 	arr := []string{"NORTH", "SOUTH", "WEST", "EAST"}
-// 	res := false
-// 	for _, s := range arr {
-// 		if s == src {
-// 			res = true
-// 			break
-// 		}
-// 	}
-
-// 	if res {
-// 		panic("the source of a ROUTER_FORWARD instruction must be directions")
-// 	}
-// }
-
-// func (c *Core) getIndex(side string) int {
-// 	var srcIndex int
-
-// 	switch side {
-// 	case "NORTH":
-// 		srcIndex = int(cgra.North)
-// 	case "WEST":
-// 		srcIndex = int(cgra.West)
-// 	case "SOUTH":
-// 		srcIndex = int(cgra.South)
-// 	case "EAST":
-// 		srcIndex = int(cgra.East)
-// 	// Adding new direction
-// 	default:
-// 		panic("invalid side")
-// 	}
-
-// 	return srcIndex
-// }
