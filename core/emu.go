@@ -21,11 +21,11 @@ type routingRule struct {
 // }
 
 type coreState struct {
-	PC           uint32
-	TileX, TileY uint32
-	Registers    []uint32
-	Memory       []uint32
-	Code         []string
+	PC uint32
+	//TileX, TileY uint32
+	Registers []uint32
+	Memory    []uint32
+	Code      []string
 	//consider adding new feature
 	// ConfigMem []*Context
 

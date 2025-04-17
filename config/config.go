@@ -74,19 +74,19 @@ func (d DeviceBuilder) WithFreq(freq sim.Freq) DeviceBuilder {
 }
 
 // WithMonitor sets the monitor that monitors the device.
-func (d DeviceBuilder) WithMonitor(monitor *monitoring.Monitor) DeviceBuilder {
+func (d DeviceBuilder) WithMonitor(monitor *monitoring.Monitor) DeviceBuilder { 
 	d.monitor = monitor
 	return d
 }
 
 // WithWidth sets the width of CGRA mesh.
-func (d DeviceBuilder) WithWidth(width int) DeviceBuilder {
+func (d DeviceBuilder) WithWidth(width int) DeviceBuilder { // !DO NOT NEED
 	d.width = width
 	return d
 }
 
 // WithHeight sets the height of CGRA mesh.
-func (d DeviceBuilder) WithHeight(height int) DeviceBuilder {
+func (d DeviceBuilder) WithHeight(height int) DeviceBuilder { // !DO NOT NEED
 	d.height = height
 	return d
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
+	"github.com/sarchlab/zeonica/confignew"
 )
 
 type portPair struct {
@@ -17,11 +18,17 @@ type Core struct {
 
 	ports map[cgra.Side]*portPair
 
-	freq sim.Freq
+	internalInfo map[int]func()
+	// a map to store internal information, like the coordinates of the core in mesh.
+
+	freq    sim.Freq
+	binding confignew.IDImplBinding
 
 	state coreState
 	emu   instEmulator
 }
+
+// Ask Yuchao to try the sim to run a main diagram mesh.
 
 func (c *Core) GetTileX() int {
 	return int(c.state.TileX)

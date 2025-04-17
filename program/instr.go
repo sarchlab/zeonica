@@ -1,13 +1,22 @@
-package instr
+package program
 
 import "fmt"
+
+type Program struct {
+	EntryBlocks []EntryBlock
+}
+
+type EntryBlock struct {
+	EntryCond     OperandList
+	CombinedInsts []CombinedInst
+}
 
 type Inst struct {
 	// The raw text of the instruction.
 	rawtxt      string
 	behavior    interface{} // to store the behavior of the instruction
-	DstOperands []Operand
-	SrcOperands []Operand
+	DstOperands OperandList
+	SrcOperands OperandList
 	// others....
 	// not add predicate !!!
 }

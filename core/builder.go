@@ -24,17 +24,9 @@ func (b Builder) WithFreq(freq sim.Freq) Builder {
 	return b
 }
 
-func (b Builder) WithDirections(numDirections int) Builder {
-	if numDirections < 4 {
-		panic("Need at least 4 directions")
-	}
-	b.numDirections = numDirections
-	return b
-}
-
 func NewBuilder() Builder {
 	return Builder{
-		numDirections: 4, // default 4 direction
+		//numDirections: 4, // default 4 direction
 	}
 }
 

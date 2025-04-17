@@ -1,4 +1,6 @@
-package instr
+package program
+
+
 
 // ISA is a struct that represents an Instruction Set Architecture.
 type ISA struct {
@@ -22,11 +24,6 @@ func (isa ISA) registerNewInst(name string, behavior interface{}) {
 }
 
 var defaultISA = NewISA("Zeonica Unified ISA")
-
-// Define the behavior of the ADD instruction in Zeonica Unified ISA.
-func instADD(src1 int32, src2 int32) int32 {
-	return src1 + src2
-}
 
 // ...
 
