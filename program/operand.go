@@ -1,15 +1,53 @@
-package instr
+package program
+
+type DynID int
+
+type StaID int
+
+type OperandList struct {
+	Operands []Operand
+}
+
+func (o OperandList) GetAnys() []Operand {
+	// return a list
+	anys := []Operand{}
+	for _, operand := range o.Operands {
+		if operand.Predicate == PredAny {
+			anys = append(anys, operand)
+		}
+	}
+	return anys
+}
+
+func (o OperandList) GetAlls() []Operand {
+	// return a list
+	alls := []Operand{}
+	for _, operand := range o.Operands {
+		alls = append(alls, operand)
+	}
+	return alls
+}
+
+// a Enum for Pred
+type Pred int
+
+const (
+	NoPred Pred = iota
+	PredAll
+	PredAny
+)
 
 type Operand struct {
-	DynamicID []int         // dynamicID
-	StaticID  int           // staticID
-	Predicate bool          // predicate
-	Impl      AsOperandImpl // an implementation of the operand
+	DynamicID []DynID
+	StaticID  StaID
+	Predicate Pred
+	Impl      AsOperandImpl
 }
 
 type AsOperandImpl interface {
 	Retrieve([]int) interface{}  // retrieve value from the source, type is not defined.
 	Push([]int, interface{})     // push value to the source
+	Peek([]int) interface{}      // peek value from the source
 	AddressWrite(int)            // write the address to the source, if supported.
 	AddressRead(int) interface{} // read the address from the source, if supported.
 	// THE SIGNATURE OF THE FUNCTION ABOVE NEED SOME MORE ADJUSTMENT
