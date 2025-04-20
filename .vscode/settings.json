@@ -3,5 +3,8 @@
 		"cgra",
 		"sarchlab",
 		"zeonica"
-	]
+	],
+	"files.watcherExclude": {
+		"**/target": true
+	}
 }

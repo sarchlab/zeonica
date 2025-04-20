@@ -1,0 +1,13 @@
+Monitoring simulation with http://localhost:40525
+  0.000000, Feed in 1 to Device.Tile[0][0].Core.South
+  0.000000, Feed in 2 to Device.Tile[0][0].Core.West
+  1.000000, Device.Tile[0][0].Core, inst: WAIT, $0, NET_RECV_SOUTH, R
+  1.000000, Device.Tile[0][0].Core, Recv 1 Driver.DeviceSouth[0]->Device.Tile[0][0].Core.South, Color 0
+  1.000000, Device.Tile[0][0].Core, Recv 2 Driver.DeviceWest[0]->Device.Tile[0][0].Core.West, Color 0
+  2.000000, Device.Tile[0][0].Core, inst: WAIT, $0, NET_RECV_SOUTH, R
+  2.000000, Device.Tile[0][0].Core, inst: WAIT, $1, NET_RECV_WEST, R
+  2.000000, Device.Tile[0][0].Core, inst: MUL, $2, $1, $0
+Mul Instruction, Data are 2 and 1, Res is 2
+  2.000000, Device.Tile[0][0].Core, inst: SEND, NET_SEND_EAST, $2, R
+  3.000000, Device.Tile[0][0].Core, Send 2 Device.Tile[0][0].Core.East->Driver.DeviceEast[0], Color 0
+[0]

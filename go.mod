@@ -10,6 +10,7 @@ require (
 	github.com/onsi/gomega v1.34.2
 	github.com/sarchlab/akita/v4 v4.0.0
 	github.com/tebeka/atexit v0.3.0
+	go.uber.org/mock v0.5.0
 )
 
 require (

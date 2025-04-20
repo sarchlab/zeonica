@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	//"time"
-
 	"github.com/sarchlab/akita/v4/monitoring"
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/api"
@@ -39,8 +37,7 @@ var mac2Kernel string
 //go:embed MULT2.cgraasm
 var mult2Kernel string
 
-func matrixMulti(driver api.Driver) {
-
+func MatrixMulti(driver api.Driver) {
 	//1 3
 	//2 4
 	src1 := []uint32{1, 2, 3, 4}
@@ -86,8 +83,6 @@ func matrixMulti(driver api.Driver) {
 	driver.FeedIn(src1[0:2], cgra.South, [2]int{0, 2}, 2, "R")
 	driver.FeedIn(src1[2:4], cgra.South, [2]int{0, 2}, 2, "B")
 	driver.Run()
-	//driver.FeedIn(src2[:], cgra.North, [2]int{0, width}, width, "B") //for output signal
-	//driver.Collect(dst, cgra.South, [2]int{0, height}, height, "B")  //for output
 	//              ReadMemory(y, x, addr)
 	dst[0] = driver.ReadMemory(2, 0, 0)
 	dst[1] = driver.ReadMemory(2, 0, 1)
@@ -131,7 +126,7 @@ func main() {
 
 	monitor.StartServer()
 
-	matrixMulti(driver)
+	MatrixMulti(driver)
 
 	//time.Sleep(100 * time.Hour)
 	atexit.Exit(0)

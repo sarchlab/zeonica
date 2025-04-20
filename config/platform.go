@@ -21,19 +21,30 @@ type tile struct {
 	Core tileCore
 }
 
-// GetPort returns the of the tile by the side.
-func (t tile) GetPort(side cgra.Side) sim.Port {
-	switch side {
-	case cgra.North:
-		return t.Core.GetPortByName("North")
-	case cgra.West:
-		return t.Core.GetPortByName("West")
-	case cgra.South:
-		return t.Core.GetPortByName("South")
-	case cgra.East:
-		return t.Core.GetPortByName("East")
+func (t tile) GetPort(dir interface{}) sim.Port {
+	switch v := dir.(type) {
+	case cgra.Side:
+		// default direction
+		switch v {
+		case cgra.North:
+			return t.Core.GetPortByName("North")
+		case cgra.West:
+			return t.Core.GetPortByName("West")
+		case cgra.South:
+			return t.Core.GetPortByName("South")
+		case cgra.East:
+			return t.Core.GetPortByName("East")
+		default:
+			panic("invalid cgra.Side")
+		}
+	case int:
+		// custom direction
+		if v >= 4 {
+			return t.Core.GetPortByName(fmt.Sprintf("CustomDir%d", v))
+		}
+		panic(fmt.Sprintf("invalid direction number: %d (0-3 are reserved)", v))
 	default:
-		panic("invalid side")
+		panic("invalid direction type")
 	}
 }
 
@@ -74,6 +85,7 @@ type device struct {
 	Name          string
 	Width, Height int
 	Tiles         [][]*tile
+	Directions    int
 }
 
 // GetSize returns the width and height of the device.

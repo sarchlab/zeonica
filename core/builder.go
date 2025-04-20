@@ -7,8 +7,9 @@ import (
 
 // Builder can create new cores.
 type Builder struct {
-	engine sim.Engine
-	freq   sim.Freq
+	engine        sim.Engine
+	freq          sim.Freq
+	numDirections int
 }
 
 // WithEngine sets the engine.
@@ -23,6 +24,12 @@ func (b Builder) WithFreq(freq sim.Freq) Builder {
 	return b
 }
 
+func NewBuilder() Builder {
+	return Builder{
+		//numDirections: 4, // default 4 direction
+	}
+}
+
 // Build creates a core.
 func (b Builder) Build(name string) *Core {
 	c := &Core{}
@@ -31,33 +38,37 @@ func (b Builder) Build(name string) *Core {
 	c.state = coreState{
 		Registers:        make([]uint32, 64),
 		Memory:           make([]uint32, 1024),
-		RecvBufHead:      make([][]uint32, 4),
-		RecvBufHeadReady: make([][]bool, 4),
-		SendBufHead:      make([][]uint32, 4),
-		SendBufHeadBusy:  make([][]bool, 4),
+		RecvBufHead:      make([][]uint32, b.numDirections),
+		RecvBufHeadReady: make([][]bool, b.numDirections),
+		SendBufHead:      make([][]uint32, b.numDirections),
+		SendBufHeadBusy:  make([][]bool, b.numDirections),
 	}
 
-	for i := 0; i < 4; i++ {
-		c.state.RecvBufHead[i] = make([]uint32, 4)
-		c.state.RecvBufHeadReady[i] = make([]bool, 4)
-		c.state.SendBufHead[i] = make([]uint32, 4)
-		c.state.SendBufHeadBusy[i] = make([]bool, 4)
+	for i := 0; i < b.numDirections; i++ {
+		c.state.RecvBufHead[i] = make([]uint32, b.numDirections)
+		c.state.RecvBufHeadReady[i] = make([]bool, b.numDirections)
+		c.state.SendBufHead[i] = make([]uint32, b.numDirections)
+		c.state.SendBufHeadBusy[i] = make([]bool, b.numDirections)
 	}
 
 	c.ports = make(map[cgra.Side]*portPair)
 
-	b.makePort(c, cgra.North)
-	b.makePort(c, cgra.West)
-	b.makePort(c, cgra.South)
-	b.makePort(c, cgra.East)
+	for i := 0; i < b.numDirections; i++ {
+		b.makePort(c, cgra.Side(i))
+	}
 
 	return c
 }
 
 func (b *Builder) makePort(c *Core, side cgra.Side) {
-	localPort := sim.NewPort(c, 1, 1, c.Name()+"."+side.Name())
+	localPort := sim.NewPort(c, 1, 1, c.Name()+"."+side.Name()) //string
 	c.ports[side] = &portPair{
 		local: localPort,
 	}
 	c.AddPort(side.Name(), localPort)
 }
+
+/*
+create a port for core's each id
+
+*/
