@@ -53,14 +53,7 @@ func instSHR(src1 int32, src2 int32) int32 {
 	return src1 >> src2
 }
 
-func instPHI(src1 int32, src2 int32, cond int32) int32 {
-	if cond != 0 {
-		return src1
-	}
-	return src2
-}
-
-func instSEL(cond bool, src1 int32, src2 int32) int32 {
+func instPHI(src1 int32, src2 int32, cond bool) int32 {
 	if cond == true {
 		return src1
 	} else if cond == false {
@@ -69,8 +62,29 @@ func instSEL(cond bool, src1 int32, src2 int32) int32 {
 	return 0
 }
 
+func instSEL(cond int32, src1 int32, src2 int32) int32 {
+	if cond != 0 {
+		return src1
+	}
+	return src2
+}
+
 func instEQ(src1 int32, src2 int32) int32 {
 	if src1 == src2 {
+		return 1
+	}
+	return 0
+}
+
+func instNE(src1 int32, src2 int32) int32 {
+	if src1 != src2 {
+		return 1
+	}
+	return 0
+}
+
+func instLT(src1 int32, src2 int32) int32 {
+	if src1 < src2 {
 		return 1
 	}
 	return 0
