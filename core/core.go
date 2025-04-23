@@ -70,10 +70,90 @@ func (c *Core) MapProgram(program []string, x int, y int) {
 
 func (c *Core) runProgram() bool {
 	madeProgress := false
+	//run()
+
 	return madeProgress
 }
 
 func (c *Core) Tick() (madeProgress bool) {
+	madeProgress = c.doSend() || madeProgress
 	madeProgress = c.runProgram() || madeProgress
+	madeProgress = c.doRecv() || madeProgress
+	return madeProgress
+}
+
+func (c *Core) doSend() bool {
+	madeProgress := false
+	for i := 0; i < 4; i++ {
+		for color := 0; color < 4; color++ {
+
+			if !c.state.SendBufHeadBusy[color][i] {
+				continue
+			}
+
+			msg := cgra.MoveMsgBuilder{}.
+				WithDst(c.ports[cgra.Side(i)].remote).
+				WithSrc(c.ports[cgra.Side(i)].local.AsRemote()).
+				WithData(c.state.SendBufHead[color][i]).
+				WithSendTime(c.Engine.CurrentTime()).
+				WithColor(color).
+				Build()
+
+			err := c.ports[cgra.Side(i)].local.Send(msg)
+			if err != nil {
+				continue
+			}
+
+			fmt.Printf("%10f, %s, Send %d %s->%s, Color %d\n",
+				c.Engine.CurrentTime()*1e9,
+				c.Name(),
+				msg.Data, msg.Src, msg.Dst,
+				color)
+			c.state.SendBufHeadBusy[color][i] = false
+		}
+	}
+
+	return madeProgress
+}
+
+func (c *Core) doRecv() bool {
+	madeProgress := false
+	for i := 0; i < 4; i++ { //direction
+		item := c.ports[cgra.Side(i)].local.PeekIncoming()
+		if item == nil {
+			continue
+		}
+
+		// fmt.Printf("%10f, %s, %d retrieved\n",
+		// 	c.Engine.CurrentTime()*1e9,
+		// 	c.Name(), cgra.Side(i))
+
+		//fmt.Printf("%s Scanning direction %d(0 is North, 3 is West)\n", c.Name(), i)
+		for color := 0; color < 4; color++ {
+			//fmt.Printf("%s Receiving Data with color %d. Recv buffer head: %+v\n",
+			//	c.Name(), color, c.state.RecvBufHeadReady[color][i])
+			if c.state.RecvBufHeadReady[color][i] {
+				continue
+			}
+
+			msg := item.(*cgra.MoveMsg)
+			if color != msg.Color {
+				continue
+			}
+
+			c.state.RecvBufHeadReady[color][i] = true
+			c.state.RecvBufHead[color][i] = msg.Data
+
+			fmt.Printf("%10f, %s, Recv %d %s->%s, Color %d\n",
+				c.Engine.CurrentTime()*1e9,
+				c.Name(),
+				msg.Data, msg.Src, msg.Dst,
+				color)
+
+			c.ports[cgra.Side(i)].local.RetrieveIncoming()
+			madeProgress = true
+		}
+	}
+
 	return madeProgress
 }

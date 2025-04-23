@@ -69,23 +69,58 @@ func instSEL(cond int32, src1 int32, src2 int32) int32 {
 	return src2
 }
 
-func instEQ(src1 int32, src2 int32) int32 {
+func instEQ(src1 int32, src2 int32) bool {
 	if src1 == src2 {
-		return 1
+		return true
 	}
-	return 0
+	return false
 }
 
-func instNE(src1 int32, src2 int32) int32 {
+func instNE(src1 int32, src2 int32) bool {
 	if src1 != src2 {
-		return 1
+		return true
 	}
-	return 0
+	return false
 }
 
-func instLT(src1 int32, src2 int32) int32 {
+func instLT(src1 int32, src2 int32) bool {
 	if src1 < src2 {
-		return 1
+		return true
 	}
-	return 0
+	return false
+}
+
+func instLE(src1 int32, src2 int32) bool {
+	if src1 <= src2 {
+		return true
+	}
+	return false
+}
+
+func instFADD(src1 float32, src2 float32) float32 {
+	return src1 + src2
+}
+
+func instFSUB(src1 float32, src2 float32) float32 {
+	return src1 - src2
+}
+
+func instFMUL(src1 float32, src2 float32) float32 {
+	return src1 * src2
+}
+
+func instFDIV(src1 float32, src2 float32) float32 {
+	return src1 / src2
+}
+
+func instFEQ(src1 float32, src2 float32) bool {
+	return src1 == src2
+}
+
+func instFLT(src1 float32, src2 float32) bool {
+	return src1 < src2
+}
+
+func instFLE(src1 float32, src2 float32) bool {
+	return src1 <= src2
 }
