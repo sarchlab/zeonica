@@ -12,6 +12,7 @@ import (
 	"github.com/sarchlab/zeonica/api"
 	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/config"
+	"github.com/sarchlab/zeonica/core"
 	"github.com/tebeka/atexit"
 )
 
@@ -19,10 +20,10 @@ var width = 3
 var height = 3
 
 //go:embed Donothing.cgraasm
-var doNothingKernel string
+var doNothingKernel core.CombinedInst
 
 //go:embed LoadData.cgraasm
-var loadDataKernel string
+var loadDataKernel core.CombinedInst
 
 //go:embed StoreData.cgraasm
 var storeDataKernel string
@@ -65,6 +66,67 @@ func matrixMulti(driver api.Driver) {
 		PE(2,0) PE(2,1) PE(2,2)
 		(x, y)
 	*/
+
+	var doNothingKernel = core.Program{
+		EntryBlocks: []core.EntryBlock{
+			{
+				CombinedInsts: []core.CombinedInst{
+					{Insts: []core.Inst{{OpCode: "NOP"}}},
+				},
+			},
+		},
+	}
+
+	var loadDataKernel = core.Program{
+		EntryBlocks: []core.EntryBlock{
+			{
+				CombinedInsts: []core.CombinedInst{
+					{
+						Insts: []core.Inst{
+							{
+								OpCode:      "MOV",
+								SrcOperands: core.OperandList{Operands: []core.Operand{{Color: "R", Impl: "NORTH"}}},
+								DstOperands: core.OperandList{Operands: []core.Operand{{Color: "R", Impl: "SOUTH"}}},
+							},
+						},
+					},
+					{
+						Insts: []core.Inst{
+							{
+								OpCode:      "MOV",
+								SrcOperands: core.OperandList{Operands: []core.Operand{{Color: "B", Impl: "NORTH"}}},
+								DstOperands: core.OperandList{Operands: []core.Operand{{Color: "B", Impl: "SOUTH"}}},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	var storeDataKernel = core.Program{
+		EntryBlocks: []core.EntryBlock{
+			{
+				CombinedInsts: []core.CombinedInst{
+					{Insts: []core.Inst{
+						{
+							OpCode:      "MOV",
+							SrcOperands: core.OperandList{Operands: []core.Operand{{Color: "R", Impl: "WEST"}}},
+							DstOperands: core.OperandList{Operands: []core.Operand{{Impl: "$1"}}},
+						},
+					}},
+					{Insts: []core.Inst{
+						{
+							OpCode:      "MOV",
+							SrcOperands: core.OperandList{Operands: []core.Operand{{Color: "B", Impl: "WEST"}}},
+							DstOperands: core.OperandList{Operands: []core.Operand{{Impl: "$1"}}},
+						},
+					}},
+				},
+			},
+		},
+	}
+
 	kernels := api.PerPEKernels{
 		{0, 0}: mult2Kernel,
 		{1, 0}: mac2Kernel,

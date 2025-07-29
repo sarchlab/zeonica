@@ -87,7 +87,7 @@ func (d DeviceBuilder) createTiles(
 				d.monitor.RegisterComponent(tile.Core)
 			}
 
-			tile.Core.MapProgram(nil, x, y)
+			tile.Core.MapProgram(core.Program{}, x, y)
 
 			dev.Tiles[y][x] = tile
 		}

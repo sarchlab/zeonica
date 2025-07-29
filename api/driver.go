@@ -3,7 +3,6 @@ package api
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/akita/v4/sim/directconnection"
@@ -30,7 +29,7 @@ type Driver interface {
 	Collect(data []uint32, side cgra.Side, portRange [2]int, stride int, color string)
 
 	// MapProgram maps to the provided program to a core at the given coordinate.
-	MapProgram(program string, core [2]int)
+	MapProgram(program interface{}, core [2]int)
 
 	//SetPerPRKernels manually maps a list of kernels to different PEs.
 	SetPerPEKernels(kernels PerPEKernels) error
@@ -366,9 +365,10 @@ func (d *driverImpl) Collect(
 }
 
 // MapProgram dispatches a program to a core.
-func (d *driverImpl) MapProgram(program string, core [2]int) {
+func (d *driverImpl) MapProgram(program interface{}, core [2]int) {
+	// check if it is a Program.
 	tile := d.device.GetTile(core[0], core[1])
-	tile.MapProgram(strings.Split(program, "\n"), core[0], core[1])
+	tile.MapProgram(program, core[0], core[1])
 }
 
 func (d *driverImpl) SetPerPEKernels(kernels PerPEKernels) error {

@@ -35,7 +35,7 @@ func (s Side) Name() string {
 type Tile interface {
 	GetPort(side Side) sim.Port
 	SetRemotePort(side Side, port sim.RemotePort)
-	MapProgram(program []string, x int, y int)
+	MapProgram(program interface{}, x int, y int)
 	GetMemory(x int, y int, addr uint32) uint32
 	WriteMemory(x int, y int, data uint32, baseAddr uint32)
 	GetTileX() int

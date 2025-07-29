@@ -54,9 +54,13 @@ func (c *Core) SetRemotePort(side cgra.Side, remote sim.RemotePort) {
 }
 
 // MapProgram sets the program that the core needs to run.
-func (c *Core) MapProgram(program []string, x int, y int) {
-	c.state.Code = program
-	c.state.PC = 0
+func (c *Core) MapProgram(program interface{}, x int, y int) {
+	if prog, ok := program.(Program); ok {
+		c.state.Code = prog
+	} else {
+		panic("MapProgram expects core.Program type")
+	}
+	c.state.PCInBlock = -1
 	c.state.TileX = uint32(x)
 	c.state.TileY = uint32(y)
 }
@@ -148,25 +152,29 @@ func (c *Core) doRecv() bool {
 }
 
 func (c *Core) runProgram() bool {
-	if int(c.state.PC) >= len(c.state.Code) {
-		return false
+	if c.state.PCInBlock == -1 {
+		c.state.PCInBlock = 0
+		c.state.SelectedBlock = &c.state.Code.EntryBlocks[0] // just temp, only one block
 	}
-	inst := c.state.Code[c.state.PC]
+	combInst := c.state.SelectedBlock.CombinedInsts[c.state.PCInBlock]
 
-	fmt.Printf("%10f, %s, inst: %s inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), inst, len(inst))
+	fmt.Printf("%10f, %s, inst: %v inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), combInst, len(combInst.Insts))
+
+	/* do not have label in codes
 	for inst[len(inst)-1] == ':' {
 		c.state.PC++
 		inst = c.state.Code[c.state.PC]
 	}
-	prevPC := c.state.PC
+	*/
+	prevPC := c.state.PCInBlock
 	//fmt.Printf("start run inst \n")
-	c.emu.RunInst(inst, &c.state)
-	nextPC := c.state.PC
+	c.emu.RunCombinedInst(combInst, &c.state)
+	nextPC := c.state.PCInBlock
 	//fmt.Printf("end run inst, current PC = %d\n", nextPC)
 	if prevPC == nextPC {
 		return false
 	}
-	fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
+	fmt.Printf("%10f, %s, Inst %v\n", c.Engine.CurrentTime()*1e9, c.Name(), combInst)
 	//debug reg value
 	//fmt.Printf("Core (%d, %d) Register values:\n", c.state.TileX, c.state.TileY)
 	// for i, val := range c.state.Registers {
@@ -224,6 +232,7 @@ func (c *Core) runProgram() bool {
 // }
 
 // If data from two sources is not ready, wait to ready.
+/*
 func (c *Core) WaitAnd(src1 string, src2 string, color string) {
 	src1Index := c.getIndex(src1)
 	src2Index := c.getIndex(src2)
@@ -235,9 +244,9 @@ func (c *Core) WaitAnd(src1 string, src2 string, color string) {
 		//return false
 	}
 	fmt.Printf("%10f, %s, Wait data from %s and %s\n", c.Engine.CurrentTime()*1e9, c.Name(), src1, src2)
-	c.state.PC++
+	c.state.PCInBlock = -1
 	//return true
-}
+}*/
 
 // Wait for data is ready and send.
 func (c *Core) Router(dst string, src string, color string) bool {
