@@ -3,10 +3,12 @@ package api
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/akita/v4/sim/directconnection"
 	"github.com/sarchlab/zeonica/cgra"
+	"github.com/sarchlab/zeonica/core"
 )
 
 // Driver provides the interface to control an accelerator.
@@ -63,10 +65,6 @@ type PerPEKernels map[[2]int]string
 
 func (d *driverImpl) PreloadMemory(x int, y int, data uint32, baseAddr uint32) {
 	tile := d.device.GetTile(x, y)
-	// fmt.Printf(
-	//     "[DEBUG] PreloadMemory(x=%d, y=%d) -> Tile: %v\n",
-	//     x, y, tile,
-	// )
 	tile.WriteMemory(x, y, data, baseAddr)
 }
 
@@ -136,11 +134,15 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 		if err != nil {
 			panic("CGRA cannot handle the data rate")
 		}
-		fmt.Printf("%10f, Feed in %d to %s\n",
-			d.Engine.CurrentTime()*1e9,
-			task.data[task.round*task.stride+i],
-			task.remotePorts[i])
 
+		core.Trace("DataFlow",
+			"Behavior", "FeedIn",
+			slog.Float64("Time", float64(d.Engine.CurrentTime()*1e9)),
+			"Data", task.data[task.round*task.stride+i],
+			"Color", task.color,
+			"From", port.Name(),
+			"To", task.remotePorts[i],
+		)
 		madeProgress = true
 	}
 
@@ -166,9 +168,21 @@ func (d *driverImpl) doOneCollectTask(task *collectTask) bool {
 		return false
 	}
 
+	//fmt.Printf("\033[31mCollect Task: %v\033[0m\n", task)
+
 	for i, port := range task.ports {
 		msg := port.RetrieveIncoming().(*cgra.MoveMsg)
 		task.data[task.round*task.stride+i] = msg.Data
+		// in red
+
+		core.Trace("DataFlow",
+			"Behavior", "Collect",
+			slog.Float64("Time", float64(d.Engine.CurrentTime()*1e9)),
+			"Data", task.data[task.round*task.stride+i],
+			"Color", task.color,
+			"From", task.ports[i].Name(),
+			"To", "None",
+		)
 	}
 
 	task.round++

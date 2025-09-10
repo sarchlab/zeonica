@@ -32,6 +32,16 @@ func (t tile) GetPort(side cgra.Side) sim.Port {
 		return t.Core.GetPortByName("South")
 	case cgra.East:
 		return t.Core.GetPortByName("East")
+	case cgra.NorthEast:
+		return t.Core.GetPortByName("NorthEast")
+	case cgra.SouthEast:
+		return t.Core.GetPortByName("SouthEast")
+	case cgra.SouthWest:
+		return t.Core.GetPortByName("SouthWest")
+	case cgra.NorthWest:
+		return t.Core.GetPortByName("NorthWest")
+	case cgra.Router:
+		return t.Core.GetPortByName("Router")
 	default:
 		panic("invalid side")
 	}

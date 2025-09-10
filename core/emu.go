@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -16,7 +17,7 @@ type routingRule struct {
 }
 
 type Trigger struct {
-	src    [4]bool
+	src    [12]bool
 	color  int
 	branch string
 }
@@ -27,6 +28,7 @@ type coreState struct {
 	PCInBlock     int32
 	TileX, TileY  uint32
 	Registers     []uint32
+	States        map[string]interface{} // This is to store core states, such as Phiconst, CmpFlags
 	// still consider using outside block to control pc
 	//Code         [][]string
 	Memory []uint32
@@ -45,20 +47,38 @@ type instEmulator struct {
 	CareFlags bool
 }
 
-func (i instEmulator) RunCombinedInst(inst CombinedInst, state *coreState) {
+func (i instEmulator) RunCombinedInst(cinst CombinedInst, state *coreState) {
+	LogState(state)
+
+	instOpcodes := make([]string, len(cinst.Insts))
+	for i, inst := range cinst.Insts {
+		instOpcodes[i] = inst.OpCode
+	}
+
 	if i.CareFlags {
-		for _, inst := range inst.Insts {
+		for _, inst := range cinst.Insts {
 			if !i.CheckFlags(inst, state) {
+				slog.Info("CheckFlags",
+					"result", false,
+					"victim", inst.OpCode,
+					"X", state.TileX,
+					"Y", state.TileY,
+					"instOpcodes", instOpcodes,
+				)
 				return
 			}
 		}
 	}
-	for _, inst := range inst.Insts {
+	slog.Info("CheckFlags", "result", true, "X", state.TileX, "Y", state.TileY, "instOpcodes", instOpcodes)
+	for _, inst := range cinst.Insts {
 		i.RunInst(inst, state)
 	}
+	LogState(state)
 }
 
 func (i instEmulator) CheckFlags(inst Inst, state *coreState) bool {
+
+	//PrintState(state)
 	flag := true
 	for _, src := range inst.SrcOperands.Operands {
 		if state.Directions[src.Impl] {
@@ -77,15 +97,17 @@ func (i instEmulator) CheckFlags(inst Inst, state *coreState) bool {
 			}
 		}
 	}
+	//fmt.Println("[CheckFlags] checking flags for inst", inst.OpCode, "@(", state.TileX, ",", state.TileY, "):", flag)
 	return flag
 }
 
 func (i instEmulator) RunInst(inst Inst, state *coreState) {
 
 	instName := inst.OpCode
-	if strings.Contains(instName, "CMP") {
-		instName = "CMP"
-	}
+	/*
+		if strings.Contains(instName, "CMP") {
+			instName = "CMP"
+		}*/
 	// alwaysflag := false
 	// if strings.HasPrefix(instName, "@") && !alwaysflag {
 	// 	instName = "SENDREC"
@@ -95,6 +117,7 @@ func (i instEmulator) RunInst(inst Inst, state *coreState) {
 
 	instFuncs := map[string]func(Inst, *coreState){
 		"ADD": i.runAdd, // ADD, ADDI, INC, SUB, DEC
+		"SUB": i.runSub,
 		"LLS": i.runLLS,
 		"LRS": i.runLRS,
 		"MUL": i.runMul, // MULI
@@ -115,6 +138,19 @@ func (i instEmulator) RunInst(inst Inst, state *coreState) {
 		"FSUB": i.runFSub,
 		"FMUL": i.runFMul,
 		"NOP":  i.runNOP,
+
+		"PHI":       i.runPhi,
+		"PHI_CONST": i.runPhiConst,
+		"GPRED":     i.runGrantPred,
+
+		"CMP_EXPORT": i.runCmpExport,
+
+		"LT_EX": i.runLTExport,
+
+		"LDD": i.runLoadDirect,
+		"STD": i.runStoreDirect,
+
+		"TRIGGER": i.runTrigger,
 	}
 
 	if instFunc, ok := instFuncs[instName]; ok {
@@ -129,25 +165,37 @@ func (i instEmulator) findPCPlus4(state *coreState) {
 	if state.SelectedBlock == nil {
 		return // Just for test make the unit test to run normally
 	}
+	//fmt.Println("PC+4 ", state.PCInBlock)
+	state.PCInBlock++
 	if state.PCInBlock >= int32(len(state.SelectedBlock.CombinedInsts)) {
 		state.PCInBlock = -1
 		state.SelectedBlock = nil
+		slog.Info("Flow", "PCInBlock", "-1", "X", state.TileX, "Y", state.TileY)
 	}
-	state.PCInBlock++
 }
 
 func (i instEmulator) getDirecIndex(side string) int {
 	var srcIndex int
 
 	switch side {
-	case "NORTH":
+	case "North":
 		srcIndex = int(cgra.North)
-	case "WEST":
+	case "West":
 		srcIndex = int(cgra.West)
-	case "SOUTH":
+	case "South":
 		srcIndex = int(cgra.South)
-	case "EAST":
+	case "East":
 		srcIndex = int(cgra.East)
+	case "NorthEast":
+		srcIndex = int(cgra.NorthEast)
+	case "NorthWest":
+		srcIndex = int(cgra.NorthWest)
+	case "SouthEast":
+		srcIndex = int(cgra.SouthEast)
+	case "SouthWest":
+		srcIndex = int(cgra.SouthWest)
+	case "Router":
+		srcIndex = int(cgra.Router)
 	default:
 		panic("invalid side")
 	}
@@ -156,7 +204,7 @@ func (i instEmulator) getDirecIndex(side string) int {
 }
 
 func (i instEmulator) RouterSrcMustBeDirection(src string) {
-	arr := []string{"NORTH", "SOUTH", "WEST", "EAST"}
+	arr := []string{"NORTH", "SOUTH", "WEST", "EAST", "NORTHEAST", "NORTHWEST", "SOUTHEAST", "SOUTHWEST", "ROUTER"}
 	res := false
 	for _, s := range arr {
 		if s == src {
@@ -285,11 +333,12 @@ func (i instEmulator) runSend(inst []string, state *coreState) {
 // Prototype for moving an immediate: MOV, DstReg, Immediate
 // Prototype for register to register: MOV, DstReg, SrcReg
 func (i instEmulator) runMov(inst Inst, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src := inst.SrcOperands.Operands[0]
 
 	// Write the value into the destination register
-	i.writeOperand(dst, i.readOperand(src, state), state)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, i.readOperand(src, state), state)
+	}
 	i.findPCPlus4(state)
 }
 
@@ -298,65 +347,86 @@ func (i instEmulator) runNOP(inst Inst, state *coreState) {
 }
 
 /*
-func (i instEmulator) parseAddress(addrStr string, state *coreState) uint32 {
-	// imm addr
-	if immediate, err := strconv.ParseUint(addrStr, 0, 32); err == nil {
-		return uint32(immediate)
-	}
-
-	// addr in reg
-	if strings.Contains(addrStr, "$") {
-		parts := strings.Split(addrStr, "+")
-		baseReg := strings.TrimSpace(parts[0])
-		baseAddr := i.readOperand(baseReg, state)
-
-		offset := uint32(0)
-		if len(parts) > 1 {
-			offsetVal, err := strconv.ParseUint(parts[1], 0, 32)
-			if err != nil {
-				panic("invalid offset")
-			}
-			offset = uint32(offsetVal)
+	func (i instEmulator) parseAddress(addrStr string, state *coreState) uint32 {
+		// imm addr
+		if immediate, err := strconv.ParseUint(addrStr, 0, 32); err == nil {
+			return uint32(immediate)
 		}
-		return baseAddr + offset
+
+		// addr in reg
+		if strings.Contains(addrStr, "$") {
+			parts := strings.Split(addrStr, "+")
+			baseReg := strings.TrimSpace(parts[0])
+			baseAddr := i.readOperand(baseReg, state)
+
+			offset := uint32(0)
+			if len(parts) > 1 {
+				offsetVal, err := strconv.ParseUint(parts[1], 0, 32)
+				if err != nil {
+					panic("invalid offset")
+				}
+				offset = uint32(offsetVal)
+			}
+			return baseAddr + offset
+		}
+
+		panic("invalid address format")
 	}
-
-	panic("invalid address format")
-}
-
-func (i instEmulator) runLoad(inst Inst, state *coreState) {
-	dstReg := inst.DstOperands.Operands[0]
-	addrStr := inst.SrcOperands.Operands[0] // address（ 0x100 or $1+0x10）
-	// $1 + 0x10 implies that the base address of register 1
-	// (which is 0xF0) plus an offset of 0x10
-	// results in the address 0x100.
-	addrVal := i.parseAddress(addrStr, state)
+*/
+func (i instEmulator) runLoadDirect(inst Inst, state *coreState) {
+	src1 := inst.SrcOperands.Operands[0]
+	addr := i.readOperand(src1, state)
 
 	if addr >= uint32(len(state.Memory)) {
 		panic("memory address out of bounds")
 	}
 	value := state.Memory[addr]
-	i.writeOperand(dstReg, value, state)
+
+	slog.Warn("Memory",
+		"Behavior", "LoadDirect",
+		"Value", value,
+		"Addr", addr,
+		"X", state.TileX,
+		"Y", state.TileY,
+	)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, value, state)
+	}
 	i.findPCPlus4(state)
 }
 
-func (i instEmulator) runStore(inst []string, state *coreState) {
-	srcReg := inst[1]
-	addrStr := inst[2]
-	addr := i.parseAddress(addrStr, state)
+func (i instEmulator) runStoreDirect(inst Inst, state *coreState) {
+	src1 := inst.SrcOperands.Operands[0]
+	addr := i.readOperand(src1, state)
+	src2 := inst.SrcOperands.Operands[1]
+	value := i.readOperand(src2, state)
 	if addr >= uint32(len(state.Memory)) {
 		panic("memory address out of bounds")
 	}
-	value := i.readOperand(srcReg, state)
+	slog.Warn("Memory",
+		"Behavior", "StoreDirect",
+		"Value", value,
+		"Addr", addr,
+		"X", state.TileX,
+		"Y", state.TileY,
+	)
 	state.Memory[addr] = value
-	state.PC++
-}*/
+	i.findPCPlus4(state)
+}
 
+func (i instEmulator) runTrigger(inst Inst, state *coreState) {
+	src := inst.SrcOperands.Operands[0]
+	i.readOperand(src, state)
+	// just consume a operand and do nothing
+	i.findPCPlus4(state)
+}
+
+/*
 func (i instEmulator) sendDstMustBeNetSendReg(dst string) {
 	if !strings.HasPrefix(dst, "NET_SEND_") {
 		panic("the destination of a SEND instruction must be NET_SEND_ registers")
 	}
-}
+}*/
 
 /**
  * @description:
@@ -382,9 +452,16 @@ func (i instEmulator) readOperand(operand Operand, state *coreState) (value uint
 		}
 
 		value = state.Registers[registerIndex]
+		//fmt.Println("[readOperand] read ", value, "from register", registerIndex, ":", value, "@(", state.TileX, ",", state.TileY, ")")
 	} else if state.Directions[operand.Impl] {
+		//fmt.Println("operand.Impl", operand.Impl)
 		// must first check it is ready
-		value = state.SendBufHead[i.getColorIndex(operand.Color)][i.getDirecIndex(operand.Impl)]
+		color, direction := i.getColorIndex(operand.Color), i.getDirecIndex(operand.Impl)
+		value = state.RecvBufHead[color][direction]
+		// set the ready flag to false
+		state.RecvBufHeadReady[color][direction] = false
+		//mt.Println("state.RecvBufHead[", i.getColorIndex(operand.Color), "][", i.getDirecIndex(operand.Impl), "]:", value)
+		//fmt.Println("[ReadOperand] read", value, "from port", operand.Impl, ":", value, "@(", state.TileX, ",", state.TileY, ")")
 	} else {
 		// try to convert into int
 		num, err := strconv.Atoi(operand.Impl)
@@ -596,13 +673,38 @@ func (i instEmulator) runMul_Sub(inst []string, state *coreState) {
  * @prototype: ADD, DstReg, SrcReg1, SrcReg2(Imme)
  */
 func (i instEmulator) runAdd(inst Inst, state *coreState) {
+	src1 := inst.SrcOperands.Operands[0]
+	src2 := inst.SrcOperands.Operands[1]
+	src1Val := i.readOperand(src1, state)
+	src2Val := i.readOperand(src2, state)
+
+	// 转换为有符号整数进行加法运算
+	src1Signed := int32(src1Val)
+	src2Signed := int32(src2Val)
+	dstValSigned := src1Signed + src2Signed
+	dstVal := uint32(dstValSigned)
+
+	//fmt.Printf("IADD: Adding %d (src1) + %d (src2) = %d\n", src1Signed, src2Signed, dstValSigned)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, dstVal, state)
+	}
+	i.findPCPlus4(state)
+}
+
+func (i instEmulator) runSub(inst Inst, state *coreState) {
 	dst := inst.DstOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 	src1Val := i.readOperand(src1, state)
 	src2Val := i.readOperand(src2, state)
-	dstVal := src1Val + src2Val
-	//fmt.Printf("IADD: Adding %v (src1) + %v (src2) = %v\n", src1Val, src2Val, dstVal)
+
+	// 转换为有符号整数进行减法运算
+	src1Signed := int32(src1Val)
+	src2Signed := int32(src2Val)
+	dstValSigned := src1Signed - src2Signed
+	dstVal := uint32(dstValSigned)
+
+	fmt.Printf("ISUB: Subtracting %d (src1) - %d (src2) = %d\n", src1Signed, src2Signed, dstValSigned)
 	i.writeOperand(dst, dstVal, state)
 	i.findPCPlus4(state)
 }
@@ -614,8 +716,13 @@ func (i instEmulator) runMul(inst Inst, state *coreState) {
 
 	srcVal1 := i.readOperand(src1, state)
 	srcVal2 := i.readOperand(src2, state)
-	dstVal := i.readOperand(dst, state)
-	dstVal = srcVal1 * srcVal2
+
+	// 转换为有符号整数进行乘法运算
+	src1Signed := int32(srcVal1)
+	src2Signed := int32(srcVal2)
+	dstValSigned := src1Signed * src2Signed
+	dstVal := uint32(dstValSigned)
+
 	i.writeOperand(dst, dstVal, state)
 	i.findPCPlus4(state)
 }
@@ -627,11 +734,22 @@ func (i instEmulator) runDiv(inst Inst, state *coreState) {
 
 	srcVal1 := i.readOperand(src1, state)
 	srcVal2 := i.readOperand(src2, state)
-	dstVal := i.readOperand(dst, state)
-	dstVal = srcVal1 / srcVal2
+
+	// 转换为有符号整数进行除法运算
+	src1Signed := int32(srcVal1)
+	src2Signed := int32(srcVal2)
+
+	// 避免除零
+	if src2Signed == 0 {
+		panic("Division by zero at " + strconv.Itoa(int(state.PCInBlock)) + "@(" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ")")
+	}
+
+	dstValSigned := src1Signed / src2Signed
+	dstVal := uint32(dstValSigned)
+
 	i.writeOperand(dst, dstVal, state)
 
-	//fmt.Printf("DIV Instruction, Data are %v and %v, Res is %v\n", srcVal1, srcVal2, dstVal)
+	fmt.Printf("DIV Instruction, Data are %d and %d, Res is %d\n", src1Signed, src2Signed, dstValSigned)
 	i.findPCPlus4(state)
 }
 
@@ -706,14 +824,14 @@ func (i instEmulator) runAND(inst Inst, state *coreState) {
 	i.findPCPlus4(state)
 }
 
-func (i instEmulator) Jump(dst string, state *coreState) {
-	label := state.SelectedBlock.Label[dst]
-	state.PCInBlock = int32(label)
+func (i instEmulator) Jump(dst uint32, state *coreState) {
+	state.PCInBlock = int32(dst)
 }
 
 func (i instEmulator) runJmp(inst Inst, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
-	i.Jump(dst.Impl, state)
+	src := inst.SrcOperands.Operands[0]
+	srcVal := i.readOperand(src, state)
+	i.Jump(srcVal, state)
 }
 
 func (i instEmulator) runBeq(inst Inst, state *coreState) {
@@ -724,7 +842,7 @@ func (i instEmulator) runBeq(inst Inst, state *coreState) {
 	immeVal := i.readOperand(imme, state)
 
 	if srcVal == immeVal {
-		i.Jump(inst.DstOperands.Operands[0].Impl, state)
+		i.Jump(srcVal, state)
 	} else {
 		i.findPCPlus4(state)
 	}
@@ -738,7 +856,7 @@ func (i instEmulator) runBne(inst Inst, state *coreState) {
 	immeVal := i.readOperand(imme, state)
 
 	if srcVal != immeVal {
-		i.Jump(inst.DstOperands.Operands[0].Impl, state)
+		i.Jump(srcVal, state)
 	} else {
 		i.findPCPlus4(state)
 	}
@@ -752,7 +870,7 @@ func (i instEmulator) runBlt(inst Inst, state *coreState) {
 	immeVal := i.readOperand(imme, state)
 
 	if srcVal < immeVal {
-		i.Jump(inst.DstOperands.Operands[0].Impl, state)
+		i.Jump(srcVal, state)
 	} else {
 		i.findPCPlus4(state)
 	}
@@ -855,6 +973,98 @@ func (i instEmulator) runFMul(inst Inst, state *coreState) {
 
 	resultUint := float2Uint(resultFloat)
 	i.writeOperand(dst, resultUint, state)
+
+	i.findPCPlus4(state)
+}
+
+func (i instEmulator) runCmpExport(inst Inst, state *coreState) {
+	dst := inst.DstOperands.Operands[0]
+	src1 := inst.SrcOperands.Operands[0]
+	src2 := inst.SrcOperands.Operands[1]
+
+	src1Val := i.readOperand(src1, state)
+	src2Val := i.readOperand(src2, state)
+
+	if src1Val == src2Val {
+		i.writeOperand(dst, 1, state)
+	} else {
+		i.writeOperand(dst, 0, state)
+	}
+	i.findPCPlus4(state)
+}
+
+func (i instEmulator) runLTExport(inst Inst, state *coreState) {
+	src1 := inst.SrcOperands.Operands[0]
+	src2 := inst.SrcOperands.Operands[1]
+
+	src1Val := i.readOperand(src1, state)
+	src2Val := i.readOperand(src2, state)
+
+	if src1Val < src2Val {
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, 1, state)
+		}
+	} else {
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, 0, state)
+		}
+	}
+
+	i.findPCPlus4(state)
+}
+
+func (i instEmulator) runPhi(inst Inst, state *coreState) {
+	dst := inst.DstOperands.Operands[0]
+	src1 := inst.SrcOperands.Operands[0]
+	src2 := inst.SrcOperands.Operands[1]
+	src3 := inst.SrcOperands.Operands[2]
+
+	src1Val := i.readOperand(src1, state)
+	src2Val := i.readOperand(src2, state)
+	src3Val := i.readOperand(src3, state)
+
+	var result uint32
+	if src3Val == 0 {
+		result = src1Val
+	} else {
+		result = src2Val
+	}
+
+	i.writeOperand(dst, result, state)
+	i.findPCPlus4(state)
+}
+
+func (i instEmulator) runPhiConst(inst Inst, state *coreState) {
+	src1 := inst.SrcOperands.Operands[0]
+	src2 := inst.SrcOperands.Operands[1]
+
+	src1Val := i.readOperand(src1, state)
+	src2Val := i.readOperand(src2, state)
+
+	var result uint32
+	if state.States["Phiconst"] == false {
+		result = src1Val
+		state.States["Phiconst"] = true
+	} else {
+		result = src2Val
+	}
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, result, state)
+	}
+	i.findPCPlus4(state)
+}
+
+func (i instEmulator) runGrantPred(inst Inst, state *coreState) {
+	dst := inst.DstOperands.Operands[0]
+	src := inst.SrcOperands.Operands[0]
+	pred := inst.SrcOperands.Operands[1]
+
+	srcVal := i.readOperand(src, state)
+	predVal := i.readOperand(pred, state)
+
+	if predVal == 1 {
+		i.writeOperand(dst, srcVal, state)
+	}
 
 	i.findPCPlus4(state)
 }
@@ -1111,7 +1321,7 @@ func (i instEmulator) runTriggerTwoSide(inst []string, state *coreState) {
 	if state.RecvBufHeadReady[color1Index][src1Index] &&
 		state.RecvBufHeadReady[color2Index][src2Index] {
 		//fmt.Print("Triggered\n")
-		i.Jump(codeBlock, state)
+		//i.Jump(codeBlock, state)
 		return
 	}
 	//fmt.Print("Untriggered\n")
@@ -1137,7 +1347,7 @@ func (i instEmulator) runTriggerOneSide(inst []string, state *coreState) {
 	}
 	trigger.src[srcIndex] = true
 	if state.RecvBufHeadReady[colorIndex][srcIndex] {
-		i.Jump(codeBlock, state)
+		//i.Jump(codeBlock, state)
 		//fmt.Print("Triggered\n")
 		return
 	}
@@ -1204,7 +1414,7 @@ func (i instEmulator) runSleep(inst []string, state *coreState) {
 	for _, t := range state.triggers {
 		flag := true
 		color := t.color
-		branch := t.branch
+		//branch := t.branch
 		for i := 0; i < 4; i++ {
 			if t.src[i] && !(state.RecvBufHeadReady[color][i]) {
 				flag = false
@@ -1212,7 +1422,7 @@ func (i instEmulator) runSleep(inst []string, state *coreState) {
 		}
 		if flag {
 			//fmt.Printf("[%d][%d]Sleep: Triggered: %s\n", state.TileX, state.TileY, t.branch)
-			i.Jump(branch, state)
+			//i.Jump(branch, state)
 			return
 		}
 	}

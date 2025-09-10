@@ -28,21 +28,40 @@ func (b Builder) Build(name string) *Core {
 	c := &Core{}
 
 	c.TickingComponent = sim.NewTickingComponent(name, b.engine, b.freq, c)
+	c.emu = instEmulator{
+		CareFlags: true,
+	}
 	c.state = coreState{
+		SelectedBlock: nil,
+		PCInBlock:     0,
+		Directions: map[string]bool{
+			"North":     true,
+			"East":      true,
+			"South":     true,
+			"West":      true,
+			"NorthEast": true,
+			"SouthEast": true,
+			"SouthWest": true,
+			"NorthWest": true,
+			"Router":    true,
+		},
 		Registers:        make([]uint32, 64),
 		Memory:           make([]uint32, 1024),
 		RecvBufHead:      make([][]uint32, 4),
 		RecvBufHeadReady: make([][]bool, 4),
 		SendBufHead:      make([][]uint32, 4),
 		SendBufHeadBusy:  make([][]bool, 4),
+		States:           make(map[string]interface{}),
 	}
 
 	for i := 0; i < 4; i++ {
-		c.state.RecvBufHead[i] = make([]uint32, 4)
-		c.state.RecvBufHeadReady[i] = make([]bool, 4)
-		c.state.SendBufHead[i] = make([]uint32, 4)
-		c.state.SendBufHeadBusy[i] = make([]bool, 4)
+		c.state.RecvBufHead[i] = make([]uint32, 12)
+		c.state.RecvBufHeadReady[i] = make([]bool, 12)
+		c.state.SendBufHead[i] = make([]uint32, 12)
+		c.state.SendBufHeadBusy[i] = make([]bool, 12)
 	}
+
+	c.state.States["Phiconst"] = false
 
 	c.ports = make(map[cgra.Side]*portPair)
 
@@ -50,6 +69,14 @@ func (b Builder) Build(name string) *Core {
 	b.makePort(c, cgra.West)
 	b.makePort(c, cgra.South)
 	b.makePort(c, cgra.East)
+	b.makePort(c, cgra.NorthEast)
+	b.makePort(c, cgra.SouthEast)
+	b.makePort(c, cgra.SouthWest)
+	b.makePort(c, cgra.NorthWest)
+	b.makePort(c, cgra.Router)
+	b.makePort(c, cgra.Dummy1)
+	b.makePort(c, cgra.Dummy2)
+	b.makePort(c, cgra.Dummy3)
 
 	return c
 }

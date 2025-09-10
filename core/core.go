@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
@@ -40,10 +41,18 @@ func (c *Core) GetMemory(x int, y int, addr uint32) uint32 {
 
 // write memory
 func (c *Core) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
-	fmt.Printf("Core [%d][%d] receive WriteMemory(x=%d, y=%d)\n", c.state.TileX, c.state.TileY, x, y)
+	//fmt.Printf("Core [%d][%d] receive WriteMemory(x=%d, y=%d)\n", c.state.TileX, c.state.TileY, x, y)
 	if x == int(c.state.TileX) && y == int(c.state.TileY) {
 		c.state.Memory[baseAddr] = data
-		fmt.Printf("Core [%d][%d] write memory[%d] = %d\n", c.state.TileX, c.state.TileY, baseAddr, c.state.Memory[baseAddr])
+		//fmt.Printf("Core [%d][%d] write memory[%d] = %d\n", c.state.TileX, c.state.TileY, baseAddr, c.state.Memory[baseAddr])
+		Trace("Memory",
+			"Behavior", "WriteMemory",
+			"Time", float64(c.Engine.CurrentTime()*1e9),
+			"Data", data,
+			"X", x,
+			"Y", y,
+			"Addr", baseAddr,
+		)
 	} else {
 		panic(fmt.Sprintf("Invalid Tile: Expect (%d, %d)，but get (%d, %d)", c.state.TileX, c.state.TileY, x, y))
 	}
@@ -77,7 +86,7 @@ func (c *Core) Tick() (madeProgress bool) {
 
 func (c *Core) doSend() bool {
 	madeProgress := false
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 12; i++ {
 		for color := 0; color < 4; color++ {
 
 			if !c.state.SendBufHeadBusy[color][i] {
@@ -97,11 +106,14 @@ func (c *Core) doSend() bool {
 				continue
 			}
 
-			fmt.Printf("%10f, %s, Send %d %s->%s, Color %d\n",
-				c.Engine.CurrentTime()*1e9,
-				c.Name(),
-				msg.Data, msg.Src, msg.Dst,
-				color)
+			Trace("DataFlow",
+				"Behavior", "Send",
+				slog.Float64("Time", float64(c.Engine.CurrentTime()*1e9)),
+				"Data", msg.Data,
+				"Color", color,
+				"Src", msg.Src,
+				"Dst", msg.Dst,
+			)
 			c.state.SendBufHeadBusy[color][i] = false
 		}
 	}
@@ -111,7 +123,7 @@ func (c *Core) doSend() bool {
 
 func (c *Core) doRecv() bool {
 	madeProgress := false
-	for i := 0; i < 4; i++ { //direction
+	for i := 0; i < 12; i++ { //direction
 		item := c.ports[cgra.Side(i)].local.PeekIncoming()
 		if item == nil {
 			continue
@@ -137,11 +149,14 @@ func (c *Core) doRecv() bool {
 			c.state.RecvBufHeadReady[color][i] = true
 			c.state.RecvBufHead[color][i] = msg.Data
 
-			fmt.Printf("%10f, %s, Recv %d %s->%s, Color %d\n",
-				c.Engine.CurrentTime()*1e9,
-				c.Name(),
-				msg.Data, msg.Src, msg.Dst,
-				color)
+			Trace("DataFlow",
+				"Behavior", "Recv",
+				"Time", float64(c.Engine.CurrentTime()*1e9),
+				"Data", msg.Data,
+				"Src", msg.Src,
+				"Dst", msg.Dst,
+				"Color", color,
+			)
 
 			c.ports[cgra.Side(i)].local.RetrieveIncoming()
 			madeProgress = true
@@ -158,7 +173,7 @@ func (c *Core) runProgram() bool {
 	}
 	combInst := c.state.SelectedBlock.CombinedInsts[c.state.PCInBlock]
 
-	fmt.Printf("%10f, %s, inst: %v inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), combInst, len(combInst.Insts))
+	//fmt.Printf("%10f, %s, inst: %v inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), combInst, len(combInst.Insts))
 
 	/* do not have label in codes
 	for inst[len(inst)-1] == ':' {
@@ -174,7 +189,12 @@ func (c *Core) runProgram() bool {
 	if prevPC == nextPC {
 		return false
 	}
-	fmt.Printf("%10f, %s, Inst %v\n", c.Engine.CurrentTime()*1e9, c.Name(), combInst)
+	Trace("Inst",
+		"Time", float64(c.Engine.CurrentTime()*1e9),
+		"X", c.state.TileX,
+		"Y", c.state.TileY,
+		"CombinedInst", combInst.String(),
+	)
 	//debug reg value
 	//fmt.Printf("Core (%d, %d) Register values:\n", c.state.TileX, c.state.TileY)
 	// for i, val := range c.state.Registers {
@@ -269,7 +289,7 @@ func (c *Core) Router(dst string, src string, color string) bool {
 	c.state.SendBufHeadBusy[colorIndex][dstIndex] = true
 	c.state.SendBufHead[colorIndex][dstIndex] = c.state.RecvBufHead[colorIndex][srcIndex]
 	fmt.Printf("%10f, %s, ROUTER %d %s->%s\n",
-		c.Engine.CurrentTime()*1e9,
+		float64(c.Engine.CurrentTime()*1e9),
 		c.Name(),
 		c.state.RecvBufHead[colorIndex][srcIndex], c.Name(), dst)
 	return true
@@ -282,7 +302,7 @@ func (c *Core) ConditionSend(dst string, src string, resister int, srcColor int,
 }
 
 func (c *Core) RouterSrcMustBeDirection(src string) {
-	arr := []string{"NORTH", "SOUTH", "WEST", "EAST"}
+	arr := []string{"NORTH", "SOUTH", "WEST", "EAST", "SOUTHWEST", "SOUTHEAST", "NORTHWEST", "NORTHEAST", "ROUTER"}
 	res := false
 	for _, s := range arr {
 		if s == src {
@@ -308,6 +328,16 @@ func (c *Core) getIndex(side string) int {
 		srcIndex = int(cgra.South)
 	case "EAST":
 		srcIndex = int(cgra.East)
+	case "NORTHEAST":
+		srcIndex = int(cgra.NorthEast)
+	case "NORTHWEST":
+		srcIndex = int(cgra.NorthWest)
+	case "SOUTHEAST":
+		srcIndex = int(cgra.SouthEast)
+	case "SOUTHWEST":
+		srcIndex = int(cgra.SouthWest)
+	case "ROUTER":
+		srcIndex = int(cgra.Router)
 	// Adding new direction
 	default:
 		panic("invalid side")
