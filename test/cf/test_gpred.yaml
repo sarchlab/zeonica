@@ -9,15 +9,16 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "GPRED"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-                - operand: "South"
-                  color: "R"
-              dst_operands:
-                - operand: "East"
-                  color: "R"
+            - operations:
+                - opcode: "GPRED"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                    - operand: "South"
+                      color: "R"
+                  dst_operands:
+                    - operand: "East"
+                      color: "R"
 
     - row: 1
       column: 0
@@ -26,41 +27,46 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "MOV"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-              dst_operands:
-                - operand: "North"
-                  color: "R"
-            - opcode: "MOV"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-              dst_operands:
-                - operand: "East"
-                  color: "R"
-            - opcode: "MOV"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-              dst_operands:
-                - operand: "North"
-                  color: "R"
-            - opcode: "MOV"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-              dst_operands:
-                - operand: "North"
-                  color: "R"
-            - opcode: "MOV"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-              dst_operands:
-                - operand: "East"
-                  color: "R"
+            - operations:
+                - opcode: "MOV"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                  dst_operands:
+                    - operand: "North"
+                      color: "R"
+            - operations:
+                - opcode: "MOV"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                  dst_operands:
+                    - operand: "East"
+                      color: "R"
+            - operations:
+                - opcode: "MOV"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                  dst_operands:
+                    - operand: "North"
+                      color: "R"
+            - operations:
+                - opcode: "MOV"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                  dst_operands:
+                    - operand: "North"
+                      color: "R"
+            - operations:
+                - opcode: "MOV"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                  dst_operands:
+                    - operand: "East"
+                      color: "R"
 
     - row: 0
       column: 1
@@ -69,15 +75,16 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "GPRED"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-                - operand: "South"
-                  color: "R"
-              dst_operands:
-                - operand: "East"
-                  color: "R"
+            - operations:
+                - opcode: "GPRED"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                    - operand: "South"
+                      color: "R"
+                  dst_operands:
+                    - operand: "East"
+                      color: "R"
 
     - row: 1
       column: 1
@@ -86,10 +93,11 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "MOV"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-              dst_operands:
-                - operand: "North"
-                  color: "R" 
+            - operations:
+                - opcode: "MOV"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                  dst_operands:
+                    - operand: "North"
+                      color: "R"

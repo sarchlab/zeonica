@@ -33,7 +33,7 @@ func (b Builder) Build(name string) *Core {
 	}
 	c.state = coreState{
 		SelectedBlock: nil,
-		PCInBlock:     0,
+		PCInBlock:     -1,
 		Directions: map[string]bool{
 			"North":     true,
 			"East":      true,
@@ -52,6 +52,12 @@ func (b Builder) Build(name string) *Core {
 		SendBufHead:      make([][]uint32, 4),
 		SendBufHeadBusy:  make([][]bool, 4),
 		States:           make(map[string]interface{}),
+		Mode:             SyncOp,
+		CurrReservationState: ReservationState{
+			ReservationMap:  make(map[int]bool),
+			OpToExec:        0,
+			RefCountRuntime: make(map[string]int),
+		},
 	}
 
 	for i := 0; i < 4; i++ {

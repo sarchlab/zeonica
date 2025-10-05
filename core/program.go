@@ -9,7 +9,7 @@ import (
 )
 
 // CoreProgram represents a program for a specific core
-type CoreProgram struct {
+type YAMLCoreProgram struct {
 	Row     int         `yaml:"row"`
 	Column  int         `yaml:"column"`
 	CoreID  string      `yaml:"core_id"`
@@ -18,13 +18,17 @@ type CoreProgram struct {
 
 // YAMLEntry represents an entry block in the YAML
 type YAMLEntry struct {
-	EntryID      string        `yaml:"entry_id"`
-	Type         string        `yaml:"type"`
-	Instructions []Instruction `yaml:"instructions"`
+	EntryID           string                 `yaml:"entry_id"`
+	Type              string                 `yaml:"type"`
+	InstructionGroups []YAMLInstructionGroup `yaml:"instructions"`
 }
 
 // Instruction represents a single instruction in the YAML
-type Instruction struct {
+type YAMLInstructionGroup struct {
+	Operations []YAMLOperation `yaml:"operations"`
+}
+
+type YAMLOperation struct {
 	OpCode      string        `yaml:"opcode"`
 	SrcOperands []YAMLOperand `yaml:"src_operands"`
 	DstOperands []YAMLOperand `yaml:"dst_operands"`
@@ -38,9 +42,9 @@ type YAMLOperand struct {
 
 // ArrayConfig represents the top-level YAML structure
 type ArrayConfig struct {
-	Rows  int           `yaml:"rows"`
-	Cols  int           `yaml:"columns"`
-	Cores []CoreProgram `yaml:"cores"`
+	Rows  int               `yaml:"rows"`
+	Cols  int               `yaml:"columns"`
+	Cores []YAMLCoreProgram `yaml:"cores"`
 }
 
 // YAMLRoot represents the root structure of the YAML file
@@ -53,23 +57,24 @@ type Program struct {
 }
 
 type EntryBlock struct {
-	EntryCond     OperandList
-	CombinedInsts []CombinedInst
-	Label         map[string]int
+	EntryCond         OperandList // not used
+	InstructionGroups []InstructionGroup
+	Label             map[string]int
 }
 
-type CombinedInst struct {
-	Insts []Inst
+type InstructionGroup struct {
+	Operations []Operation
+	RefCount   map[string]int
 }
 
-func (ci *CombinedInst) String() string {
-	if len(ci.Insts) == 1 {
-		return ci.Insts[0].OpCode
-	} else if len(ci.Insts) > 1 {
+func (ig *InstructionGroup) String() string {
+	if len(ig.Operations) == 1 {
+		return ig.Operations[0].OpCode
+	} else if len(ig.Operations) > 1 {
 		// return "<ADD, ADD, ADD>"
-		opCodes := make([]string, len(ci.Insts))
-		for i, inst := range ci.Insts {
-			opCodes[i] = inst.OpCode
+		opCodes := make([]string, len(ig.Operations))
+		for i, operation := range ig.Operations {
+			opCodes[i] = operation.OpCode
 		}
 		return "<" + strings.Join(opCodes, ", ") + ">"
 	} else {
@@ -77,7 +82,7 @@ func (ci *CombinedInst) String() string {
 	}
 }
 
-type Inst struct {
+type Operation struct {
 	// The raw text of the instruction.
 	OpCode      string
 	DstOperands OperandList
@@ -129,45 +134,52 @@ func LoadProgramFile(programFilePath string) map[string]Program {
 				Label: make(map[string]int),
 			}
 
-			// Convert instructions
-			var combinedInsts []CombinedInst
-			for _, inst := range entry.Instructions {
-				// Convert source operands
-				var srcOperands []Operand
-				for _, src := range inst.SrcOperands {
-					srcOperands = append(srcOperands, Operand{
-						Flag:  false, // Default flag value
-						Color: src.Color,
-						Impl:  src.Operand,
-					})
+			// Convert instruction groups
+			var instructionGroups []InstructionGroup
+			for _, instGroup := range entry.InstructionGroups {
+				instructionGroup := InstructionGroup{
+					RefCount: make(map[string]int),
 				}
 
-				// Convert destination operands
-				var dstOperands []Operand
-				for _, dst := range inst.DstOperands {
-					dstOperands = append(dstOperands, Operand{
-						Flag:  false, // Default flag value
-						Color: dst.Color,
-						Impl:  dst.Operand,
-					})
+				// Convert operations
+				var operations []Operation
+				for _, yamlOp := range instGroup.Operations {
+					// Convert source operands
+					var srcOperands []Operand
+					for _, src := range yamlOp.SrcOperands {
+						srcOperands = append(srcOperands, Operand{
+							Flag:  false, // Default flag value
+							Color: src.Color,
+							Impl:  src.Operand,
+						})
+						instructionGroup.RefCount[src.Operand+src.Color]++
+					}
+
+					// Convert destination operands
+					var dstOperands []Operand
+					for _, dst := range yamlOp.DstOperands {
+						dstOperands = append(dstOperands, Operand{
+							Flag:  false, // Default flag value
+							Color: dst.Color,
+							Impl:  dst.Operand,
+						})
+					}
+
+					// Create operation
+					operation := Operation{
+						OpCode:      yamlOp.OpCode,
+						SrcOperands: OperandList{Operands: srcOperands},
+						DstOperands: OperandList{Operands: dstOperands},
+					}
+
+					operations = append(operations, operation)
 				}
 
-				// Create instruction
-				instruction := Inst{
-					OpCode:      inst.OpCode,
-					SrcOperands: OperandList{Operands: srcOperands},
-					DstOperands: OperandList{Operands: dstOperands},
-				}
-
-				// Create combined instruction
-				combinedInst := CombinedInst{
-					Insts: []Inst{instruction},
-				}
-
-				combinedInsts = append(combinedInsts, combinedInst)
+				instructionGroup.Operations = operations
+				instructionGroups = append(instructionGroups, instructionGroup)
 			}
 
-			entryBlock.CombinedInsts = combinedInsts
+			entryBlock.InstructionGroups = instructionGroups
 			entryBlocks = append(entryBlocks, entryBlock)
 		}
 
@@ -184,9 +196,9 @@ func LoadProgramFile(programFilePath string) map[string]Program {
 func PrintProgram(program Program) {
 	for _, entryBlock := range program.EntryBlocks {
 		fmt.Println(entryBlock.Label)
-		for _, combinedInst := range entryBlock.CombinedInsts {
-			for _, inst := range combinedInst.Insts {
-				fmt.Println(inst.OpCode, inst.SrcOperands, inst.DstOperands)
+		for _, instructionGroup := range entryBlock.InstructionGroups {
+			for _, operation := range instructionGroup.Operations {
+				fmt.Println(operation.OpCode, operation.SrcOperands, operation.DstOperands)
 			}
 		}
 	}

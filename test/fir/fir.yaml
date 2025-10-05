@@ -9,35 +9,38 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "PHI_CONST"
-              src_operands:
-                - operand: "0"
-                  color: "R"
-                - operand: "East"
-                  color: "R"
-              dst_operands:
-                - operand: "East"
-                  color: "R"
-                - operand: "South"
-                  color: "R"
-                - operand: "$0"
-                  color: "R"
-            - opcode: "ADD"
-              src_operands:
-                - operand: "0"
-                  color: "R"
-                - operand: "$0"
-                  color: "R"
-              dst_operands:
-                - operand: "$1"
-                  color: "R"
-            - opcode: "LDD"
-              src_operands:
-                - operand: "$1"
-                  color: "R"
-              dst_operands:
-                - operand: "South"
-                  color: "R"
+            - operations:
+              - opcode: "PHI_CONST"
+                src_operands:
+                  - operand: "0"
+                    color: "R"
+                  - operand: "East"
+                    color: "R"
+                dst_operands:
+                  - operand: "East"
+                    color: "R"
+                  - operand: "South"
+                    color: "R"
+                  - operand: "$0"
+                    color: "R"
+            - operations:
+              - opcode: "ADD"
+                src_operands:
+                  - operand: "0"
+                    color: "R"
+                  - operand: "$0"
+                    color: "R"
+                dst_operands:
+                  - operand: "$1"
+                    color: "R"
+            - operations:
+              - opcode: "LDD"
+                src_operands:
+                  - operand: "$1"
+                    color: "R"
+                dst_operands:
+                  - operand: "South"
+                    color: "R"
 
     - row: 0
       column: 1
@@ -46,41 +49,46 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "TRIGGER"
-              src_operands:
-                - operand: "North"
-                  color: "R"
-            - opcode: "MOV"
-              src_operands:
-                - operand: "114"
-                  color: "R"
-              dst_operands:
-                - operand: "West"
-                  color: "R"
-            - opcode: "ADD"
-              src_operands:
-                - operand: "1"
-                  color: "R"
-                - operand: "West"
-                  color: "R"
-              dst_operands:
-                - operand: "South"
-                  color: "R"
-                - operand: "$0"
-                  color: "R"
-            - opcode: "GPRED"
-              src_operands:
-                - operand: "$0"
-                  color: "R"
-                - operand: "South"
-                  color: "R"
-              dst_operands:
-                - operand: "West"
-                  color: "R"
-            - opcode: "JMP"
-              src_operands:
-                - operand: "2"
-                  color: "R"
+            - operations:
+              - opcode: "TRIGGER"
+                src_operands:
+                  - operand: "North"
+                    color: "R"
+            - operations:
+              - opcode: "MOV"
+                src_operands:
+                  - operand: "114"
+                    color: "R"
+                dst_operands:
+                  - operand: "West"
+                    color: "R"
+            - operations:
+              - opcode: "ADD"
+                src_operands:
+                  - operand: "1"
+                    color: "R"
+                  - operand: "West"
+                    color: "R"
+                dst_operands:
+                  - operand: "South"
+                    color: "R"
+                  - operand: "$0"
+                    color: "R"
+            - operations:
+              - opcode: "GPRED"
+                src_operands:
+                  - operand: "$0"
+                    color: "R"
+                  - operand: "South"
+                    color: "R"
+                dst_operands:
+                  - operand: "West"
+                    color: "R"
+            - operations:
+              - opcode: "JMP"
+                src_operands:
+                  - operand: "2"
+                    color: "R"
 
     - row: 1
       column: 0
@@ -89,31 +97,34 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "ADD"
-              src_operands:
-                - operand: "2"
-                  color: "R"
-                - operand: "North"
-                  color: "R"
-              dst_operands:
-                - operand: "$0"
-                  color: "R"
-            - opcode: "LDD"
-              src_operands:
-                - operand: "$0"
-                  color: "R"
-              dst_operands:
-                - operand: "$1"
-                  color: "R"
-            - opcode: "MUL"
-              src_operands:
-                - operand: "$1"
-                  color: "R"
-                - operand: "North"
-                  color: "R"
-              dst_operands:
-                - operand: "South"
-                  color: "R"
+            - operations:
+              - opcode: "ADD"
+                src_operands:
+                  - operand: "2"
+                    color: "R"
+                  - operand: "North"
+                    color: "R"
+                dst_operands:
+                  - operand: "$0"
+                    color: "R"
+            - operations:
+              - opcode: "LDD"
+                src_operands:
+                  - operand: "$0"
+                    color: "R"
+                dst_operands:
+                  - operand: "$1"
+                    color: "R"
+            - operations:
+              - opcode: "MUL"
+                src_operands:
+                  - operand: "$1"
+                    color: "R"
+                  - operand: "North"
+                    color: "R"
+                dst_operands:
+                  - operand: "South"
+                    color: "R"
 
     - row: 1
       column: 1
@@ -122,15 +133,16 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "LT_EX"
-              src_operands:
-                - operand: "North"
-                  color: "R"
-                - operand: "2"
-                  color: "R"
-              dst_operands:
-                - operand: "North"
-                  color: "R"
+            - operations:
+              - opcode: "LT_EX"
+                src_operands:
+                  - operand: "North"
+                    color: "R"
+                  - operand: "2"
+                    color: "R"
+                dst_operands:
+                  - operand: "North"
+                    color: "R"
 
     - row: 2
       column: 0
@@ -139,38 +151,43 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "TRIGGER"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-            - opcode: "MOV"
-              src_operands:
-                - operand: "514"
-                  color: "R"
-              dst_operands:
-                - operand: "East"
-                  color: "R"
-            - opcode: "ADD"
-              src_operands:
-                - operand: "East"
-                  color: "R"
-                - operand: "North"
-                  color: "R"
-              dst_operands:
-                - operand: "$0"
-                  color: "R"
-                - operand: "East"
-                  color: "R"
-            - opcode: "STD"
-              src_operands:
-                - operand: "0"
-                  color: "R"
-                - operand: "$0"
-                  color: "R"
-            - opcode: "JMP"
-              src_operands:
-                - operand: "2"
-                  color: "R"
+            - operations:
+              - opcode: "TRIGGER"
+                src_operands:
+                  - operand: "West"
+                    color: "R"
+            - operations:
+              - opcode: "MOV"
+                src_operands:
+                  - operand: "514"
+                    color: "R"
+                dst_operands:
+                  - operand: "East"
+                    color: "R"
+            - operations:
+              - opcode: "ADD"
+                src_operands:
+                  - operand: "East"
+                    color: "R"
+                  - operand: "North"
+                    color: "R"
+                dst_operands:
+                  - operand: "$0"
+                    color: "R"
+                  - operand: "East"
+                    color: "R"
+            - operations:
+              - opcode: "STD"
+                src_operands:
+                  - operand: "0"
+                    color: "R"
+                  - operand: "$0"
+                    color: "R"
+            - operations:
+              - opcode: "JMP"
+                src_operands:
+                  - operand: "2"
+                    color: "R"
 
     - row: 2
       column: 1
@@ -179,12 +196,13 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "PHI_CONST"
-              src_operands:
-                - operand: "2"
-                  color: "R"
-                - operand: "West"
-                  color: "R"
-              dst_operands:
-                - operand: "West"
-                  color: "R"
+            - operations:
+              - opcode: "PHI_CONST"
+                src_operands:
+                  - operand: "2"
+                    color: "R"
+                  - operand: "West"
+                    color: "R"
+                dst_operands:
+                  - operand: "West"
+                    color: "R"

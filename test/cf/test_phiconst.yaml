@@ -9,15 +9,16 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "PHI_CONST"
-              src_operands:
-                - operand: "4"
-                  color: "R"
-                - operand: "West"
-                  color: "R"
-              dst_operands:
-                - operand: "East"
-                  color: "R"
+            - operations:
+                - opcode: "PHI_CONST"
+                  src_operands:
+                    - operand: "4"
+                      color: "R"
+                    - operand: "West"
+                      color: "R"
+                  dst_operands:
+                    - operand: "East"
+                      color: "R"
 
     - row: 1
       column: 0
@@ -26,15 +27,16 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "PHI_CONST"
-              src_operands:
-                - operand: "1"
-                  color: "R"
-                - operand: "East"
-                  color: "R"
-              dst_operands:
-                - operand: "West"
-                  color: "R"
+            - operations:
+                - opcode: "PHI_CONST"
+                  src_operands:
+                    - operand: "1"
+                      color: "R"
+                    - operand: "East"
+                      color: "R"
+                  dst_operands:
+                    - operand: "West"
+                      color: "R"
 
     - row: 0
       column: 1
@@ -43,15 +45,16 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "PHI_CONST"
-              src_operands:
-                - operand: "3"
-                  color: "R"
-                - operand: "West"
-                  color: "R"
-              dst_operands:
-                - operand: "South"
-                  color: "R"
+            - operations:
+                - opcode: "PHI_CONST"
+                  src_operands:
+                    - operand: "3"
+                      color: "R"
+                    - operand: "West"
+                      color: "R"
+                  dst_operands:
+                    - operand: "South"
+                      color: "R"
 
     - row: 1
       column: 1
@@ -60,12 +63,13 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "PHI_CONST"
-              src_operands:
-                - operand: "2"
-                  color: "R"
-                - operand: "North"
-                  color: "R"
-              dst_operands:
-                - operand: "West"
-                  color: "R" 
+            - operations:
+                - opcode: "PHI_CONST"
+                  src_operands:
+                    - operand: "2"
+                      color: "R"
+                    - operand: "North"
+                      color: "R"
+                  dst_operands:
+                    - operand: "West"
+                      color: "R"

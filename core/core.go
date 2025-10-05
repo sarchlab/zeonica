@@ -169,9 +169,15 @@ func (c *Core) doRecv() bool {
 func (c *Core) runProgram() bool {
 	if c.state.PCInBlock == -1 {
 		c.state.PCInBlock = 0
-		c.state.SelectedBlock = &c.state.Code.EntryBlocks[0] // just temp, only one block
+		c.state.SelectedBlock = &c.state.Code.EntryBlocks[0] // just temp, only one block\
+		if c.state.Mode == AsyncOp {
+			c.emu.SetUpInstructionGroup(0, &c.state)
+		}
+		c.state.NextPCInBlock = -1
 	}
-	combInst := c.state.SelectedBlock.CombinedInsts[c.state.PCInBlock]
+	//print("Op2Exec: ", c.state.CurrReservationState.OpToExec, "\n")
+
+	iGroup := c.state.SelectedBlock.InstructionGroups[c.state.PCInBlock]
 
 	//fmt.Printf("%10f, %s, inst: %v inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), combInst, len(combInst.Insts))
 
@@ -181,20 +187,20 @@ func (c *Core) runProgram() bool {
 		inst = c.state.Code[c.state.PC]
 	}
 	*/
-	prevPC := c.state.PCInBlock
 	//fmt.Printf("start run inst \n")
-	c.emu.RunCombinedInst(combInst, &c.state)
-	nextPC := c.state.PCInBlock
+	makeProgress := c.emu.RunInstructionGroup(iGroup, &c.state, float64(c.Engine.CurrentTime()*1e9))
 	//fmt.Printf("end run inst, current PC = %d\n", nextPC)
-	if prevPC == nextPC {
-		return false
-	}
-	Trace("Inst",
-		"Time", float64(c.Engine.CurrentTime()*1e9),
-		"X", c.state.TileX,
-		"Y", c.state.TileY,
-		"CombinedInst", combInst.String(),
-	)
+
+	/*
+		Trace("Inst",
+			"Time", float64(c.Engine.CurrentTime()*1e9),
+			"X", c.state.TileX,
+			"Y", c.state.TileY,
+			"InstructionGroup", iGroup.String(),
+		)
+	*/
+
+	return makeProgress
 	//debug reg value
 	//fmt.Printf("Core (%d, %d) Register values:\n", c.state.TileX, c.state.TileY)
 	// for i, val := range c.state.Registers {
@@ -203,71 +209,9 @@ func (c *Core) runProgram() bool {
 	// 	}
 	// }
 
-	return true
 }
 
-// Distributor for always executing part, these parts are not controlled by cycles.
-// func (c *Core) AlwaysPart() bool {
-// 	madeProgress := true //If madeprogress, tick, otherwise, wait
-// 	if int(c.state.PC) >= len(c.state.Code) {
-// 		return false
-// 	}
-
-// 	inst := c.state.Code[c.state.PC]
-// 	for inst[len(inst)-1] == ':' {
-// 		c.state.PC++
-// 		inst = c.state.Code[c.state.PC]
-// 	}
-
-// 	for strings.HasPrefix(inst, "@") {
-// 		prevPC := c.state.PC
-// 		parts := strings.Split(inst, ",")
-// 		instName := parts[0]
-// 		instName = strings.TrimLeft(instName, "@")
-
-// 		switch instName {
-// 		case "ROUTER_FORWARD":
-// 			madeProgress = c.Router(parts[1], parts[2], parts[3]) || madeProgress
-// 		case "WAIT_AND":
-// 			c.WaitAnd(parts[1], parts[2], parts[3]) //Pending modification
-// 		default:
-// 			panic("Invalid Instruction")
-// 		}
-
-// 		c.state.PC++
-// 		nextPC := c.state.PC
-// 		if prevPC == nextPC {
-// 			return false
-// 		}
-
-// 		fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), inst)
-// 		if int(c.state.PC) >= len(c.state.Code) {
-// 			return false
-// 		}
-
-// 		inst = c.state.Code[c.state.PC]
-// 	}
-
-// 	return madeProgress
-// }
-
-// If data from two sources is not ready, wait to ready.
 /*
-func (c *Core) WaitAnd(src1 string, src2 string, color string) {
-	src1Index := c.getIndex(src1)
-	src2Index := c.getIndex(src2)
-	colorIndex := c.emu.getColorIndex(color)
-
-	if !c.state.RecvBufHeadReady[colorIndex][src1Index] || !c.state.RecvBufHeadReady[colorIndex][src2Index] {
-		//c.state.PC = uint32(len(c.state.Code))
-		fmt.Printf("%10f, %s, Data from %s and %s is not both available\n", c.Engine.CurrentTime()*1e9, c.Name(), src1, src2)
-		//return false
-	}
-	fmt.Printf("%10f, %s, Wait data from %s and %s\n", c.Engine.CurrentTime()*1e9, c.Name(), src1, src2)
-	c.state.PCInBlock = -1
-	//return true
-}*/
-
 // Wait for data is ready and send.
 func (c *Core) Router(dst string, src string, color string) bool {
 
@@ -299,7 +243,7 @@ func (c *Core) Router(dst string, src string, color string) bool {
 // If the source data is not available, do nothing.
 func (c *Core) ConditionSend(dst string, src string, resister int, srcColor int, dstColor int) {
 
-}
+}*/
 
 func (c *Core) RouterSrcMustBeDirection(src string) {
 	arr := []string{"NORTH", "SOUTH", "WEST", "EAST", "SOUTHWEST", "SOUTHEAST", "NORTHWEST", "NORTHEAST", "ROUTER"}

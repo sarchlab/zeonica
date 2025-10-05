@@ -9,15 +9,16 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "ADD"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-                - operand: "1"
-                  color: "R"
-              dst_operands:
-                - operand: "East"
-                  color: "R"
+            - operations:
+                - opcode: "ADD"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                    - operand: "1"
+                      color: "R"
+                  dst_operands:
+                    - operand: "East"
+                      color: "R"
 
     - row: 0
       column: 1
@@ -26,15 +27,16 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "ADD"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-                - operand: "1"
-                  color: "R"
-              dst_operands:
-                - operand: "East"
-                  color: "R"
+            - operations:
+                - opcode: "ADD"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                    - operand: "1"
+                      color: "R"
+                  dst_operands:
+                    - operand: "East"
+                      color: "R"
 
     - row: 1
       column: 0
@@ -43,15 +45,16 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "ADD"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-                - operand: "1"
-                  color: "R"
-              dst_operands:
-                - operand: "East"
-                  color: "R"
+            - operations:
+                - opcode: "ADD"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                    - operand: "1"
+                      color: "R"
+                  dst_operands:
+                    - operand: "East"
+                      color: "R"
 
     - row: 1
       column: 1
@@ -60,12 +63,13 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "ADD"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-                - operand: "1"
-                  color: "R"
-              dst_operands:
-                - operand: "East"
-                  color: "R" 
+            - operations:
+                - opcode: "ADD"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                    - operand: "1"
+                      color: "R"
+                  dst_operands:
+                    - operand: "East"
+                      color: "R" 

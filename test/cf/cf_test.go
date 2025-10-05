@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 	"testing"
 	"unsafe"
 
@@ -99,6 +101,13 @@ func TestCmpExOperation(t *testing.T) {
 }
 
 func TestGpredOperation(t *testing.T) {
+
+	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: core.LevelTrace,
+	})
+
+	slog.SetDefault(slog.New(handler))
+
 	// 设置测试参数
 	width := 2
 	height := 2

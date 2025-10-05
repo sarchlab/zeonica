@@ -115,7 +115,7 @@ class EnhancedLogParser:
                 elif log_entry.get('msg') == 'Inst':
                     x = log_entry.get('X', 0)
                     y = log_entry.get('Y', 0)
-                    instruction = log_entry.get('CombinedInst', '')
+                    instruction = log_entry.get('OpCode', '')
                     
                     if instruction:
                         # Store instruction at the specified position and timestamp

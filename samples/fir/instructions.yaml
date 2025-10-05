@@ -9,33 +9,34 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "$31"
-                  color: "RED"
-            - opcode: "ADD"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-                - operand: "EAST"
-                  color: "RED"
-              dst_operands:
-                - operand: "$0"
-                  color: "RED"
-            - opcode: "ST"
-              src_operands:
-                - operand: "$0"
-                  color: "RED"
-              dst_operands:
-                - operand: "$31"
-                  color: "RED"
-            - opcode: "JMP"
-              src_operands:
-                - operand: "#1"
-                  color: "RED"
+            - operations:
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$31"
+                      color: "RED"
+                - opcode: "ADD"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                    - operand: "EAST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$0"
+                      color: "RED"
+                - opcode: "ST"
+                  src_operands:
+                    - operand: "$0"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$31"
+                      color: "RED"
+                - opcode: "JMP"
+                  src_operands:
+                    - operand: "#1"
+                      color: "RED"
 
     - row: 0
       column: 1
@@ -44,49 +45,50 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "SOUTH"
-                  color: "RED"
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "$31"
-                  color: "RED"
-            - opcode: "ADD"
-              src_operands:
-                - operand: "$31"
-                  color: "RED"
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "$0"
-                  color: "RED"
-            - opcode: "LD"
-              src_operands:
-                - operand: "$0"
-                  color: "RED"
-              dst_operands:
-                - operand: "$1"
-                  color: "RED"
-            - opcode: "MUL"
-              src_operands:
-                - operand: "$1"
-                  color: "RED"
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "SOUTH"
-                  color: "RED"
-            - opcode: "JMP"
-              src_operands:
-                - operand: "#2"
-                  color: "RED"
+            - operations:
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "SOUTH"
+                      color: "RED"
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$31"
+                      color: "RED"
+                - opcode: "ADD"
+                  src_operands:
+                    - operand: "$31"
+                      color: "RED"
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$0"
+                      color: "RED"
+                - opcode: "LD"
+                  src_operands:
+                    - operand: "$0"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$1"
+                      color: "RED"
+                - opcode: "MUL"
+                  src_operands:
+                    - operand: "$1"
+                      color: "RED"
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "SOUTH"
+                      color: "RED"
+                - opcode: "JMP"
+                  src_operands:
+                    - operand: "#2"
+                      color: "RED"
 
     - row: 0
       column: 2
@@ -95,67 +97,68 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "SOUTH"
-                  color: "RED"
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "SOUTH"
-                  color: "RED"
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "$31"
-                  color: "RED"
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "$30"
-                  color: "RED"
-            - opcode: "PHI"
-              src_operands:
-                - operand: "$30"
-                  color: "RED"
-                - operand: "EAST"
-                  color: "RED"
-              dst_operands:
-                - operand: "$30"
-                  color: "RED"
-                - operand: "EAST"
-                  color: "RED"
-                - operand: "SOUTH"
-                  color: "RED"
-            - opcode: "ADD"
-              src_operands:
-                - operand: "$31"
-                  color: "RED"
-                - operand: "$30"
-                  color: "RED"
-              dst_operands:
-                - operand: "$0"
-                  color: "RED"
-            - opcode: "LD"
-              src_operands:
-                - operand: "$0"
-                  color: "RED"
-              dst_operands:
-                - operand: "SOUTH"
-                  color: "RED"
-            - opcode: "JMP"
-              src_operands:
-                - operand: "#4"
-                  color: "RED"
+            - operations:
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "SOUTH"
+                      color: "RED"
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "SOUTH"
+                      color: "RED"
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$31"
+                      color: "RED"
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$30"
+                      color: "RED"
+                - opcode: "PHI"
+                  src_operands:
+                    - operand: "$30"
+                      color: "RED"
+                    - operand: "EAST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$30"
+                      color: "RED"
+                    - operand: "EAST"
+                      color: "RED"
+                    - operand: "SOUTH"
+                      color: "RED"
+                - opcode: "ADD"
+                  src_operands:
+                    - operand: "$31"
+                      color: "RED"
+                    - operand: "$30"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$0"
+                      color: "RED"
+                - opcode: "LD"
+                  src_operands:
+                    - operand: "$0"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "SOUTH"
+                      color: "RED"
+                - opcode: "JMP"
+                  src_operands:
+                    - operand: "#4"
+                      color: "RED"
 
     - row: 1
       column: 0
@@ -164,28 +167,29 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "$31"
-                  color: "RED"
-            - opcode: "PHI"
-              src_operands:
-                - operand: "WEST"
-                  color: "RED"
-                - operand: "$31"
-                  color: "RED"
-              dst_operands:
-                - operand: "$31"
-                  color: "RED"
-                - operand: "WEST"
-                  color: "RED"
-            - opcode: "JMP"
-              src_operands:
-                - operand: "#1"
-                  color: "RED"
+            - operations:
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$31"
+                      color: "RED"
+                - opcode: "PHI"
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                    - operand: "$31"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$31"
+                      color: "RED"
+                    - operand: "WEST"
+                      color: "RED"
+                - opcode: "JMP"
+                  src_operands:
+                    - operand: "#1"
+                      color: "RED"
 
     - row: 1
       column: 1
@@ -194,33 +198,34 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "SOUTH"
-                  color: "RED"
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "$31"
-                  color: "RED"
-            - opcode: "CMP"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-                - operand: "$31"
-                  color: "RED"
-              dst_operands:
-                - operand: "NORTH"
-                  color: "RED"
-            - opcode: "JMP"
-              src_operands:
-                - operand: "#2"
-                  color: "RED"
+            - operations:
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "SOUTH"
+                      color: "RED"
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$31"
+                      color: "RED"
+                - opcode: "CMP"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                    - operand: "$31"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                - opcode: "JMP"
+                  src_operands:
+                    - operand: "#2"
+                      color: "RED"
 
     - row: 1
       column: 2
@@ -229,43 +234,44 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "SOUTH"
-                  color: "RED"
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "SOUTH"
-                  color: "RED"
-            - opcode: "MV"
-              src_operands:
-                - operand: "NORTH"
-                  color: "RED"
-              dst_operands:
-                - operand: "$31"
-                  color: "RED"
-            - opcode: "ADD"
-              src_operands:
-                - operand: "WEST"
-                  color: "RED"
-                - operand: "$31"
-                  color: "RED"
-              dst_operands:
-                - operand: "WEST"
-                  color: "RED"
-                - operand: "SOUTH"
-                  color: "RED"
-            - opcode: "GPRED"
-              src_operands:
-                - operand: "SOUTH"
-                  color: "RED"
-            - opcode: "JMP"
-              src_operands:
-                - operand: "#3"
-                  color: "RED"
+            - operations:
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "SOUTH"
+                      color: "RED"
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "SOUTH"
+                      color: "RED"
+                - opcode: "MV"
+                  src_operands:
+                    - operand: "NORTH"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "$31"
+                      color: "RED"
+                - opcode: "ADD"
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                    - operand: "$31"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                    - operand: "SOUTH"
+                      color: "RED"
+                - opcode: "GPRED"
+                  src_operands:
+                    - operand: "SOUTH"
+                      color: "RED"
+                - opcode: "JMP"
+                  src_operands:
+                    - operand: "#3"
+                      color: "RED"

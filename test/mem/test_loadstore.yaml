@@ -9,26 +9,29 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "MOV"
-              src_operands:
-                - operand: "West"
-                  color: "R"
-              dst_operands:
-                - operand: "$0"
-                  color: "R"
-            - opcode: "STD"
-              src_operands:
-                - operand: "0"
-                  color: "R"
-                - operand: "$0"
-                  color: "R"
-            - opcode: "LDD"
-              src_operands:
-                - operand: "0"
-                  color: "R"
-              dst_operands:
-                - operand: "East"
-                  color: "R"
+            - operations:
+                - opcode: "MOV"
+                  src_operands:
+                    - operand: "West"
+                      color: "R"
+                  dst_operands:
+                    - operand: "$0"
+                      color: "R"
+            - operations:
+                - opcode: "STD"
+                  src_operands:
+                    - operand: "0"
+                      color: "R"
+                    - operand: "$0"
+                      color: "R"
+            - operations:
+                - opcode: "LDD"
+                  src_operands:
+                    - operand: "0"
+                      color: "R"
+                  dst_operands:
+                    - operand: "East"
+                      color: "R"
 
     - row: 1
       column: 0
@@ -37,19 +40,21 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "STD"
-              src_operands:
-                - operand: "0"
-                  color: "R"
-                - operand: "East"
-                  color: "R"
-            - opcode: "LDD"
-              src_operands:
-                - operand: "0"
-                  color: "R"
-              dst_operands:
-                - operand: "West"
-                  color: "R"
+            - operations:
+                - opcode: "STD"
+                  src_operands:
+                    - operand: "0"
+                      color: "R"
+                    - operand: "East"
+                      color: "R"
+            - operations:
+                - opcode: "LDD"
+                  src_operands:
+                    - operand: "0"
+                      color: "R"
+                  dst_operands:
+                    - operand: "West"
+                      color: "R"
     - row: 0
       column: 1
       core_id: "core_0_1"
@@ -57,19 +62,21 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "STD"
-              src_operands:
-                - operand: "0"
-                  color: "R"
-                - operand: "West"
-                  color: "R"
-            - opcode: "LDD"
-              src_operands:
-                - operand: "0"
-                  color: "R"
-              dst_operands:
-                - operand: "South"
-                  color: "R"
+            - operations:
+                - opcode: "STD"
+                  src_operands:
+                    - operand: "0"
+                      color: "R"
+                    - operand: "West"
+                      color: "R"
+            - operations:
+                - opcode: "LDD"
+                  src_operands:
+                    - operand: "0"
+                      color: "R"
+                  dst_operands:
+                    - operand: "South"
+                      color: "R"
 
     - row: 1
       column: 1
@@ -78,16 +85,18 @@ array_config:
         - entry_id: "entry0"
           type: "loop"
           instructions:
-            - opcode: "STD"
-              src_operands:
-                - operand: "0"
-                  color: "R"
-                - operand: "North"
-                  color: "R"
-            - opcode: "LDD"
-              src_operands:
-                - operand: "0"
-                  color: "R"
-              dst_operands:
-                - operand: "West"
-                  color: "R"
+            - operations:
+                - opcode: "STD"
+                  src_operands:
+                    - operand: "0"
+                      color: "R"
+                    - operand: "North"
+                      color: "R"
+            - operations:
+                - opcode: "LDD"
+                  src_operands:
+                    - operand: "0"
+                      color: "R"
+                  dst_operands:
+                    - operand: "West"
+                      color: "R"
