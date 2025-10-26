@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/sarchlab/akita/v4/mem/mem"
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
 )
@@ -86,7 +87,7 @@ func (c *Core) Tick() (madeProgress bool) {
 
 func (c *Core) doSend() bool {
 	madeProgress := false
-	for i := 0; i < 12; i++ {
+	for i := 0; i < 8; i++ { // only 8 directions
 		for color := 0; color < 4; color++ {
 
 			if !c.state.SendBufHeadBusy[color][i] {
@@ -118,12 +119,47 @@ func (c *Core) doSend() bool {
 		}
 	}
 
+	// handle the memory request
+
+	if c.state.SendBufHeadBusy[c.emu.getColorIndex("R")][cgra.Router] { // only one port, must be Router-red
+
+		if c.state.IsToWriteMemory {
+
+		} else {
+			msg := mem.ReadReqBuilder{}.
+				WithAddress(uint64(c.state.AddrBuf)).
+				WithSrc(c.ports[cgra.Side(cgra.Router)].local.AsRemote()).
+				WithDst(c.ports[cgra.Side(cgra.Router)].remote).
+				WithByteSize(4).
+				Build()
+
+			err := c.ports[cgra.Side(cgra.Router)].local.Send(msg)
+			if err != nil {
+				return madeProgress
+			}
+
+			Trace("Memory",
+				"Behavior", "Send",
+				slog.Float64("Time", float64(c.Engine.CurrentTime()*1e9)),
+				"Data", c.state.AddrBuf,
+				"Color", "R",
+				"Src", msg.Src,
+				"Dst", msg.Dst,
+			)
+			c.state.SendBufHeadBusy[c.emu.getColorIndex("R")][cgra.Router] = false
+		}
+	}
+
 	return madeProgress
+}
+
+func convert4BytesToUint32(data []byte) uint32 {
+	return uint32(data[0])<<24 | uint32(data[1])<<16 | uint32(data[2])<<8 | uint32(data[3])
 }
 
 func (c *Core) doRecv() bool {
 	madeProgress := false
-	for i := 0; i < 12; i++ { //direction
+	for i := 0; i < 8; i++ { //direction
 		item := c.ports[cgra.Side(i)].local.PeekIncoming()
 		if item == nil {
 			continue
@@ -161,6 +197,32 @@ func (c *Core) doRecv() bool {
 			c.ports[cgra.Side(i)].local.RetrieveIncoming()
 			madeProgress = true
 		}
+	}
+
+	item := c.ports[cgra.Side(cgra.Router)].local.PeekIncoming()
+	if item == nil {
+		return madeProgress
+	} else {
+		if c.state.RecvBufHeadReady[c.emu.getColorIndex("R")][cgra.Router] {
+			return madeProgress
+		}
+
+		msg := item.(*mem.DataReadyRsp)
+
+		c.state.RecvBufHeadReady[c.emu.getColorIndex("R")][cgra.Router] = true
+		c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router] = convert4BytesToUint32(msg.Data)
+
+		Trace("Memory",
+			"Behavior", "Recv",
+			"Time", float64(c.Engine.CurrentTime()*1e9),
+			"Data", msg.Data,
+			"Src", msg.Src,
+			"Dst", msg.Dst,
+			"Color", "R",
+		)
+
+		c.ports[cgra.Side(cgra.Router)].local.RetrieveIncoming()
+		madeProgress = true
 	}
 
 	return madeProgress

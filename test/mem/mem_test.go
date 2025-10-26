@@ -97,3 +97,98 @@ func TestLoadStoreOperation(t *testing.T) {
 		t.Fatal("❌ LoadStore tests failed!")
 	}
 }
+
+func makeBytesFromUint32(data uint32) []byte {
+	return []byte{byte(data >> 24), byte(data >> 16), byte(data >> 8), byte(data)}
+}
+
+func TestLoadWaitDRAMOperation(t *testing.T) {
+	width := 2
+	height := 2
+
+	src1 := make([]uint32, 1)
+	src1[0] = 114
+	src2 := make([]uint32, 1)
+	src2[0] = 514
+	dst1 := make([]uint32, 1)
+	dst2 := make([]uint32, 1)
+
+	engine := sim.NewSerialEngine()
+
+	driver := api.DriverBuilder{}.
+		WithEngine(engine).
+		WithFreq(1 * sim.GHz).
+		Build("Driver")
+
+	device := config.DeviceBuilder{}.
+		WithEngine(engine).
+		WithFreq(1 * sim.GHz).
+		WithWidth(width).
+		WithHeight(height).
+		WithMemoryMode("local").
+		Build("Device")
+
+	driver.RegisterDevice(device)
+
+	program := core.LoadProgramFile("./test_lw.yaml")
+	if len(program) == 0 {
+		t.Fatal("Failed to load program")
+	}
+
+	driver.FeedIn(src1, cgra.West, [2]int{0, 1}, 1, "R")
+	driver.FeedIn(src2, cgra.West, [2]int{1, 2}, 1, "R")
+	driver.Collect(dst1, cgra.East, [2]int{0, 1}, 1, "R")
+	driver.Collect(dst2, cgra.East, [2]int{1, 2}, 1, "R")
+
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			coord := fmt.Sprintf("(%d,%d)", x, y)
+			if prog, exists := program[coord]; exists {
+				driver.MapProgram(prog, [2]int{x, y})
+			}
+		}
+	}
+
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(3), 0)
+	driver.PreloadSharedMemory(0, 1, makeBytesFromUint32(1), 0)
+
+	driver.Run()
+
+	srcI1 := make([]int32, 1)
+	srcI2 := make([]int32, 1)
+	dstI1 := make([]int32, 1)
+	dstI2 := make([]int32, 1)
+
+	for i := 0; i < 1; i++ {
+		srcI1[i] = *(*int32)(unsafe.Pointer(&src1[i]))
+		srcI2[i] = *(*int32)(unsafe.Pointer(&src2[i]))
+		dstI1[i] = *(*int32)(unsafe.Pointer(&dst1[i]))
+		dstI2[i] = *(*int32)(unsafe.Pointer(&dst2[i]))
+	}
+
+	expected1 := []int32{3}
+	expected2 := []int32{1}
+
+	t.Logf("=== LoadWaitDRAM Test Results ===")
+	allPassed := true
+	if dstI1[0] != expected1[0] {
+		t.Errorf("Index 0: Input=%d, Expected=%d, Actual=%d",
+			srcI1[0], expected1[0], dstI1[0])
+		allPassed = false
+	} else {
+		t.Logf("Index 0: Input=%d, Output=%d ✓", srcI1[0], dstI1[0])
+	}
+	if dstI2[0] != expected2[0] {
+		t.Errorf("Index 0: Input=%d, Expected=%d, Actual=%d",
+			srcI2[0], expected2[0], dstI2[0])
+		allPassed = false
+	} else {
+		t.Logf("Index 0: Input=%d, Output=%d ✓", srcI2[0], dstI2[0])
+	}
+	if allPassed {
+		t.Log("✅ LoadWaitDRAM tests passed!")
+	} else {
+		t.Fatal("❌ LoadWaitDRAM tests failed!")
+	}
+
+}

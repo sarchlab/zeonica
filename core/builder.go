@@ -51,6 +51,8 @@ func (b Builder) Build(name string) *Core {
 		RecvBufHeadReady: make([][]bool, 4),
 		SendBufHead:      make([][]uint32, 4),
 		SendBufHeadBusy:  make([][]bool, 4),
+		AddrBuf:          0,
+		IsToWriteMemory:  false,
 		States:           make(map[string]interface{}),
 		Mode:             SyncOp,
 		CurrReservationState: ReservationState{

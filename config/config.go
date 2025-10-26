@@ -4,6 +4,8 @@ package config
 import (
 	"fmt"
 
+	"github.com/sarchlab/akita/v4/mem/idealmemcontroller"
+	"github.com/sarchlab/akita/v4/mem/mem"
 	"github.com/sarchlab/akita/v4/monitoring"
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/akita/v4/sim/directconnection"
@@ -18,6 +20,8 @@ type DeviceBuilder struct {
 	monitor *monitoring.Monitor
 	//portFactory   portFactory
 	width, height int
+	memoryMode    string    // simple or shared or local
+	memoryShare   [][][]int // [[ [x1, y1], [x2, y2], ...], [ [x1, y1], [x2, y2], ...], ...]
 }
 
 // type portFactory interface {
@@ -54,6 +58,18 @@ func (d DeviceBuilder) WithHeight(height int) DeviceBuilder {
 	return d
 }
 
+// WithMemoryMode sets the memory mode (simple or shared).
+func (d DeviceBuilder) WithMemoryMode(mode string) DeviceBuilder {
+	d.memoryMode = mode
+	return d
+}
+
+// WithMemoryShare sets the memory sharing configuration.
+func (d DeviceBuilder) WithMemoryShare(share [][][]int) DeviceBuilder {
+	d.memoryShare = share
+	return d
+}
+
 // Build creates a CGRA device.
 func (d DeviceBuilder) Build(name string) cgra.Device {
 	dev := &device{
@@ -65,8 +81,80 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 
 	d.createTiles(dev, name)
 	d.connectTiles(dev)
+	d.createSharedMemory(dev)
 
 	return dev
+}
+
+func (d DeviceBuilder) createSharedMemory(dev *device) {
+	if d.memoryMode == "shared" {
+		// Create shared memory controller
+
+		// Connect tiles to shared memory based on memoryShare configuration
+		for groupIndex, group := range d.memoryShare {
+			// Create a connection for this memory group
+
+			sharedMem := idealmemcontroller.MakeBuilder().
+				WithEngine(d.engine).
+				WithNewStorage(4 * mem.GB).
+				WithLatency(5).
+				Build("SharedMemory")
+
+			connName := fmt.Sprintf("MemConn_Group_%d", groupIndex)
+			conn := directconnection.MakeBuilder().
+				WithEngine(d.engine).
+				WithFreq(d.freq).
+				Build(connName)
+
+			// Connect shared memory to the connection
+			conn.PlugIn(sharedMem.GetPortByName("Top"))
+
+			// Connect each tile in this group to the shared memory
+			for _, tileCoords := range group {
+				x, y := tileCoords[0], tileCoords[1]
+				if x >= 0 && x < d.width && y >= 0 && y < d.height {
+					tile := dev.Tiles[y][x]
+					// Create a memory port for this tile
+					memPort := tile.Core.GetPortByName("Memory")
+					conn.PlugIn(memPort)
+
+					// Store the connection for later use
+
+					// Configure the core to use shared memory
+					// This would need to be implemented in the core to set UseSharedMemory = true
+					// and set the SharedMemoryPort
+				}
+			}
+		}
+	} else if d.memoryMode == "local" {
+		// create DRAM for each of the tiles
+		for y := 0; y < d.height; y++ {
+			for x := 0; x < d.width; x++ {
+				tile := dev.Tiles[y][x]
+				drams := idealmemcontroller.MakeBuilder().
+					WithEngine(d.engine).
+					WithNewStorage(4 * mem.GB).
+					WithLatency(5).
+					Build("DRAM")
+
+				conn := directconnection.MakeBuilder().
+					WithEngine(d.engine).
+					WithFreq(d.freq).
+					Build("DRAMConn")
+
+				conn.PlugIn(drams.GetPortByName("Top"))
+				conn.PlugIn(tile.Core.GetPortByName("Router")) // use router as the memory port
+
+				// set the remote port of the tile to the DRAM port
+				tile.SetRemotePort(cgra.Router, drams.GetPortByName("Top").AsRemote())
+
+				tile.SharedMemoryController = drams
+				dev.SharedMemoryControllers = append(dev.SharedMemoryControllers, drams)
+
+				fmt.Println("Init DRAM for tile", tile.Core.Name(), "at", x, y)
+			}
+		}
+	}
 }
 
 func (d DeviceBuilder) createTiles(

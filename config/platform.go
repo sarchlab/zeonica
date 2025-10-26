@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 
+	"github.com/sarchlab/akita/v4/mem/idealmemcontroller"
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
 )
@@ -18,7 +19,8 @@ type tileCore interface {
 }
 
 type tile struct {
-	Core tileCore
+	Core                   tileCore
+	SharedMemoryController *idealmemcontroller.Comp
 }
 
 // GetPort returns the of the tile by the side.
@@ -68,6 +70,14 @@ func (t tile) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
 	t.Core.WriteMemory(x, y, data, baseAddr)
 }
 
+func (t tile) WriteSharedMemory(x int, y int, data []byte, baseAddr uint32) { // x, y is useless here
+	fmt.Println("WriteSharedMemory(", x, ",", y, ") ", baseAddr, " <- ", data)
+	err := t.SharedMemoryController.Storage.Write(uint64(baseAddr), data)
+	if err != nil {
+		panic(err)
+	}
+}
+
 // SetRemotePort sets the port that the core can send data to.
 func (t tile) SetRemotePort(side cgra.Side, port sim.RemotePort) {
 	t.Core.SetRemotePort(side, port)
@@ -81,9 +91,10 @@ func (t tile) MapProgram(program interface{}, x int, y int) {
 // A Device is a CGRA device that includes a large number of tiles. Tiles can be
 // retrieved using d.Tiles[y][x].
 type device struct {
-	Name          string
-	Width, Height int
-	Tiles         [][]*tile
+	Name                    string
+	Width, Height           int
+	Tiles                   [][]*tile
+	SharedMemoryControllers []*idealmemcontroller.Comp
 }
 
 // GetSize returns the width and height of the device.

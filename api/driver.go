@@ -39,6 +39,8 @@ type Driver interface {
 	//
 	PreloadMemory(x int, y int, data uint32, baseAddr uint32)
 
+	PreloadSharedMemory(x int, y int, data []byte, baseAddr uint32)
+
 	//
 	ReadMemory(x int, y int, addr uint32) uint32
 
@@ -66,6 +68,11 @@ type PerPEKernels map[[2]int]string
 func (d *driverImpl) PreloadMemory(x int, y int, data uint32, baseAddr uint32) {
 	tile := d.device.GetTile(x, y)
 	tile.WriteMemory(x, y, data, baseAddr)
+}
+
+func (d *driverImpl) PreloadSharedMemory(x int, y int, data []byte, baseAddr uint32) {
+	tile := d.device.GetTile(x, y)
+	tile.WriteSharedMemory(x, y, data, baseAddr)
 }
 
 func (d *driverImpl) ReadMemory(x int, y int, addr uint32) uint32 {

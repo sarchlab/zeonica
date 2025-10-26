@@ -97,6 +97,8 @@ type coreState struct {
 	RecvBufHeadReady [][]bool
 	SendBufHead      [][]uint32
 	SendBufHeadBusy  [][]bool
+	AddrBuf          uint32 // buffer for the address of the memory
+	IsToWriteMemory  bool
 
 	routingRules []*routingRule
 	triggers     []*Trigger
@@ -334,6 +336,8 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"LDD": i.runLoadDirect,
 		"STD": i.runStoreDirect,
 
+		"LD":      i.runLoadDRAM,
+		"LDW":     i.runLoadWaitDRAM,
 		"TRIGGER": i.runTrigger,
 	}
 
@@ -582,6 +586,39 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 	// elect no next PC
 }
 
+func (i instEmulator) runLoadDRAM(inst Operation, state *coreState) {
+	src1 := inst.SrcOperands.Operands[0]
+	addr := i.readOperand(src1, state)
+
+	// only send the read request
+	pseudo_operand := Operand{
+		Impl:  "Router",
+		Color: "R",
+	}
+	slog.Warn("DRAM",
+		"Behavior", "LoadDRAM",
+		"Addr", addr,
+		"X", state.TileX,
+		"Y", state.TileY,
+	)
+	i.writeOperand(pseudo_operand, addr, state)
+	state.AddrBuf = addr
+	state.IsToWriteMemory = false // not for write memory
+}
+
+func (i instEmulator) runLoadWaitDRAM(inst Operation, state *coreState) {
+	pseudo_operand := Operand{
+		Impl:  "Router",
+		Color: "R",
+	}
+
+	value := i.readOperand(pseudo_operand, state)
+
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, value, state)
+	}
+}
+
 func (i instEmulator) runStoreDirect(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
 	addr := i.readOperand(src1, state)
@@ -770,7 +807,7 @@ func (i instEmulator) runDiv(inst Operation, state *coreState) {
 
 	i.writeOperand(dst, dstVal, state)
 
-	fmt.Printf("DIV Instruction, Data are %d and %d, Res is %d\n", src1Signed, src2Signed, dstValSigned)
+	// fmt.Printf("DIV Instruction, Data are %d and %d, Res is %d\n", src1Signed, src2Signed, dstValSigned)
 	// elect no next PC
 }
 
