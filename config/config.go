@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/sarchlab/akita/v4/mem/idealmemcontroller"
 	"github.com/sarchlab/akita/v4/mem/mem"
@@ -20,8 +21,8 @@ type DeviceBuilder struct {
 	monitor *monitoring.Monitor
 	//portFactory   portFactory
 	width, height int
-	memoryMode    string    // simple or shared or local
-	memoryShare   [][][]int // [[ [x1, y1], [x2, y2], ...], [ [x1, y1], [x2, y2], ...], ...]
+	memoryMode    string         // simple or shared or local
+	memoryShare   map[[2]int]int //map[[x, y]]GroupID
 }
 
 // type portFactory interface {
@@ -65,7 +66,7 @@ func (d DeviceBuilder) WithMemoryMode(mode string) DeviceBuilder {
 }
 
 // WithMemoryShare sets the memory sharing configuration.
-func (d DeviceBuilder) WithMemoryShare(share [][][]int) DeviceBuilder {
+func (d DeviceBuilder) WithMemoryShare(share map[[2]int]int) DeviceBuilder {
 	d.memoryShare = share
 	return d
 }
@@ -90,39 +91,47 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 	if d.memoryMode == "shared" {
 		// Create shared memory controller
 
-		// Connect tiles to shared memory based on memoryShare configuration
-		for groupIndex, group := range d.memoryShare {
-			// Create a connection for this memory group
+		controllers := make(map[int]*idealmemcontroller.Comp)
+		connections := make(map[int]*directconnection.Comp)
 
-			sharedMem := idealmemcontroller.MakeBuilder().
-				WithEngine(d.engine).
-				WithNewStorage(4 * mem.GB).
-				WithLatency(5).
-				Build("SharedMemory")
+		for x := 0; x < d.width; x++ {
+			for y := 0; y < d.height; y++ {
+				tile := dev.Tiles[y][x]
+				// if has mapping
+				if _, ok := d.memoryShare[[2]int{x, y}]; !ok {
+					panic("No mapping for tile " + strconv.Itoa(x) + "," + strconv.Itoa(y))
+				}
+				groupID := d.memoryShare[[2]int{x, y}]
+				if _, ok := controllers[groupID]; !ok {
+					// has not been created yet, create it
+					controller := idealmemcontroller.MakeBuilder().
+						WithEngine(d.engine).
+						WithNewStorage(4 * mem.GB).
+						WithLatency(5).
+						Build("SharedMemory")
+					controllers[groupID] = controller
 
-			connName := fmt.Sprintf("MemConn_Group_%d", groupIndex)
-			conn := directconnection.MakeBuilder().
-				WithEngine(d.engine).
-				WithFreq(d.freq).
-				Build(connName)
+					name := fmt.Sprintf("SharedMemory%d%d", x, y)
 
-			// Connect shared memory to the connection
-			conn.PlugIn(sharedMem.GetPortByName("Top"))
+					conn := directconnection.MakeBuilder().
+						WithEngine(d.engine).
+						WithFreq(d.freq).
+						Build(name)
+					conn.PlugIn(controller.GetPortByName("Top"))
+					conn.PlugIn(tile.Core.GetPortByName("Router"))
+					connections[groupID] = conn
+					tile.SetRemotePort(cgra.Router, controller.GetPortByName("Top").AsRemote())
+					tile.SharedMemoryController = controller
+					dev.SharedMemoryControllers = append(dev.SharedMemoryControllers, controller)
 
-			// Connect each tile in this group to the shared memory
-			for _, tileCoords := range group {
-				x, y := tileCoords[0], tileCoords[1]
-				if x >= 0 && x < d.width && y >= 0 && y < d.height {
-					tile := dev.Tiles[y][x]
-					// Create a memory port for this tile
-					memPort := tile.Core.GetPortByName("Memory")
-					conn.PlugIn(memPort)
-
-					// Store the connection for later use
-
-					// Configure the core to use shared memory
-					// This would need to be implemented in the core to set UseSharedMemory = true
-					// and set the SharedMemoryPort
+					fmt.Println("Connect Tile (", x, ",", y, ") to SharedMemory Controller (", groupID, ") (new-created)")
+				} else {
+					// plug in the controller to the tile
+					fmt.Println("Connect Tile (", x, ",", y, ") to SharedMemory Controller (", groupID, ") (already-created)")
+					connections[groupID].PlugIn(tile.Core.GetPortByName("Router"))
+					tile.SetRemotePort(cgra.Router, controllers[groupID].GetPortByName("Top").AsRemote())
+					tile.SharedMemoryController = controllers[groupID]
+					dev.SharedMemoryControllers = append(dev.SharedMemoryControllers, controllers[groupID])
 				}
 			}
 		}

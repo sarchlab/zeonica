@@ -192,3 +192,161 @@ func TestLoadWaitDRAMOperation(t *testing.T) {
 	}
 
 }
+
+func TestGoAround(t *testing.T) {
+	width := 2
+	height := 2
+
+	src := make([]uint32, 5)
+	src = []uint32{114, 514, 19, 19, 810}
+	dst := make([]uint32, 5)
+	srcI := make([]int32, 5)
+	dstI := make([]int32, 5)
+
+	engine := sim.NewSerialEngine()
+
+	driver := api.DriverBuilder{}.
+		WithEngine(engine).
+		WithFreq(1 * sim.GHz).
+		Build("Driver")
+
+	device := config.DeviceBuilder{}.
+		WithEngine(engine).
+		WithFreq(1 * sim.GHz).
+		WithWidth(width).
+		WithHeight(height).
+		WithMemoryMode("local").
+		Build("Device")
+
+	driver.RegisterDevice(device)
+
+	program := core.LoadProgramFile("./test_lwsw-go-a-round.yaml")
+	if len(program) == 0 {
+		t.Fatal("Failed to load program")
+	}
+
+	driver.FeedIn(src, cgra.West, [2]int{0, 1}, 1, "R")
+	driver.Collect(dst, cgra.West, [2]int{1, 2}, 1, "R")
+
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			coord := fmt.Sprintf("(%d,%d)", x, y)
+			if prog, exists := program[coord]; exists {
+				driver.MapProgram(prog, [2]int{x, y})
+			}
+		}
+	}
+
+	driver.Run()
+
+	for i := 0; i < 5; i++ {
+		srcI[i] = *(*int32)(unsafe.Pointer(&src[i]))
+		dstI[i] = *(*int32)(unsafe.Pointer(&dst[i]))
+	}
+
+	expected := []int32{114, 514, 19, 19, 810}
+
+	t.Logf("=== GoAround Test Results ===")
+	allPassed := true
+	for i := 0; i < 5; i++ {
+		if dstI[i] != expected[i] {
+			t.Errorf("Index %d: Input=%d, Expected=%d, Actual=%d",
+				i, srcI[i], expected[i], dstI[i])
+			allPassed = false
+		} else {
+			t.Logf("Index %d: Input=%d, Output=%d ✓", i, srcI[i], dstI[i])
+		}
+	}
+	if allPassed {
+		t.Log("✅ GoAround tests passed!")
+	} else {
+		t.Fatal("❌ GoAround tests failed!")
+	}
+
+}
+
+func TestSharedMemory(t *testing.T) {
+	width := 2
+	height := 2
+
+	src := make([]uint32, 5)
+	src = []uint32{114, 514, 19, 19, 810}
+	dst1 := make([]uint32, 5)
+	dst2 := make([]uint32, 5)
+	dst3 := make([]uint32, 5)
+	srcI := make([]int32, 5)
+	dstI1 := make([]int32, 5)
+	dstI2 := make([]int32, 5)
+	dstI3 := make([]int32, 5)
+
+	engine := sim.NewSerialEngine()
+
+	driver := api.DriverBuilder{}.
+		WithEngine(engine).
+		WithFreq(1 * sim.GHz).
+		Build("Driver")
+
+	device := config.DeviceBuilder{}.
+		WithEngine(engine).
+		WithFreq(1 * sim.GHz).
+		WithWidth(width).
+		WithHeight(height).
+		WithMemoryMode("shared").
+		WithMemoryShare(map[[2]int]int{
+			{0, 0}: 0,
+			{0, 1}: 0,
+			{1, 0}: 0,
+			{1, 1}: 0,
+		}).
+		Build("Device")
+
+	driver.RegisterDevice(device)
+
+	program := core.LoadProgramFile("./test_all-shared-mem.yaml")
+	if len(program) == 0 {
+		t.Fatal("Failed to load program")
+	}
+
+	driver.FeedIn(src, cgra.West, [2]int{0, 1}, 1, "R")
+	driver.Collect(dst1, cgra.West, [2]int{1, 2}, 1, "R")
+	driver.Collect(dst2, cgra.East, [2]int{0, 1}, 1, "R")
+	driver.Collect(dst3, cgra.East, [2]int{1, 2}, 1, "R")
+
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			coord := fmt.Sprintf("(%d,%d)", x, y)
+			if prog, exists := program[coord]; exists {
+				driver.MapProgram(prog, [2]int{x, y})
+			}
+		}
+	}
+
+	driver.Run()
+
+	for i := 0; i < 5; i++ {
+		srcI[i] = *(*int32)(unsafe.Pointer(&src[i]))
+		dstI1[i] = *(*int32)(unsafe.Pointer(&dst1[i]))
+		dstI2[i] = *(*int32)(unsafe.Pointer(&dst2[i]))
+		dstI3[i] = *(*int32)(unsafe.Pointer(&dst3[i]))
+	}
+
+	expected := []int32{114, 514, 19, 19, 810}
+
+	t.Logf("=== SharedMemory Test Results ===")
+	allPassed := true
+	for i := 0; i < 5; i++ {
+		if dstI1[i] != expected[i] || dstI2[i] != expected[i] || dstI3[i] != expected[i] {
+			t.Errorf("Index %d: Input=%d, Expected=%d, Actual1=%d, Actual2=%d, Actual3=%d",
+				i, srcI[i], expected[i], dstI1[i], dstI2[i], dstI3[i])
+			allPassed = false
+		} else {
+			t.Logf("Index %d: Input=%d, Output1=%d, Output2=%d, Output3=%d ✓", i, srcI[i], dstI1[i], dstI2[i], dstI3[i])
+		}
+	}
+	if allPassed {
+		t.Log("✅ SharedMemory tests passed!")
+	} else {
+		t.Fatal("❌ SharedMemory tests failed!")
+	}
+
+}

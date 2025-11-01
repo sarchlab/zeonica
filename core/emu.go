@@ -336,8 +336,12 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"LDD": i.runLoadDirect,
 		"STD": i.runStoreDirect,
 
-		"LD":      i.runLoadDRAM,
-		"LDW":     i.runLoadWaitDRAM,
+		"LD":  i.runLoadDRAM,
+		"LDW": i.runLoadWaitDRAM,
+
+		"ST":  i.runStoreDRAM,
+		"STW": i.runStoreWaitDRAM,
+
 		"TRIGGER": i.runTrigger,
 	}
 
@@ -589,30 +593,29 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 func (i instEmulator) runLoadDRAM(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
 	addr := i.readOperand(src1, state)
-
-	// only send the read request
-	pseudo_operand := Operand{
-		Impl:  "Router",
-		Color: "R",
+	dst := inst.DstOperands.Operands[0]
+	if dst.Impl != "Router" {
+		panic("the destination of a LOAD_DRAM instruction must be Router")
 	}
+
 	slog.Warn("DRAM",
 		"Behavior", "LoadDRAM",
 		"Addr", addr,
 		"X", state.TileX,
 		"Y", state.TileY,
 	)
-	i.writeOperand(pseudo_operand, addr, state)
+	i.writeOperand(dst, addr, state)
 	state.AddrBuf = addr
 	state.IsToWriteMemory = false // not for write memory
 }
 
 func (i instEmulator) runLoadWaitDRAM(inst Operation, state *coreState) {
-	pseudo_operand := Operand{
-		Impl:  "Router",
-		Color: "R",
-	}
+	src := inst.SrcOperands.Operands[0]
 
-	value := i.readOperand(pseudo_operand, state)
+	if src.Impl != "Router" {
+		panic("the source of a LOAD_WAIT_DRAM instruction must be Router")
+	}
+	value := i.readOperand(src, state)
 
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, value, state)
@@ -636,6 +639,36 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) {
 	)
 	state.Memory[addr] = value
 	// elect no next PC
+}
+
+func (i instEmulator) runStoreDRAM(inst Operation, state *coreState) {
+	src1 := inst.SrcOperands.Operands[0]
+	addr := i.readOperand(src1, state)
+	src2 := inst.SrcOperands.Operands[1]
+	value := i.readOperand(src2, state)
+	dst := inst.DstOperands.Operands[0]
+	if dst.Impl != "Router" {
+		panic("the destination of a STORE_DRAM instruction must be Router")
+	}
+
+	slog.Warn("DRAM",
+		"Behavior", "StoreDRAM",
+		"Addr", addr,
+		"Value", value,
+		"X", state.TileX,
+		"Y", state.TileY,
+	)
+	i.writeOperand(dst, value, state) // store the value to the data channel
+	state.AddrBuf = addr
+	state.IsToWriteMemory = true // for write memory
+}
+
+func (i instEmulator) runStoreWaitDRAM(inst Operation, state *coreState) {
+	src := inst.SrcOperands.Operands[0]
+	if src.Impl != "Router" {
+		panic("the source of a STORE_WAIT_DRAM instruction must be Router")
+	}
+	i.readOperand(src, state) // do nothing, only get the write done
 }
 
 func (i instEmulator) runTrigger(inst Operation, state *coreState) {

@@ -85,6 +85,10 @@ func (c *Core) Tick() (madeProgress bool) {
 	return madeProgress
 }
 
+func makeBytesFromUint32(data uint32) []byte {
+	return []byte{byte(data >> 24), byte(data >> 16), byte(data >> 8), byte(data)}
+}
+
 func (c *Core) doSend() bool {
 	madeProgress := false
 	for i := 0; i < 8; i++ { // only 8 directions
@@ -124,7 +128,27 @@ func (c *Core) doSend() bool {
 	if c.state.SendBufHeadBusy[c.emu.getColorIndex("R")][cgra.Router] { // only one port, must be Router-red
 
 		if c.state.IsToWriteMemory {
+			msg := mem.WriteReqBuilder{}.
+				WithAddress(uint64(c.state.AddrBuf)).
+				WithData(makeBytesFromUint32(c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router])).
+				WithSrc(c.ports[cgra.Side(cgra.Router)].local.AsRemote()).
+				WithDst(c.ports[cgra.Side(cgra.Router)].remote).
+				Build()
 
+			err := c.ports[cgra.Side(cgra.Router)].local.Send(msg)
+			if err != nil {
+				return madeProgress
+			}
+
+			Trace("Memory",
+				"Behavior", "Send",
+				slog.Float64("Time", float64(c.Engine.CurrentTime()*1e9)),
+				"Data", c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router],
+				"Color", "R",
+				"Src", msg.Src,
+				"Dst", msg.Dst,
+			)
+			c.state.SendBufHeadBusy[c.emu.getColorIndex("R")][cgra.Router] = false
 		} else {
 			msg := mem.ReadReqBuilder{}.
 				WithAddress(uint64(c.state.AddrBuf)).
@@ -207,22 +231,37 @@ func (c *Core) doRecv() bool {
 			return madeProgress
 		}
 
-		msg := item.(*mem.DataReadyRsp)
+		// if msg is DataReadyRsp, then the data is ready
+		if msg, ok := item.(*mem.DataReadyRsp); ok {
+			c.state.RecvBufHeadReady[c.emu.getColorIndex("R")][cgra.Router] = true
+			c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router] = convert4BytesToUint32(msg.Data)
 
-		c.state.RecvBufHeadReady[c.emu.getColorIndex("R")][cgra.Router] = true
-		c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router] = convert4BytesToUint32(msg.Data)
+			Trace("Memory",
+				"Behavior", "Recv",
+				"Time", float64(c.Engine.CurrentTime()*1e9),
+				"Data", msg.Data,
+				"Src", msg.Src,
+				"Dst", msg.Dst,
+				"Color", "R",
+			)
 
-		Trace("Memory",
-			"Behavior", "Recv",
-			"Time", float64(c.Engine.CurrentTime()*1e9),
-			"Data", msg.Data,
-			"Src", msg.Src,
-			"Dst", msg.Dst,
-			"Color", "R",
-		)
+			c.ports[cgra.Side(cgra.Router)].local.RetrieveIncoming()
+			madeProgress = true
+		} else if msg, ok := item.(*mem.WriteDoneRsp); ok {
+			c.state.RecvBufHeadReady[c.emu.getColorIndex("R")][cgra.Router] = true
+			c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router] = 0
 
-		c.ports[cgra.Side(cgra.Router)].local.RetrieveIncoming()
-		madeProgress = true
+			Trace("Memory",
+				"Behavior", "Recv",
+				"Time", float64(c.Engine.CurrentTime()*1e9),
+				"Src", msg.Src,
+				"Dst", msg.Dst,
+				"Color", "R",
+			)
+
+			c.ports[cgra.Side(cgra.Router)].local.RetrieveIncoming()
+			madeProgress = true
+		}
 	}
 
 	return madeProgress

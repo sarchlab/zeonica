@@ -36,8 +36,8 @@ var _ = Describe("InstEmulator", func() {
 		}
 	})
 
-	var mul_const_inst = CombinedInst{
-		Insts: []Inst{
+	var mul_const_inst = InstructionGroup{
+		Operations: []Operation{
 			{
 				OpCode: "MUL",
 				SrcOperands: OperandList{
@@ -59,7 +59,7 @@ var _ = Describe("InstEmulator", func() {
 		Describe("MUL_CONST", func() {
 			It("should multiply register by immediate", func() {
 				s.Registers[0] = 5
-				ie.RunCombinedInst(mul_const_inst, &s)
+				ie.RunInstructionGroup(mul_const_inst, &s, 0)
 				Expect(s.Registers[1]).To(Equal(uint32(15)))
 				Expect(s.PCInBlock).To(Equal(int32(0)))
 				// in the test, there is no SelectedBlock, so emu will not increase the PCInBlock
