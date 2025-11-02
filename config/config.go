@@ -61,6 +61,9 @@ func (d DeviceBuilder) WithHeight(height int) DeviceBuilder {
 
 // WithMemoryMode sets the memory mode (simple or shared).
 func (d DeviceBuilder) WithMemoryMode(mode string) DeviceBuilder {
+	if mode != "simple" && mode != "shared" && mode != "local" {
+		panic("Invalid memory mode: " + mode)
+	}
 	d.memoryMode = mode
 	return d
 }
