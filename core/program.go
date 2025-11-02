@@ -193,6 +193,10 @@ func LoadProgramFile(programFilePath string) map[string]Program {
 	return programMap
 }
 
+func LoadProgramFileFromASM(programFilePath string) map[string]Program {
+	return nil
+}
+
 func PrintProgram(program Program) {
 	for _, entryBlock := range program.EntryBlocks {
 		fmt.Println(entryBlock.Label)
