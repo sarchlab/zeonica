@@ -1,0 +1,3 @@
+[submodule "test/Zeonica_Testbench"]
+	path = test/Zeonica_Testbench
+	url = git@github.com:sarchlab/Zeonica_Testbench.git
