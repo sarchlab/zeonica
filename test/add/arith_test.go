@@ -53,7 +53,7 @@ func TestAddOperationWithRandomData(t *testing.T) {
 	driver.RegisterDevice(device)
 
 	// 加载程序
-	program := core.LoadProgramFile("./test_add.yaml")
+	program := core.LoadProgramFileFromYAML("./test_add.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
@@ -145,7 +145,7 @@ func TestSubOperationWithRandomData(t *testing.T) {
 	driver.RegisterDevice(device)
 
 	// 加载程序
-	program := core.LoadProgramFile("./test_sub.yaml")
+	program := core.LoadProgramFileFromYAML("./test_sub.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
@@ -237,7 +237,7 @@ func TestMulOperationWithRandomData(t *testing.T) {
 	driver.RegisterDevice(device)
 
 	// 加载程序
-	program := core.LoadProgramFile("./test_mul.yaml")
+	program := core.LoadProgramFileFromYAML("./test_mul.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
@@ -333,7 +333,7 @@ func TestDivOperationWithRandomData(t *testing.T) {
 	driver.RegisterDevice(device)
 
 	// 加载程序
-	program := core.LoadProgramFile("./test_div.yaml")
+	program := core.LoadProgramFileFromYAML("./test_div.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}

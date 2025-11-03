@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestLoadProgramFile(t *testing.T) {
+func TestLoadProgramFileFromYAML(t *testing.T) {
 	// Check if file exists
 	filePath := "../samples/fir/instructions.yaml"
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -27,7 +27,7 @@ func TestLoadProgramFile(t *testing.T) {
 	}
 
 	// Load the program file - adjust path from core/ directory
-	programMap := LoadProgramFile(filePath)
+	programMap := LoadProgramFileFromYAML(filePath)
 
 	// Print the loaded programs
 	fmt.Println("=== Loaded Programs ===")

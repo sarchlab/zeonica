@@ -27,8 +27,8 @@ func Fir() {
 		Build("Driver")
 
 	// 创建设备
-	device := config.DeviceBuilder{}.
-		WithEngine(engine).
+	device := config.DeviceBuilder{}
+	WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		WithWidth(width).
 		WithHeight(height).
@@ -37,7 +37,7 @@ func Fir() {
 	driver.RegisterDevice(device)
 
 	// 加载程序
-	program := core.LoadProgramFile("./fir.yaml")
+	program := core.LoadProgramFileFromYAML("./fir.yaml")
 	if len(program) == 0 {
 		panic("Failed to load program")
 	}

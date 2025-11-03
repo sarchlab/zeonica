@@ -64,7 +64,7 @@ func test_through(driver api.Driver, program map[string]core.Program) {
 func main() {
 
 	// Load the program - use path relative to workspace root
-	program := core.LoadProgramFile("./demo_instructions.yaml")
+	program := core.LoadProgramFileFromYAML("./demo_instructions.yaml")
 	fmt.Println(program)
 
 	engine := sim.NewSerialEngine()

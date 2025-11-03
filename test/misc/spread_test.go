@@ -48,7 +48,7 @@ func TestSpreadOperation(t *testing.T) {
 	driver.RegisterDevice(device)
 
 	// 加载程序
-	program := core.LoadProgramFile("./test_spread.yaml")
+	program := core.LoadProgramFileFromYAML("./test_spread.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}

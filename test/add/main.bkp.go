@@ -72,7 +72,7 @@ func main() {
 	fmt.Printf("Array size: %dx%d\n", width, height)
 
 	// Load the program - use path relative to workspace root
-	program := core.LoadProgramFile("./test_add.yaml")
+	program := core.LoadProgramFileFromYAML("./test_add.yaml")
 	fmt.Println("Loaded programs for cores:", len(program))
 
 	// 打印每个core的程序信息

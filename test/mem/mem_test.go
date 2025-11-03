@@ -45,7 +45,7 @@ func TestLoadStoreOperation(t *testing.T) {
 	driver.RegisterDevice(device)
 
 	// 加载程序
-	program := core.LoadProgramFile("./test_loadstore.yaml")
+	program := core.LoadProgramFileFromYAML("./test_loadstore.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
@@ -130,7 +130,7 @@ func TestLoadWaitDRAMOperation(t *testing.T) {
 
 	driver.RegisterDevice(device)
 
-	program := core.LoadProgramFile("./test_lw.yaml")
+	program := core.LoadProgramFileFromYAML("./test_lw.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
@@ -220,7 +220,7 @@ func TestGoAround(t *testing.T) {
 
 	driver.RegisterDevice(device)
 
-	program := core.LoadProgramFile("./test_lwsw-go-a-round.yaml")
+	program := core.LoadProgramFileFromYAML("./test_lwsw-go-a-round.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
@@ -302,7 +302,7 @@ func TestSharedMemory(t *testing.T) {
 
 	driver.RegisterDevice(device)
 
-	program := core.LoadProgramFile("./test_all-shared-mem.yaml")
+	program := core.LoadProgramFileFromYAML("./test_all-shared-mem.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}

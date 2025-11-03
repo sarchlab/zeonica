@@ -47,7 +47,7 @@ func TestCmpExOperation(t *testing.T) {
 	driver.RegisterDevice(device)
 
 	// 加载程序
-	program := core.LoadProgramFile("./test_cmpex.yaml")
+	program := core.LoadProgramFileFromYAML("./test_cmpex.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
@@ -154,7 +154,7 @@ func TestGpredOperation(t *testing.T) {
 	driver.RegisterDevice(device)
 
 	// 加载程序
-	program := core.LoadProgramFile("./test_gpred.yaml")
+	program := core.LoadProgramFileFromYAML("./test_gpred.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
@@ -243,7 +243,7 @@ func TestPhiOperation(t *testing.T) {
 	driver.RegisterDevice(device)
 
 	// 加载程序
-	program := core.LoadProgramFile("./test_phiconst.yaml")
+	program := core.LoadProgramFileFromYAML("./test_phiconst.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
