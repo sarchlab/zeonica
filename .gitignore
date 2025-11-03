@@ -17,3 +17,4 @@
 .DS_Store
 *.debug
 samples/passthrough/passthrough
+samples/TestInstruction/TestInstruction

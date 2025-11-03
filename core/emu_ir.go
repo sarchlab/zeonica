@@ -44,7 +44,7 @@ func (i instEmulator) runPhiIR(inst Instruction, state *coreState) {
 
 	for idx := 1; idx < len(inst.Operands); idx++ {
 		incoming := strings.TrimSpace(inst.Operands[idx])
-		
+
 		// Parse format: $reg@BlockLabel
 		parts := strings.Split(incoming, "@")
 		if len(parts) != 2 {

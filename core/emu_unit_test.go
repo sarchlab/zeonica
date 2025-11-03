@@ -17,11 +17,11 @@ var _ = Describe("InstEmulator", func() {
 	BeforeEach(func() {
 		ie = instEmulator{}
 		s = coreState{
-			PC:        		  0,
-			TileX:     		  0,
-			TileY:     		  0,
-			Registers: 		  make([]uint32, 16),
-			Memory:    		  make([]uint32, 1024),
+			PC:               0,
+			TileX:            0,
+			TileY:            0,
+			Registers:        make([]uint32, 16),
+			Memory:           make([]uint32, 1024),
 			Code:             make([]string, 0),
 			RecvBufHead:      make([][]uint32, 4),
 			RecvBufHeadReady: make([][]bool, 4),
@@ -139,15 +139,15 @@ var _ = Describe("InstEmulator", func() {
 			It("should store/load from immediate address", func() {
 				s.Registers[0] = 0xDEADBEEF
 				ie.RunInst("ST, $0, 0x100", &s) // Store
-				ie.RunInst("LD, $1, 0x100", &s)  // Load
+				ie.RunInst("LD, $1, 0x100", &s) // Load
 				Expect(s.Registers[1]).To(Equal(uint32(0xDEADBEEF)))
 			})
 
 			It("should handle register-based addressing", func() {
 				s.Registers[0] = 0x100
 				s.Registers[1] = 0xCAFEBABE
-				ie.RunInst("ST, $1, $0", &s)       // Store at 0x100
-				ie.RunInst("LD, $2, $0", &s)       // Load from 0x100
+				ie.RunInst("ST, $1, $0", &s) // Store at 0x100
+				ie.RunInst("LD, $2, $0", &s) // Load from 0x100
 				Expect(s.Registers[2]).To(Equal(uint32(0xCAFEBABE)))
 			})
 
@@ -206,14 +206,13 @@ var _ = Describe("InstEmulator", func() {
 				result := math.Float32frombits(s.Registers[2])
 				Expect(result).To(BeNumerically("~", 3.14+1.78, 1e-4))
 			})
-			
+
 			It("should perform Floating multiply const operation", func() {
 				s.Registers[0] = math.Float32bits(3.14)
 				ie.RunInst("FMUL_CONST, $2, $0, 1.8", &s)
 				result := math.Float32frombits(s.Registers[2])
 				Expect(result).To(BeNumerically("~", 3.14*1.8, 1e-4))
 			})
-
 
 			It("should handle special values", func() {
 				// Test Infinity
@@ -258,7 +257,7 @@ var _ = Describe("InstEmulator", func() {
 				s.Code = program
 				s.ProgramIR = make([]Instruction, len(program))
 				s.PCToBlock = make(map[uint32]string)
-				
+
 				currentBlock := ""
 				for i, line := range program {
 					line = strings.TrimSpace(line)
@@ -320,7 +319,7 @@ var _ = Describe("InstEmulator", func() {
 				phiInst := s.ProgramIR[7]
 				Expect(string(phiInst.Opcode)).To(Equal("PHI"))
 				ie.RunInstIR(phiInst, &s)
-				
+
 				// Should have selected value from $1 because predecessor was A
 				Expect(s.Registers[0]).To(Equal(uint32(100)))
 				Expect(s.PC).To(Equal(uint32(8)))
@@ -343,7 +342,7 @@ var _ = Describe("InstEmulator", func() {
 				s.Code = program
 				s.ProgramIR = make([]Instruction, len(program))
 				s.PCToBlock = make(map[uint32]string)
-				
+
 				currentBlock := ""
 				for i, line := range program {
 					line = strings.TrimSpace(line)
@@ -398,7 +397,7 @@ var _ = Describe("InstEmulator", func() {
 				// Execute PHI
 				phiInst := s.ProgramIR[7]
 				ie.RunInstIR(phiInst, &s)
-				
+
 				// Should have selected value from $2 because predecessor was C
 				Expect(s.Registers[0]).To(Equal(uint32(200)))
 			})
