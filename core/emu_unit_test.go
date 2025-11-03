@@ -229,6 +229,45 @@ var _ = Describe("InstEmulator", func() {
 		})
 	})
 
+	// Helper function to build ProgramIR from program strings
+	buildProgramIR := func(program []string, state *coreState) {
+		state.Code = program
+		state.ProgramIR = make([]Instruction, len(program))
+		state.PCToBlock = make(map[uint32]string)
+
+		currentBlock := ""
+		for i, line := range program {
+			line = strings.TrimSpace(line)
+			if strings.HasSuffix(line, ":") {
+				labelName := strings.TrimSuffix(line, ":")
+				labelName = strings.TrimSpace(labelName)
+				state.ProgramIR[i] = Instruction{
+					Label: labelName,
+					Raw:   line,
+				}
+				currentBlock = labelName
+			} else {
+				tokens := strings.Split(line, ",")
+				opcode := ""
+				operands := []string{}
+				if len(tokens) > 0 {
+					opcode = strings.TrimSpace(tokens[0])
+					for j := 1; j < len(tokens); j++ {
+						operands = append(operands, strings.TrimSpace(tokens[j]))
+					}
+				}
+				state.ProgramIR[i] = Instruction{
+					Opcode:   Opcode(opcode),
+					Operands: operands,
+					Raw:      line,
+				}
+				if currentBlock != "" {
+					state.PCToBlock[uint32(i)] = currentBlock
+				}
+			}
+		}
+	}
+
 	Context("PHI Instruction with IR", func() {
 		Describe("PHI based on predecessor block", func() {
 			It("should select value from correct predecessor block", func() {
@@ -253,42 +292,8 @@ var _ = Describe("InstEmulator", func() {
 					"DONE",
 				}
 
-				// Initialize ProgramIR and PCToBlock
-				s.Code = program
-				s.ProgramIR = make([]Instruction, len(program))
-				s.PCToBlock = make(map[uint32]string)
-
-				currentBlock := ""
-				for i, line := range program {
-					line = strings.TrimSpace(line)
-					if strings.HasSuffix(line, ":") {
-						labelName := strings.TrimSuffix(line, ":")
-						labelName = strings.TrimSpace(labelName)
-						s.ProgramIR[i] = Instruction{
-							Label: labelName,
-							Raw:   line,
-						}
-						currentBlock = labelName
-					} else {
-						tokens := strings.Split(line, ",")
-						opcode := ""
-						operands := []string{}
-						if len(tokens) > 0 {
-							opcode = strings.TrimSpace(tokens[0])
-							for j := 1; j < len(tokens); j++ {
-								operands = append(operands, strings.TrimSpace(tokens[j]))
-							}
-						}
-						s.ProgramIR[i] = Instruction{
-							Opcode:   Opcode(opcode),
-							Operands: operands,
-							Raw:      line,
-						}
-						if currentBlock != "" {
-							s.PCToBlock[uint32(i)] = currentBlock
-						}
-					}
-				}
+				// Initialize ProgramIR and PCToBlock using helper
+				buildProgramIR(program, &s)
 
 				// Simulate coming from block A
 				s.PC = 0
@@ -308,7 +313,7 @@ var _ = Describe("InstEmulator", func() {
 
 				// Execute JMP B (PC=2) - this sets PC to B's label
 				ie.RunInst("JMP, B", &s)
-				Expect(s.PC).To(Equal(uint32(7))) // PC should jump to "B:" label + 1
+				Expect(s.PC).To(Equal(uint32(7))) // PC should jump to B block (where PHI is located)
 
 				// Now we're entering block B from A
 				// Update LastPredBlock before executing PHI
@@ -339,41 +344,8 @@ var _ = Describe("InstEmulator", func() {
 					"DONE",
 				}
 
-				s.Code = program
-				s.ProgramIR = make([]Instruction, len(program))
-				s.PCToBlock = make(map[uint32]string)
-
-				currentBlock := ""
-				for i, line := range program {
-					line = strings.TrimSpace(line)
-					if strings.HasSuffix(line, ":") {
-						labelName := strings.TrimSuffix(line, ":")
-						labelName = strings.TrimSpace(labelName)
-						s.ProgramIR[i] = Instruction{
-							Label: labelName,
-							Raw:   line,
-						}
-						currentBlock = labelName
-					} else {
-						tokens := strings.Split(line, ",")
-						opcode := ""
-						operands := []string{}
-						if len(tokens) > 0 {
-							opcode = strings.TrimSpace(tokens[0])
-							for j := 1; j < len(tokens); j++ {
-								operands = append(operands, strings.TrimSpace(tokens[j]))
-							}
-						}
-						s.ProgramIR[i] = Instruction{
-							Opcode:   Opcode(opcode),
-							Operands: operands,
-							Raw:      line,
-						}
-						if currentBlock != "" {
-							s.PCToBlock[uint32(i)] = currentBlock
-						}
-					}
-				}
+				// Initialize ProgramIR and PCToBlock using helper
+				buildProgramIR(program, &s)
 
 				// Simulate coming from block C
 				s.PC = 3 // Start at C:

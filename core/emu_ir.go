@@ -68,15 +68,9 @@ func (i instEmulator) runPhiIR(inst Instruction, state *coreState) {
 	}
 
 	if !foundMatch {
-		// If no match found, this might be the first execution or an error
-		// For safety, we could use the first value or panic
-		// Let's use first value for robustness
-		firstIncoming := strings.TrimSpace(inst.Operands[1])
-		parts := strings.Split(firstIncoming, "@")
-		if len(parts) >= 1 {
-			srcReg := strings.TrimSpace(parts[0])
-			selectedValue = i.readOperand(srcReg, state)
-		}
+		// No matching predecessor found for PHI; this indicates a control flow or PHI construction error.
+		panic(fmt.Sprintf("PHI: no incoming value matches predecessor block '%s' at PC %d; operands: %v",
+			predBlock, state.PC, inst.Operands))
 	}
 
 	// Write the selected value to destination
