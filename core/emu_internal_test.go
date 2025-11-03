@@ -19,18 +19,24 @@ var _ = Describe("InstEmulator", func() {
 			TileY:            0,
 			Registers:        make([]uint32, 4),
 			Code:             make([]string, 0),
-			RecvBufHead:      make([]uint32, 4),
-			RecvBufHeadReady: make([]bool, 4),
-			SendBufHead:      make([]uint32, 4),
-			SendBufHeadBusy:  make([]bool, 4),
+			RecvBufHead:      make([][]uint32, 4),
+			RecvBufHeadReady: make([][]bool, 4),
+			SendBufHead:      make([][]uint32, 4),
+			SendBufHeadBusy:  make([][]bool, 4),
+		}
+		for i := 0; i < 4; i++ {
+			s.RecvBufHead[i] = make([]uint32, 4)
+			s.RecvBufHeadReady[i] = make([]bool, 4)
+			s.SendBufHead[i] = make([]uint32, 4)
+			s.SendBufHeadBusy[i] = make([]bool, 4)
 		}
 	})
 
 	Context("when running WAIT", func() {
 		It("should wait for data to arrive", func() {
-			s.RecvBufHeadReady[0] = false
+			s.RecvBufHeadReady[0][0] = false
 
-			inst := "WAIT, $0, NET_RECV_NORTH"
+			inst := "WAIT, $0, NET_RECV_NORTH, R"
 
 			ie.RunInst(inst, &s)
 
@@ -38,24 +44,24 @@ var _ = Describe("InstEmulator", func() {
 		})
 
 		It("should move data if the data is ready", func() {
-			s.RecvBufHeadReady[0] = true
-			s.RecvBufHead[0] = 4
+			s.RecvBufHeadReady[0][0] = true
+			s.RecvBufHead[0][0] = 4
 
-			inst := "WAIT, $2, NET_RECV_NORTH"
+			inst := "WAIT, $2, NET_RECV_NORTH, R"
 
 			ie.RunInst(inst, &s)
 
 			Expect(s.PC).To(Equal(uint32(1)))
 			Expect(s.Registers[2]).To(Equal(uint32(4)))
-			Expect(s.RecvBufHeadReady[0]).To(BeFalse())
+			Expect(s.RecvBufHeadReady[0][0]).To(BeFalse())
 		})
 	})
 
 	Context("when running Send", func() {
 		It("should wait if sendBuf is busy", func() {
-			s.SendBufHeadBusy[0] = true
+			s.SendBufHeadBusy[0][0] = true
 
-			inst := "SEND, NET_SEND_NORTH, $0"
+			inst := "SEND, NET_SEND_NORTH, $0, R"
 
 			ie.RunInst(inst, &s)
 
@@ -63,16 +69,16 @@ var _ = Describe("InstEmulator", func() {
 		})
 
 		It("should send data", func() {
-			s.SendBufHeadBusy[0] = false
+			s.SendBufHeadBusy[0][0] = false
 			s.Registers[0] = 4
 
-			inst := "SEND, NET_SEND_NORTH, $0"
+			inst := "SEND, NET_SEND_NORTH, $0, R"
 
 			ie.RunInst(inst, &s)
 
 			Expect(s.PC).To(Equal(uint32(1)))
-			Expect(s.SendBufHeadBusy[0]).To(BeTrue())
-			Expect(s.SendBufHead[0]).To(Equal(uint32(4)))
+			Expect(s.SendBufHeadBusy[0][0]).To(BeTrue())
+			Expect(s.SendBufHead[0][0]).To(Equal(uint32(4)))
 		})
 	})
 
