@@ -1,6 +1,8 @@
 package core
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"math"
@@ -224,6 +226,181 @@ var _ = Describe("InstEmulator", func() {
 				s.Registers[0] = math.Float32bits(float32(math.NaN()))
 				ie.RunInst("FADD, $2, $0, $1", &s)
 				Expect(math.IsNaN(float64(math.Float32frombits(s.Registers[2])))).To(BeTrue())
+			})
+		})
+	})
+
+	Context("PHI Instruction with IR", func() {
+		Describe("PHI based on predecessor block", func() {
+			It("should select value from correct predecessor block", func() {
+				// Build a simple program with PHI instruction
+				// A:
+				//   MOV, $1, 100
+				//   JMP, B
+				// C:
+				//   MOV, $2, 200
+				//   JMP, B
+				// B:
+				//   PHI, $0, $1@A, $2@C
+				program := []string{
+					"A:",
+					"MOV, $1, 100",
+					"JMP, B",
+					"C:",
+					"MOV, $2, 200",
+					"JMP, B",
+					"B:",
+					"PHI, $0, $1@A, $2@C",
+					"DONE",
+				}
+
+				// Initialize ProgramIR and PCToBlock
+				s.Code = program
+				s.ProgramIR = make([]Instruction, len(program))
+				s.PCToBlock = make(map[uint32]string)
+				
+				currentBlock := ""
+				for i, line := range program {
+					line = strings.TrimSpace(line)
+					if strings.HasSuffix(line, ":") {
+						labelName := strings.TrimSuffix(line, ":")
+						labelName = strings.TrimSpace(labelName)
+						s.ProgramIR[i] = Instruction{
+							Label: labelName,
+							Raw:   line,
+						}
+						currentBlock = labelName
+					} else {
+						tokens := strings.Split(line, ",")
+						opcode := ""
+						operands := []string{}
+						if len(tokens) > 0 {
+							opcode = strings.TrimSpace(tokens[0])
+							for j := 1; j < len(tokens); j++ {
+								operands = append(operands, strings.TrimSpace(tokens[j]))
+							}
+						}
+						s.ProgramIR[i] = Instruction{
+							Opcode:   Opcode(opcode),
+							Operands: operands,
+							Raw:      line,
+						}
+						if currentBlock != "" {
+							s.PCToBlock[uint32(i)] = currentBlock
+						}
+					}
+				}
+
+				// Simulate coming from block A
+				s.PC = 0
+				s.CurrentBlock = ""
+				s.LastPredBlock = ""
+
+				// Execute A: label (PC=0)
+				ir := s.ProgramIR[0]
+				Expect(ir.Label).To(Equal("A"))
+				s.PC++
+
+				// Execute MOV $1, 100 (PC=1)
+				s.CurrentBlock = "A"
+				ie.RunInst("MOV, $1, 100", &s)
+				Expect(s.Registers[1]).To(Equal(uint32(100)))
+				Expect(s.PC).To(Equal(uint32(2)))
+
+				// Execute JMP B (PC=2) - this sets PC to B's label
+				ie.RunInst("JMP, B", &s)
+				Expect(s.PC).To(Equal(uint32(7))) // PC should jump to "B:" label + 1
+
+				// Now we're entering block B from A
+				// Update LastPredBlock before executing PHI
+				s.LastPredBlock = "A"
+				s.CurrentBlock = "B"
+
+				// Execute PHI (PC=7)
+				phiInst := s.ProgramIR[7]
+				Expect(string(phiInst.Opcode)).To(Equal("PHI"))
+				ie.RunInstIR(phiInst, &s)
+				
+				// Should have selected value from $1 because predecessor was A
+				Expect(s.Registers[0]).To(Equal(uint32(100)))
+				Expect(s.PC).To(Equal(uint32(8)))
+			})
+
+			It("should select value from alternate predecessor block", func() {
+				// Same program but coming from C instead of A
+				program := []string{
+					"A:",
+					"MOV, $1, 100",
+					"JMP, B",
+					"C:",
+					"MOV, $2, 200",
+					"JMP, B",
+					"B:",
+					"PHI, $0, $1@A, $2@C",
+					"DONE",
+				}
+
+				s.Code = program
+				s.ProgramIR = make([]Instruction, len(program))
+				s.PCToBlock = make(map[uint32]string)
+				
+				currentBlock := ""
+				for i, line := range program {
+					line = strings.TrimSpace(line)
+					if strings.HasSuffix(line, ":") {
+						labelName := strings.TrimSuffix(line, ":")
+						labelName = strings.TrimSpace(labelName)
+						s.ProgramIR[i] = Instruction{
+							Label: labelName,
+							Raw:   line,
+						}
+						currentBlock = labelName
+					} else {
+						tokens := strings.Split(line, ",")
+						opcode := ""
+						operands := []string{}
+						if len(tokens) > 0 {
+							opcode = strings.TrimSpace(tokens[0])
+							for j := 1; j < len(tokens); j++ {
+								operands = append(operands, strings.TrimSpace(tokens[j]))
+							}
+						}
+						s.ProgramIR[i] = Instruction{
+							Opcode:   Opcode(opcode),
+							Operands: operands,
+							Raw:      line,
+						}
+						if currentBlock != "" {
+							s.PCToBlock[uint32(i)] = currentBlock
+						}
+					}
+				}
+
+				// Simulate coming from block C
+				s.PC = 3 // Start at C:
+				s.CurrentBlock = ""
+				s.LastPredBlock = ""
+				s.PC++ // Skip C: label
+
+				// Execute MOV $2, 200 (PC=4)
+				s.CurrentBlock = "C"
+				ie.RunInst("MOV, $2, 200", &s)
+				Expect(s.Registers[2]).To(Equal(uint32(200)))
+
+				// Execute JMP B (PC=5)
+				ie.RunInst("JMP, B", &s)
+				Expect(s.PC).To(Equal(uint32(7)))
+
+				// Now we're entering block B from C
+				s.LastPredBlock = "C"
+				s.CurrentBlock = "B"
+
+				// Execute PHI
+				phiInst := s.ProgramIR[7]
+				ie.RunInstIR(phiInst, &s)
+				
+				// Should have selected value from $2 because predecessor was C
+				Expect(s.Registers[0]).To(Equal(uint32(200)))
 			})
 		})
 	})

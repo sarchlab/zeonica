@@ -37,6 +37,12 @@ type coreState struct {
 
 	routingRules []*routingRule
 	triggers     []*Trigger
+
+	// IR-related fields for structured instruction execution
+	ProgramIR     []Instruction     // Structured IR representation of the program
+	PCToBlock     map[uint32]string // Maps PC to basic block name
+	CurrentBlock  string            // Current basic block being executed
+	LastPredBlock string            // Previous basic block (predecessor)
 }
 
 type instEmulator struct {

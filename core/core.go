@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
@@ -59,6 +60,56 @@ func (c *Core) MapProgram(program []string, x int, y int) {
 	c.state.PC = 0
 	c.state.TileX = uint32(x)
 	c.state.TileY = uint32(y)
+
+	// Build ProgramIR and PCToBlock mapping
+	c.state.ProgramIR = make([]Instruction, len(program))
+	c.state.PCToBlock = make(map[uint32]string)
+	
+	currentBlockName := ""
+	
+	for i, line := range program {
+		line = strings.TrimSpace(line)
+		
+		// Check if this is a label (ends with ':')
+		if strings.HasSuffix(line, ":") {
+			// This is a label line
+			labelName := strings.TrimSuffix(line, ":")
+			labelName = strings.TrimSpace(labelName)
+			
+			c.state.ProgramIR[i] = Instruction{
+				Label: labelName,
+				Raw:   line,
+			}
+			
+			// Update current block name for subsequent instructions
+			currentBlockName = labelName
+		} else {
+			// This is a regular instruction
+			// Parse opcode and operands
+			tokens := strings.Split(line, ",")
+			opcode := ""
+			operands := []string{}
+			
+			if len(tokens) > 0 {
+				opcode = strings.TrimSpace(tokens[0])
+				for j := 1; j < len(tokens); j++ {
+					operands = append(operands, strings.TrimSpace(tokens[j]))
+				}
+			}
+			
+			c.state.ProgramIR[i] = Instruction{
+				Opcode:   Opcode(opcode),
+				Operands: operands,
+				Label:    "", // Not a label
+				Raw:      line,
+			}
+			
+			// Map this PC to the current block
+			if currentBlockName != "" {
+				c.state.PCToBlock[uint32(i)] = currentBlockName
+			}
+		}
+	}
 }
 
 // Tick runs the program for one cycle.
@@ -148,6 +199,12 @@ func (c *Core) doRecv() bool {
 }
 
 func (c *Core) runProgram() bool {
+	// Use ProgramIR if available, otherwise fall back to old Code
+	if len(c.state.ProgramIR) > 0 {
+		return c.runProgramIR()
+	}
+	
+	// Old path for backward compatibility
 	if int(c.state.PC) >= len(c.state.Code) {
 		return false
 	}
@@ -175,6 +232,45 @@ func (c *Core) runProgram() bool {
 	// 	}
 	// }
 
+	return true
+}
+
+func (c *Core) runProgramIR() bool {
+	if int(c.state.PC) >= len(c.state.ProgramIR) {
+		return false
+	}
+	
+	ir := c.state.ProgramIR[c.state.PC]
+	
+	// Handle labels: just skip them
+	if ir.Label != "" {
+		fmt.Printf("%10f, %s, Label: %s:\n", c.Engine.CurrentTime()*1e9, c.Name(), ir.Label)
+		c.state.PC++
+		return true // Labels are progress (to avoid infinite loops)
+	}
+	
+	// Check for block transition before executing instruction
+	newBlock := c.state.PCToBlock[c.state.PC]
+	if newBlock != c.state.CurrentBlock && newBlock != "" {
+		// Block transition detected
+		c.state.LastPredBlock = c.state.CurrentBlock
+		c.state.CurrentBlock = newBlock
+	}
+	
+	prevPC := c.state.PC
+	
+	// Execute the IR instruction
+	c.emu.RunInstIR(ir, &c.state)
+	
+	nextPC := c.state.PC
+	
+	// Check if we made progress
+	if prevPC == nextPC {
+		return false
+	}
+	
+	fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), ir.Raw)
+	
 	return true
 }
 
