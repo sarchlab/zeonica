@@ -100,6 +100,20 @@ func (m *MockTile) EXPECT() *MockTileMockRecorder {
 	return m.recorder
 }
 
+// GetMemory mocks base method.
+func (m *MockTile) GetMemory(arg0, arg1 int, arg2 uint32) uint32 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMemory", arg0, arg1, arg2)
+	ret0, _ := ret[0].(uint32)
+	return ret0
+}
+
+// GetMemory indicates an expected call of GetMemory.
+func (mr *MockTileMockRecorder) GetMemory(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMemory", reflect.TypeOf((*MockTile)(nil).GetMemory), arg0, arg1, arg2)
+}
+
 // GetPort mocks base method.
 func (m *MockTile) GetPort(arg0 cgra.Side) sim.Port {
 	m.ctrl.T.Helper()
@@ -114,8 +128,36 @@ func (mr *MockTileMockRecorder) GetPort(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPort", reflect.TypeOf((*MockTile)(nil).GetPort), arg0)
 }
 
+// GetTileX mocks base method.
+func (m *MockTile) GetTileX() int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTileX")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// GetTileX indicates an expected call of GetTileX.
+func (mr *MockTileMockRecorder) GetTileX() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTileX", reflect.TypeOf((*MockTile)(nil).GetTileX))
+}
+
+// GetTileY mocks base method.
+func (m *MockTile) GetTileY() int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTileY")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// GetTileY indicates an expected call of GetTileY.
+func (mr *MockTileMockRecorder) GetTileY() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTileY", reflect.TypeOf((*MockTile)(nil).GetTileY))
+}
+
 // MapProgram mocks base method.
-func (m *MockTile) MapProgram(arg0 []string, arg1, arg2 int) {
+func (m *MockTile) MapProgram(arg0 interface{}, arg1, arg2 int) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "MapProgram", arg0, arg1, arg2)
 }
@@ -127,7 +169,7 @@ func (mr *MockTileMockRecorder) MapProgram(arg0, arg1, arg2 interface{}) *gomock
 }
 
 // SetRemotePort mocks base method.
-func (m *MockTile) SetRemotePort(arg0 cgra.Side, arg1 sim.Port) {
+func (m *MockTile) SetRemotePort(arg0 cgra.Side, arg1 sim.RemotePort) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetRemotePort", arg0, arg1)
 }
@@ -136,4 +178,28 @@ func (m *MockTile) SetRemotePort(arg0 cgra.Side, arg1 sim.Port) {
 func (mr *MockTileMockRecorder) SetRemotePort(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRemotePort", reflect.TypeOf((*MockTile)(nil).SetRemotePort), arg0, arg1)
+}
+
+// WriteMemory mocks base method.
+func (m *MockTile) WriteMemory(arg0, arg1 int, arg2, arg3 uint32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "WriteMemory", arg0, arg1, arg2, arg3)
+}
+
+// WriteMemory indicates an expected call of WriteMemory.
+func (mr *MockTileMockRecorder) WriteMemory(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteMemory", reflect.TypeOf((*MockTile)(nil).WriteMemory), arg0, arg1, arg2, arg3)
+}
+
+// WriteSharedMemory mocks base method.
+func (m *MockTile) WriteSharedMemory(arg0, arg1 int, arg2 []byte, arg3 uint32) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "WriteSharedMemory", arg0, arg1, arg2, arg3)
+}
+
+// WriteSharedMemory indicates an expected call of WriteSharedMemory.
+func (mr *MockTileMockRecorder) WriteSharedMemory(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteSharedMemory", reflect.TypeOf((*MockTile)(nil).WriteSharedMemory), arg0, arg1, arg2, arg3)
 }
