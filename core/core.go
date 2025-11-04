@@ -269,6 +269,15 @@ func (c *Core) runProgramIR() bool {
 		return false
 	}
 
+	// Update block tracking if PC changed
+	// If PC jumped (non-sequential), update CurrentBlock to reflect where we came from
+	if nextPC != prevPC+1 {
+		// Non-sequential PC change (e.g., jump) - update current block based on where we were
+		if prevBlock, ok := c.state.PCToBlock[prevPC]; ok {
+			c.state.CurrentBlock = prevBlock
+		}
+	}
+
 	fmt.Printf("%10f, %s, Inst %s\n", c.Engine.CurrentTime()*1e9, c.Name(), ir.Raw)
 
 	return true
