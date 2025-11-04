@@ -69,8 +69,16 @@ func (i instEmulator) runPhiIR(inst Instruction, state *coreState) {
 
 	if !foundMatch {
 		// No matching predecessor found for PHI; this indicates a control flow or PHI construction error.
-		panic(fmt.Sprintf("PHI: no incoming value matches predecessor block '%s' at PC %d; operands: %v",
-			predBlock, state.PC, inst.Operands))
+		// Collect available block labels from the PHI operands for clearer debugging.
+		var blockLabels []string
+		for idx := 1; idx < len(inst.Operands); idx++ {
+			parts := strings.Split(strings.TrimSpace(inst.Operands[idx]), "@")
+			if len(parts) == 2 {
+				blockLabels = append(blockLabels, strings.TrimSpace(parts[1]))
+			}
+		}
+		panic(fmt.Sprintf("PHI: no incoming value matches predecessor block '%s' at PC %d; available block labels: %v",
+			predBlock, state.PC, blockLabels))
 	}
 
 	// Write the selected value to destination
