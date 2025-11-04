@@ -246,7 +246,7 @@ func (c *Core) runProgramIR() bool {
 	if ir.Label != "" {
 		fmt.Printf("%10f, %s, Label: %s:\n", c.Engine.CurrentTime()*1e9, c.Name(), ir.Label)
 		c.state.PC++
-		return true // Labels are progress (to avoid infinite loops)
+		return c.runProgramIR() // Recursively process next instruction
 	}
 
 	// Check for block transition before executing instruction
