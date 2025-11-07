@@ -114,7 +114,8 @@ func (c *Core) doSend() bool {
 			Trace("DataFlow",
 				"Behavior", "Send",
 				slog.Float64("Time", float64(c.Engine.CurrentTime()*1e9)),
-				"Data", msg.Data,
+				"Data", msg.Data.First(),
+				"Pred", c.state.SendBufHead[color][i].Pred,
 				"Color", color,
 				"Src", msg.Src,
 				"Dst", msg.Dst,
@@ -130,7 +131,7 @@ func (c *Core) doSend() bool {
 		if c.state.IsToWriteMemory {
 			msg := mem.WriteReqBuilder{}.
 				WithAddress(uint64(c.state.AddrBuf)).
-				WithData(makeBytesFromUint32(c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router])).
+				WithData(makeBytesFromUint32(c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router].First())).
 				WithSrc(c.ports[cgra.Side(cgra.Router)].local.AsRemote()).
 				WithDst(c.ports[cgra.Side(cgra.Router)].remote).
 				Build()
@@ -143,7 +144,8 @@ func (c *Core) doSend() bool {
 			Trace("Memory",
 				"Behavior", "Send",
 				slog.Float64("Time", float64(c.Engine.CurrentTime()*1e9)),
-				"Data", c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router],
+				"Data", c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router].First(),
+				"Pred", c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router].Pred,
 				"Color", "R",
 				"Src", msg.Src,
 				"Dst", msg.Dst,
@@ -212,7 +214,8 @@ func (c *Core) doRecv() bool {
 			Trace("DataFlow",
 				"Behavior", "Recv",
 				"Time", float64(c.Engine.CurrentTime()*1e9),
-				"Data", msg.Data,
+				"Data", msg.Data.First(),
+				"Pred", c.state.RecvBufHead[color][i].Pred,
 				"Src", msg.Src,
 				"Dst", msg.Dst,
 				"Color", color,
@@ -234,7 +237,7 @@ func (c *Core) doRecv() bool {
 		// if msg is DataReadyRsp, then the data is ready
 		if msg, ok := item.(*mem.DataReadyRsp); ok {
 			c.state.RecvBufHeadReady[c.emu.getColorIndex("R")][cgra.Router] = true
-			c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router] = convert4BytesToUint32(msg.Data)
+			c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router] = cgra.NewScalar(convert4BytesToUint32(msg.Data))
 
 			Trace("Memory",
 				"Behavior", "Recv",
@@ -242,6 +245,7 @@ func (c *Core) doRecv() bool {
 				"Data", msg.Data,
 				"Src", msg.Src,
 				"Dst", msg.Dst,
+				"Pred", c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router].Pred,
 				"Color", "R",
 			)
 
@@ -249,13 +253,14 @@ func (c *Core) doRecv() bool {
 			madeProgress = true
 		} else if msg, ok := item.(*mem.WriteDoneRsp); ok {
 			c.state.RecvBufHeadReady[c.emu.getColorIndex("R")][cgra.Router] = true
-			c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router] = 0
+			c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router] = cgra.NewScalar(0)
 
 			Trace("Memory",
 				"Behavior", "Recv",
 				"Time", float64(c.Engine.CurrentTime()*1e9),
 				"Src", msg.Src,
 				"Dst", msg.Dst,
+				"Pred", c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router].Pred,
 				"Color", "R",
 			)
 

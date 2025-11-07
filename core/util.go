@@ -41,7 +41,7 @@ func PrintState(state *coreState) {
 				if i > 0 {
 					regValues += " "
 				}
-				regValues += fmt.Sprintf("%d", int32(state.Registers[startReg+i]))
+				regValues += fmt.Sprintf("%d", int32(state.Registers[startReg+i].First()))
 			}
 			regRow[col+1] = regValues
 		}
@@ -68,21 +68,21 @@ func PrintState(state *coreState) {
 	// RecvBufHead (红色数据)
 	recvRedRow := []interface{}{"RecvBufHead[Red]"}
 	for i := 0; i < 12; i++ {
-		recvRedRow = append(recvRedRow, int32(state.RecvBufHead[0][i]))
+		recvRedRow = append(recvRedRow, int32(state.RecvBufHead[0][i].First()))
 	}
 	bufTable.AppendRow(recvRedRow)
 
 	// RecvBufHead (黄色数据)
 	recvYellowRow := []interface{}{"RecvBufHead[Yellow]"}
 	for i := 0; i < 12; i++ {
-		recvYellowRow = append(recvYellowRow, int32(state.RecvBufHead[1][i]))
+		recvYellowRow = append(recvYellowRow, int32(state.RecvBufHead[1][i].First()))
 	}
 	bufTable.AppendRow(recvYellowRow)
 
 	// RecvBufHead (蓝色数据)
 	recvBlueRow := []interface{}{"RecvBufHead[Blue]"}
 	for i := 0; i < 12; i++ {
-		recvBlueRow = append(recvBlueRow, int32(state.RecvBufHead[2][i]))
+		recvBlueRow = append(recvBlueRow, int32(state.RecvBufHead[2][i].First()))
 	}
 	bufTable.AppendRow(recvBlueRow)
 
@@ -110,21 +110,21 @@ func PrintState(state *coreState) {
 	// SendBufHead (红色数据)
 	sendRedRow := []interface{}{"SendBufHead[Red]"}
 	for i := 0; i < 12; i++ {
-		sendRedRow = append(sendRedRow, int32(state.SendBufHead[0][i]))
+		sendRedRow = append(sendRedRow, int32(state.SendBufHead[0][i].First()))
 	}
 	bufTable.AppendRow(sendRedRow)
 
 	// SendBufHead (黄色数据)
 	sendYellowRow := []interface{}{"SendBufHead[Yellow]"}
 	for i := 0; i < 12; i++ {
-		sendYellowRow = append(sendYellowRow, int32(state.SendBufHead[1][i]))
+		sendYellowRow = append(sendYellowRow, int32(state.SendBufHead[1][i].First()))
 	}
 	bufTable.AppendRow(sendYellowRow)
 
 	// SendBufHead (蓝色数据)
 	sendBlueRow := []interface{}{"SendBufHead[Blue]"}
 	for i := 0; i < 12; i++ {
-		sendBlueRow = append(sendBlueRow, int32(state.SendBufHead[2][i]))
+		sendBlueRow = append(sendBlueRow, int32(state.SendBufHead[2][i].First()))
 	}
 	bufTable.AppendRow(sendBlueRow)
 

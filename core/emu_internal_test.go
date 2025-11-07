@@ -30,9 +30,9 @@ var _ = Describe("InstEmulator", func() {
 			TileY:            0,
 			Registers:        make([]uint32, 4),
 			Code:             Program{},
-			RecvBufHead:      make([][]uint32, 4),
+            RecvBufHead:      make([][]Data, 4),
 			RecvBufHeadReady: make([][]bool, 4),
-			SendBufHead:      make([][]uint32, 4),
+            SendBufHead:      make([][]Data, 4),
 			SendBufHeadBusy:  make([][]bool, 4),
 		}
 	})*/

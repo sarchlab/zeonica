@@ -83,7 +83,7 @@ type coreState struct {
 	PCInBlock     int32
 	NextPCInBlock int32
 	TileX, TileY  uint32
-	Registers     []uint32
+	Registers     []cgra.Data
 	States        map[string]interface{} // This is to store core states, such as Phiconst, CmpFlags
 	// still consider using outside block to control pc
 	//Code         [][]string
@@ -93,9 +93,9 @@ type coreState struct {
 
 	Mode OpMode
 
-	RecvBufHead      [][]uint32 //[Color][Direction]
+	RecvBufHead      [][]cgra.Data //[Color][Direction]
 	RecvBufHeadReady [][]bool
-	SendBufHead      [][]uint32
+	SendBufHead      [][]cgra.Data
 	SendBufHeadBusy  [][]bool
 	AddrBuf          uint32 // buffer for the address of the memory
 	IsToWriteMemory  bool
@@ -343,6 +343,8 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"STW": i.runStoreWaitDRAM,
 
 		"TRIGGER": i.runTrigger,
+
+		"NOT": i.runNot,
 	}
 
 	if instFunc, ok := instFuncs[instName]; ok {
@@ -353,7 +355,7 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 	}
 }
 
-func (i instEmulator) readOperand(operand Operand, state *coreState) (value uint32) {
+func (i instEmulator) readOperand(operand Operand, state *coreState) (value cgra.Data) {
 	if strings.HasPrefix(operand.Impl, "$") {
 		registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand.Impl, "$"))
 		if err != nil {
@@ -388,10 +390,10 @@ func (i instEmulator) readOperand(operand Operand, state *coreState) (value uint
 		// try to convert into int
 		num, err := strconv.Atoi(operand.Impl)
 		if err == nil {
-			value = uint32(num)
+			value = cgra.NewScalar(uint32(num))
 		} else {
 			if immediate, err := strconv.ParseUint(operand.Impl, 0, 32); err == nil {
-				value = uint32(immediate)
+				value = cgra.NewScalar(uint32(immediate))
 			} else {
 				panic(fmt.Sprintf("Invalid operand %v in readOperand; expected register", operand))
 			}
@@ -400,7 +402,7 @@ func (i instEmulator) readOperand(operand Operand, state *coreState) (value uint
 	return value
 }
 
-func (i instEmulator) writeOperand(operand Operand, value uint32, state *coreState) {
+func (i instEmulator) writeOperand(operand Operand, value cgra.Data, state *coreState) {
 	// if strings.HasPrefix(operand, "$") {
 	// 	registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand, "$"))
 	// 	if err != nil {
@@ -510,7 +512,7 @@ func (i instEmulator) getColorIndex(color string) int {
 	case "B":
 		return 2
 	default:
-		panic("Wrong Color")
+		panic("Wrong Color: [" + color + "]")
 	}
 }
 
@@ -529,16 +531,34 @@ func uint2Float(u uint32) float32 {
 // Prototype for register to register: MOV, DstReg, SrcReg
 func (i instEmulator) runMov(inst Operation, state *coreState) {
 	src := inst.SrcOperands.Operands[0]
-	opr := i.readOperand(src, state)
+	oprStruct := i.readOperand(src, state)
+	opr := oprStruct.First()
 
 	// Write the value into the destination register
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, opr, state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(opr, oprStruct.Pred), state)
 	}
 }
 
 func (i instEmulator) runNOP(inst Operation, state *coreState) {
 	// do nothing
+}
+
+func (i instEmulator) runNot(inst Operation, state *coreState) {
+	src := inst.SrcOperands.Operands[0]
+	srcStruct := i.readOperand(src, state)
+	srcVal := srcStruct.First()
+	srcPred := srcStruct.Pred
+
+	result := uint32(0)
+	if srcVal == 0 {
+		result = 1
+	} else {
+		result = 0
+	}
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(result, srcPred), state)
+	}
 }
 
 /*
@@ -570,7 +590,8 @@ func (i instEmulator) runNOP(inst Operation, state *coreState) {
 */
 func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
-	addr := i.readOperand(src1, state)
+	addrStruct := i.readOperand(src1, state)
+	addr := addrStruct.First()
 
 	if addr >= uint32(len(state.Memory)) {
 		panic("memory address out of bounds")
@@ -585,14 +606,15 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 		"Y", state.TileY,
 	)
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, value, state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(value, addrStruct.Pred), state)
 	}
 	// elect no next PC
 }
 
 func (i instEmulator) runLoadDRAM(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
-	addr := i.readOperand(src1, state)
+	addrStruct := i.readOperand(src1, state)
+	addr := addrStruct.First()
 	dst := inst.DstOperands.Operands[0]
 	if dst.Impl != "Router" {
 		panic("the destination of a LOAD_DRAM instruction must be Router")
@@ -604,29 +626,32 @@ func (i instEmulator) runLoadDRAM(inst Operation, state *coreState) {
 		"X", state.TileX,
 		"Y", state.TileY,
 	)
-	i.writeOperand(dst, addr, state)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(addr, addrStruct.Pred), state)
+	}
 	state.AddrBuf = addr
 	state.IsToWriteMemory = false // not for write memory
 }
 
 func (i instEmulator) runLoadWaitDRAM(inst Operation, state *coreState) {
 	src := inst.SrcOperands.Operands[0]
-
 	if src.Impl != "Router" {
 		panic("the source of a LOAD_WAIT_DRAM instruction must be Router")
 	}
-	value := i.readOperand(src, state)
-
+	valueStruct := i.readOperand(src, state)
+	value := valueStruct.First()
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, value, state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(value, valueStruct.Pred), state)
 	}
 }
 
 func (i instEmulator) runStoreDirect(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
-	addr := i.readOperand(src1, state)
+	addrStruct := i.readOperand(src1, state)
+	addr := addrStruct.First()
 	src2 := inst.SrcOperands.Operands[1]
-	value := i.readOperand(src2, state)
+	valueStruct := i.readOperand(src2, state)
+	value := valueStruct.First()
 	if addr >= uint32(len(state.Memory)) {
 		panic("memory address out of bounds")
 	}
@@ -643,9 +668,11 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) {
 
 func (i instEmulator) runStoreDRAM(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
-	addr := i.readOperand(src1, state)
+	addrStruct := i.readOperand(src1, state)
+	addr := addrStruct.First()
 	src2 := inst.SrcOperands.Operands[1]
-	value := i.readOperand(src2, state)
+	valueStruct := i.readOperand(src2, state)
+	value := valueStruct.First()
 	dst := inst.DstOperands.Operands[0]
 	if dst.Impl != "Router" {
 		panic("the destination of a STORE_DRAM instruction must be Router")
@@ -658,7 +685,9 @@ func (i instEmulator) runStoreDRAM(inst Operation, state *coreState) {
 		"X", state.TileX,
 		"Y", state.TileY,
 	)
-	i.writeOperand(dst, value, state) // store the value to the data channel
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(value, addrStruct.Pred && valueStruct.Pred), state)
+	}
 	state.AddrBuf = addr
 	state.IsToWriteMemory = true // for write memory
 }
@@ -702,7 +731,7 @@ func (i instEmulator) parseAndCompareI(inst Operation, state *coreState) {
 	dst := inst.DstOperands.Operands[0]
 	src := inst.SrcOperands.Operands[0]
 
-	srcVal := i.readOperand(src, state)
+	srcVal := i.readOperand(src, state).First()
 	dstVal := uint32(0)
 	imme, err := strconv.ParseUint(inst.SrcOperands.Operands[1].Impl, 10, 32)
 	if err != nil {
@@ -726,7 +755,7 @@ func (i instEmulator) parseAndCompareI(inst Operation, state *coreState) {
 			dstVal = 1
 		}
 	}
-	i.writeOperand(dst, dstVal, state)
+	i.writeOperand(dst, cgra.NewScalar(dstVal), state)
 	// elect no next PC
 }
 
@@ -735,7 +764,7 @@ func (i instEmulator) parseAndCompareF32(inst Operation, state *coreState) {
 	dst := inst.DstOperands.Operands[0]
 	src := inst.SrcOperands.Operands[0]
 
-	srcVal := i.readOperand(src, state)
+	srcVal := i.readOperand(src, state).First()
 	dstVal := uint32(0)
 	imme, err := strconv.ParseUint(inst.SrcOperands.Operands[1].Impl, 10, 32)
 	if err != nil {
@@ -759,17 +788,17 @@ func (i instEmulator) parseAndCompareF32(inst Operation, state *coreState) {
 			dstVal = 1
 		}
 	}
-	i.writeOperand(dst, dstVal, state)
+	i.writeOperand(dst, cgra.NewScalar(dstVal), state)
 	// elect no next PC
 }
 
 func (i instEmulator) runAdd(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
-	src1Val := i.readOperand(src1, state)
-	src2Val := i.readOperand(src2, state)
-
-	// 转换为有符号整数进行加法运算
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
 	src1Signed := int32(src1Val)
 	src2Signed := int32(src2Val)
 	dstValSigned := src1Signed + src2Signed
@@ -777,58 +806,65 @@ func (i instEmulator) runAdd(inst Operation, state *coreState) {
 
 	//fmt.Printf("IADD: Adding %d (src1) + %d (src2) = %d\n", src1Signed, src2Signed, dstValSigned)
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, dstVal, state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, src1Struct.Pred && src2Struct.Pred), state)
 	}
 	// elect no next PC
 }
 
 func (i instEmulator) runSub(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
-	src1Val := i.readOperand(src1, state)
-	src2Val := i.readOperand(src2, state)
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
 
-	// 转换为有符号整数进行减法运算
 	src1Signed := int32(src1Val)
 	src2Signed := int32(src2Val)
 	dstValSigned := src1Signed - src2Signed
 	dstVal := uint32(dstValSigned)
 
 	fmt.Printf("ISUB: Subtracting %d (src1) - %d (src2) = %d\n", src1Signed, src2Signed, dstValSigned)
-	i.writeOperand(dst, dstVal, state)
+
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, src1Struct.Pred && src2Struct.Pred), state)
+	}
 	// elect no next PC
 }
 
 func (i instEmulator) runMul(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	srcVal1 := i.readOperand(src1, state)
-	srcVal2 := i.readOperand(src2, state)
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
 
 	// convert to signed integer for multiplication
-	src1Signed := int32(srcVal1)
-	src2Signed := int32(srcVal2)
+	src1Signed := int32(src1Val)
+	src2Signed := int32(src2Val)
 	dstValSigned := src1Signed * src2Signed
 	dstVal := uint32(dstValSigned)
 
-	i.writeOperand(dst, dstVal, state)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, src1Struct.Pred && src2Struct.Pred), state)
+	}
 	// elect no next PC
 }
 
 func (i instEmulator) runDiv(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	srcVal1 := i.readOperand(src1, state)
-	srcVal2 := i.readOperand(src2, state)
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
 
 	// convert to signed integer for division
-	src1Signed := int32(srcVal1)
-	src2Signed := int32(srcVal2)
+	src1Signed := int32(src1Val)
+	src2Signed := int32(src2Val)
 
 	// avoid division by zero
 	if src2Signed == 0 {
@@ -838,78 +874,95 @@ func (i instEmulator) runDiv(inst Operation, state *coreState) {
 	dstValSigned := src1Signed / src2Signed
 	dstVal := uint32(dstValSigned)
 
-	i.writeOperand(dst, dstVal, state)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, src1Struct.Pred && src2Struct.Pred), state)
+	}
 
 	// fmt.Printf("DIV Instruction, Data are %d and %d, Res is %d\n", src1Signed, src2Signed, dstValSigned)
 	// elect no next PC
 }
 
 func (i instEmulator) runLLS(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src := inst.SrcOperands.Operands[0]
 	shiftStr := inst.SrcOperands.Operands[1]
 
-	srcVal := i.readOperand(src, state)
-	shiftStrVal := i.readOperand(shiftStr, state)
+	srcStruct := i.readOperand(src, state)
+	srcVal := srcStruct.First()
+	shiftStrStruct := i.readOperand(shiftStr, state)
+	shiftStrVal := shiftStrStruct.First()
 
 	result := srcVal << shiftStrVal
-	i.writeOperand(dst, result, state)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(result, srcStruct.Pred && shiftStrStruct.Pred), state)
+	}
 	//fmt.Printf("LLS: %s = %s << %d => Result: %d\n", dst, src, shift, result)
 	// elect no next PC
 }
 
 func (i instEmulator) runLRS(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src := inst.SrcOperands.Operands[0]
 	shiftStr := inst.SrcOperands.Operands[1]
 
-	srcVal := i.readOperand(src, state)
-	shiftStrVal := i.readOperand(shiftStr, state)
+	srcStruct := i.readOperand(src, state)
+	srcVal := srcStruct.First()
+	shiftStrStruct := i.readOperand(shiftStr, state)
+	shiftStrVal := shiftStrStruct.First()
 
 	result := srcVal >> shiftStrVal
-	i.writeOperand(dst, result, state)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(result, srcStruct.Pred && shiftStrStruct.Pred), state)
+	}
 
 	//fmt.Printf("LRS: %s = %s >> %d => Result: %d\n", dst, src, shift, result)
 	// elect no next PC
 }
 
 func (i instEmulator) runOR(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	srcVal1 := i.readOperand(src1, state)
-	srcVal2 := i.readOperand(src2, state)
+	src1Struct := i.readOperand(src1, state)
+	srcVal1 := src1Struct.First()
+	src2Struct := i.readOperand(src2, state)
+	srcVal2 := src2Struct.First()
 	result := srcVal1 | srcVal2
-	i.writeOperand(dst, result, state)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(result, src1Struct.Pred && src2Struct.Pred), state)
+	}
 
 	//fmt.Printf("OR: %s = %s | %s => Result: %d\n", dst, src1, src2, result)
 	// elect no next PC
 }
 
 func (i instEmulator) runXOR(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	srcVal1 := i.readOperand(src1, state)
-	srcVal2 := i.readOperand(src2, state)
+	src1Struct := i.readOperand(src1, state)
+	srcVal1 := src1Struct.First()
+	src2Struct := i.readOperand(src2, state)
+	srcVal2 := src2Struct.First()
 	result := srcVal1 ^ srcVal2
-	i.writeOperand(dst, result, state)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(result, src1Struct.Pred && src2Struct.Pred), state)
+	}
 
 	//fmt.Printf("XOR: %s = %s ^ %s => Result: %d\n", dst, src1, src2, result)
 	// elect no next PC
 }
 
 func (i instEmulator) runAND(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	srcVal1 := i.readOperand(src1, state)
-	srcVal2 := i.readOperand(src2, state)
+	src1Struct := i.readOperand(src1, state)
+	srcVal1 := src1Struct.First()
+	src2Struct := i.readOperand(src2, state)
+	srcVal2 := src2Struct.First()
 	result := srcVal1 & srcVal2
-	i.writeOperand(dst, result, state)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalar(result), state)
+	}
 
 	//fmt.Printf("AND: %s = %s & %s => Result: %d\n", dst, src1, src2, result)
 	// elect no next PC
@@ -921,16 +974,20 @@ func (i instEmulator) Jump(dst uint32, state *coreState) {
 
 func (i instEmulator) runJmp(inst Operation, state *coreState) {
 	src := inst.SrcOperands.Operands[0]
-	srcVal := i.readOperand(src, state)
+	srcStruct := i.readOperand(src, state)
+	srcVal := srcStruct.First()
 	i.Jump(srcVal, state)
 }
 
 func (i instEmulator) runBeq(inst Operation, state *coreState) {
+	// not safe in new scenario
 	src := inst.SrcOperands.Operands[0]
 	imme := inst.SrcOperands.Operands[1]
 
-	srcVal := i.readOperand(src, state)
-	immeVal := i.readOperand(imme, state)
+	srcStruct := i.readOperand(src, state)
+	srcVal := srcStruct.First()
+	immeStruct := i.readOperand(imme, state)
+	immeVal := immeStruct.First()
 
 	if srcVal == immeVal {
 		i.Jump(srcVal, state)
@@ -940,11 +997,14 @@ func (i instEmulator) runBeq(inst Operation, state *coreState) {
 }
 
 func (i instEmulator) runBne(inst Operation, state *coreState) {
+	// not safe in new scenario
 	src := inst.SrcOperands.Operands[0]
 	imme := inst.SrcOperands.Operands[1]
 
-	srcVal := i.readOperand(src, state)
-	immeVal := i.readOperand(imme, state)
+	srcStruct := i.readOperand(src, state)
+	srcVal := srcStruct.First()
+	immeStruct := i.readOperand(imme, state)
+	immeVal := immeStruct.First()
 
 	if srcVal != immeVal {
 		i.Jump(srcVal, state)
@@ -954,11 +1014,14 @@ func (i instEmulator) runBne(inst Operation, state *coreState) {
 }
 
 func (i instEmulator) runBlt(inst Operation, state *coreState) {
+	// not safe in new scenario
 	src := inst.SrcOperands.Operands[0]
 	imme := inst.SrcOperands.Operands[1]
 
-	srcVal := i.readOperand(src, state)
-	immeVal := i.readOperand(imme, state)
+	srcStruct := i.readOperand(src, state)
+	srcVal := srcStruct.First()
+	immeStruct := i.readOperand(imme, state)
+	immeVal := immeStruct.First()
 
 	if srcVal < immeVal {
 		i.Jump(srcVal, state)
@@ -1012,12 +1075,15 @@ func (i instEmulator) runMul_Const_Add(inst []string, state *coreState) {
 */
 
 func (i instEmulator) runFAdd(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	src1Uint := i.readOperand(src1, state)
-	src2Uint := i.readOperand(src2, state)
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Uint := src1Struct.First()
+	src2Uint := src2Struct.First()
+	src1Pred := src1Struct.Pred
+	src2Pred := src2Struct.Pred
 
 	src1Float := uint2Float(src1Uint)
 	src2Float := uint2Float(src2Uint)
@@ -1025,18 +1091,23 @@ func (i instEmulator) runFAdd(inst Operation, state *coreState) {
 	resultFloat := src1Float + src2Float
 
 	resultUint := float2Uint(resultFloat)
-	i.writeOperand(dst, resultUint, state)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(resultUint, src1Pred && src2Pred), state)
+	}
 
 	// elect no next PC
 }
 
 func (i instEmulator) runFSub(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	src1Uint := i.readOperand(src1, state)
-	src2Uint := i.readOperand(src2, state)
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Uint := src1Struct.First()
+	src2Uint := src2Struct.First()
+	src1Pred := src1Struct.Pred
+	src2Pred := src2Struct.Pred
 
 	src1Float := uint2Float(src1Uint)
 	src2Float := uint2Float(src2Uint)
@@ -1044,18 +1115,23 @@ func (i instEmulator) runFSub(inst Operation, state *coreState) {
 	resultFloat := src1Float - src2Float
 
 	resultUint := float2Uint(resultFloat)
-	i.writeOperand(dst, resultUint, state)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(resultUint, src1Pred && src2Pred), state)
+	}
 
 	// elect no next PC
 }
 
 func (i instEmulator) runFMul(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	src1Uint := i.readOperand(src1, state)
-	src2Uint := i.readOperand(src2, state)
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Uint := src1Struct.First()
+	src2Uint := src2Struct.First()
+	src1Pred := src1Struct.Pred
+	src2Pred := src2Struct.Pred
 
 	src1Float := uint2Float(src1Uint)
 	src2Float := uint2Float(src2Uint)
@@ -1063,23 +1139,28 @@ func (i instEmulator) runFMul(inst Operation, state *coreState) {
 	resultFloat := src1Float * src2Float
 
 	resultUint := float2Uint(resultFloat)
-	i.writeOperand(dst, resultUint, state)
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(resultUint, src1Pred && src2Pred), state)
+	}
 
 	// elect no next PC
 }
 
 func (i instEmulator) runCmpExport(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
 	src1Val := i.readOperand(src1, state)
 	src2Val := i.readOperand(src2, state)
 
-	if src1Val == src2Val {
-		i.writeOperand(dst, 1, state)
+	if src1Val.First() == src2Val.First() && src1Val.Pred == src2Val.Pred {
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(1, src1Val.Pred), state)
+		}
 	} else {
-		i.writeOperand(dst, 0, state)
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(0, src1Val.Pred), state)
+		}
 	}
 	// elect no next PC
 }
@@ -1088,16 +1169,21 @@ func (i instEmulator) runLTExport(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	src1Val := i.readOperand(src1, state)
-	src2Val := i.readOperand(src2, state)
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
+	src1Pred := src1Struct.Pred
+	src2Pred := src2Struct.Pred
+	resultPred := src1Pred && src2Pred
 
 	if src1Val < src2Val {
 		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, 1, state)
+			i.writeOperand(dst, cgra.NewScalarWithPred(1, resultPred), state)
 		}
 	} else {
 		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, 0, state)
+			i.writeOperand(dst, cgra.NewScalarWithPred(0, resultPred), state)
 		}
 	}
 
@@ -1105,23 +1191,24 @@ func (i instEmulator) runLTExport(inst Operation, state *coreState) {
 }
 
 func (i instEmulator) runPhi(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
-	src3 := inst.SrcOperands.Operands[2]
 
-	src1Val := i.readOperand(src1, state)
-	src2Val := i.readOperand(src2, state)
-	src3Val := i.readOperand(src3, state)
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
 
-	var result uint32
-	if src3Val == 0 {
-		result = src1Val
+	if src1Struct.Pred && !src2Struct.Pred {
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(src1Struct.First(), src1Struct.Pred), state)
+		}
+	} else if !src1Struct.Pred && src2Struct.Pred {
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(src2Struct.First(), src2Struct.Pred), state)
+		}
 	} else {
-		result = src2Val
+		panic("Phi operation: both sources have the same predicate")
 	}
 
-	i.writeOperand(dst, result, state)
 	// elect no next PC
 }
 
@@ -1129,32 +1216,50 @@ func (i instEmulator) runPhiConst(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	src1Val := i.readOperand(src1, state)
-	src2Val := i.readOperand(src2, state)
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
+	src1Pred := src1Struct.Pred
+	src2Pred := src2Struct.Pred
 
 	var result uint32
 	if state.States["Phiconst"] == false {
 		result = src1Val
 		state.States["Phiconst"] = true
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(result, src1Pred), state)
+		}
 	} else {
 		result = src2Val
-	}
-	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, result, state)
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(result, src2Pred), state)
+		}
 	}
 	// elect no next PC
 }
 
 func (i instEmulator) runGrantPred(inst Operation, state *coreState) {
-	dst := inst.DstOperands.Operands[0]
 	src := inst.SrcOperands.Operands[0]
 	pred := inst.SrcOperands.Operands[1]
 
-	srcVal := i.readOperand(src, state)
-	predVal := i.readOperand(pred, state)
+	srcStruct := i.readOperand(src, state)
+	predStruct := i.readOperand(pred, state)
+	srcVal := srcStruct.First()
+	predVal := predStruct.First()
 
-	if predVal == 1 {
-		i.writeOperand(dst, srcVal, state)
+	resultPred := false
+
+	if predVal == 0 {
+		resultPred = false
+	} else {
+		resultPred = true
+	}
+
+	//fmt.Printf("GRANTPRED: srcVal = %d, predVal = %t at (%d, %d)\n", srcVal, predVal, state.TileX, state.TileY)
+
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(srcVal, resultPred), state)
 	}
 
 	// elect no next PC

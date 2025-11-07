@@ -45,11 +45,11 @@ func (b Builder) Build(name string) *Core {
 			"NorthWest": true,
 			"Router":    true,
 		},
-		Registers:        make([]uint32, 64),
+		Registers:        make([]cgra.Data, 64),
 		Memory:           make([]uint32, 1024),
-		RecvBufHead:      make([][]uint32, 4),
+		RecvBufHead:      make([][]cgra.Data, 4),
 		RecvBufHeadReady: make([][]bool, 4),
-		SendBufHead:      make([][]uint32, 4),
+		SendBufHead:      make([][]cgra.Data, 4),
 		SendBufHeadBusy:  make([][]bool, 4),
 		AddrBuf:          0,
 		IsToWriteMemory:  false,
@@ -63,9 +63,9 @@ func (b Builder) Build(name string) *Core {
 	}
 
 	for i := 0; i < 4; i++ {
-		c.state.RecvBufHead[i] = make([]uint32, 12)
+		c.state.RecvBufHead[i] = make([]cgra.Data, 12)
 		c.state.RecvBufHeadReady[i] = make([]bool, 12)
-		c.state.SendBufHead[i] = make([]uint32, 12)
+		c.state.SendBufHead[i] = make([]cgra.Data, 12)
 		c.state.SendBufHeadBusy[i] = make([]bool, 12)
 	}
 

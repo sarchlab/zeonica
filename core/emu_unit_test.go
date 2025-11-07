@@ -3,6 +3,7 @@ package core
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/sarchlab/zeonica/cgra"
 )
 
 var _ = Describe("InstEmulator", func() {
@@ -26,12 +27,12 @@ var _ = Describe("InstEmulator", func() {
 			},
 			TileX:            0,
 			TileY:            0,
-			Registers:        make([]uint32, 16),
+			Registers:        make([]cgra.Data, 16),
 			Memory:           make([]uint32, 1024),
 			Code:             Program{},
-			RecvBufHead:      make([][]uint32, 4),
+			RecvBufHead:      make([][]cgra.Data, 4),
 			RecvBufHeadReady: make([][]bool, 4),
-			SendBufHead:      make([][]uint32, 4),
+			SendBufHead:      make([][]cgra.Data, 4),
 			SendBufHeadBusy:  make([][]bool, 4),
 		}
 	})
@@ -58,7 +59,7 @@ var _ = Describe("InstEmulator", func() {
 	Context("Arithmetic Instructions", func() {
 		Describe("MUL_CONST", func() {
 			It("should multiply register by immediate", func() {
-				s.Registers[0] = 5
+				s.Registers[0] = cgra.NewScalar(5)
 				ie.RunInstructionGroup(mul_const_inst, &s, 0)
 				Expect(s.Registers[1]).To(Equal(uint32(15)))
 				Expect(s.PCInBlock).To(Equal(int32(0)))

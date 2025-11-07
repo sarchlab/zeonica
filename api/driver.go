@@ -131,7 +131,7 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 		msg := cgra.MoveMsgBuilder{}.
 			WithSrc(port.AsRemote()).
 			WithDst(task.remotePorts[i]).
-			WithData(task.data[task.round*task.stride+i]).
+			WithData(cgra.NewScalar(task.data[task.round*task.stride+i])).
 			WithColor(task.color).
 			WithSendTime(d.Engine.CurrentTime()). // Set the current engine time here
 			Build()
@@ -179,13 +179,14 @@ func (d *driverImpl) doOneCollectTask(task *collectTask) bool {
 
 	for i, port := range task.ports {
 		msg := port.RetrieveIncoming().(*cgra.MoveMsg)
-		task.data[task.round*task.stride+i] = msg.Data
+		task.data[task.round*task.stride+i] = msg.Data.First()
 		// in red
 
 		core.Trace("DataFlow",
 			"Behavior", "Collect",
 			slog.Float64("Time", float64(d.Engine.CurrentTime()*1e9)),
 			"Data", task.data[task.round*task.stride+i],
+			"Pred", msg.Data.Pred,
 			"Color", task.color,
 			"From", task.ports[i].Name(),
 			"To", "None",

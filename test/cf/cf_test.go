@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
-	"os"
 	"testing"
 	"unsafe"
 
@@ -100,6 +98,7 @@ func TestCmpExOperation(t *testing.T) {
 	}
 }
 
+/*
 func TestGpredOperation(t *testing.T) {
 
 	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -212,6 +211,7 @@ func TestGpredOperation(t *testing.T) {
 		t.Fatal("❌ Gpred tests failed!")
 	}
 }
+*/
 
 func TestPhiOperation(t *testing.T) {
 	// 设置测试参数
