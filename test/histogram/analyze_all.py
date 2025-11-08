@@ -420,6 +420,7 @@ def generate_backpressure_by_type(pe_backpressure, total_cycles, output_file='ba
         'CheckFlagsFailed': 'CheckFlags Failed\n(Port not ready or data invalid)',
         'SendFailed': 'Send Failed\n(Port send operation failed)',
         'RecvSkipped': 'Recv Skipped\n(Data reception skipped in SyncOp mode)',
+        'DataOverwritten': 'Data Overwritten\n(Old data overwritten by new data in AsyncOp)',
         'SendBufBusy': 'Send Buffer Busy\n(Destination port buffer is busy)',
         'MemoryWriteFailed': 'Memory Write Failed\n(Memory write request failed)',
         'MemoryReadFailed': 'Memory Read Failed\n(Memory read request failed)',
@@ -430,7 +431,7 @@ def generate_backpressure_by_type(pe_backpressure, total_cycles, output_file='ba
         all_types.update(stats['by_type'].keys())
     
     main_types = ['InstGroupBlocked', 'InstGroupNotRun', 'CheckFlagsFailed', 
-                  'SendFailed', 'RecvSkipped', 'SendBufBusy', 
+                  'SendFailed', 'RecvSkipped', 'DataOverwritten', 'SendBufBusy', 
                   'MemoryWriteFailed', 'MemoryReadFailed']
     types_to_show = [t for t in main_types if t in all_types]
     if not types_to_show:
