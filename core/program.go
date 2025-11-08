@@ -146,30 +146,57 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 				// Convert operations
 				var operations []Operation
 				for _, yamlOp := range instGroup.Operations {
+					// Helper function to normalize color: RED->R, YELLOW->Y, BLUE->B
+					normalizeColor := func(color string) string {
+						colorUpper := strings.ToUpper(color)
+						switch colorUpper {
+						case "RED":
+							return "R"
+						case "YELLOW":
+							return "Y"
+						case "BLUE":
+							return "B"
+						default:
+							return color // Return as-is if not recognized
+						}
+					}
+
 					// Convert source operands
 					var srcOperands []Operand
 					for _, src := range yamlOp.SrcOperands {
+						normalizedColor := normalizeColor(src.Color)
 						srcOperands = append(srcOperands, Operand{
 							Flag:  false, // Default flag value
-							Color: src.Color,
+							Color: normalizedColor,
 							Impl:  src.Operand,
 						})
-						instructionGroup.RefCount[src.Operand+src.Color]++
+						instructionGroup.RefCount[src.Operand+normalizedColor]++
 					}
 
 					// Convert destination operands
 					var dstOperands []Operand
 					for _, dst := range yamlOp.DstOperands {
+						normalizedColor := normalizeColor(dst.Color)
 						dstOperands = append(dstOperands, Operand{
 							Flag:  false, // Default flag value
-							Color: dst.Color,
+							Color: normalizedColor,
 							Impl:  dst.Operand,
 						})
 					}
 
+					// Normalize opcode: replace DATA_MOV/CTRL_MOV with MOV, GRANT_PREDICATE with GPRED, RETURN with RET
+					opCode := yamlOp.OpCode
+					if opCode == "DATA_MOV" || opCode == "CTRL_MOV" {
+						opCode = "MOV"
+					} else if opCode == "GRANT_PREDICATE" {
+						opCode = "GPRED"
+					} else if opCode == "RETURN" {
+						opCode = "RET"
+					}
+
 					// Create operation
 					operation := Operation{
-						OpCode:      yamlOp.OpCode,
+						OpCode:      opCode,
 						SrcOperands: OperandList{Operands: srcOperands},
 						DstOperands: OperandList{Operands: dstOperands},
 					}
@@ -187,6 +214,27 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 
 		program := Program{
 			EntryBlocks: entryBlocks,
+		}
+
+		// Debug: Check if program is empty
+		if len(entryBlocks) == 0 || len(entryBlocks[0].InstructionGroups) == 0 {
+			fmt.Printf("Warning: Core at %s has empty program (entryBlocks=%d)\n", coordKey, len(entryBlocks))
+		} else {
+			fmt.Printf("Debug: Core at %s has program with %d entryBlocks, first has %d instructionGroups\n",
+				coordKey, len(entryBlocks), len(entryBlocks[0].InstructionGroups))
+			// Debug: For Core (3,2), print detailed program info
+			if coordKey == "(3,2)" {
+				fmt.Printf("Debug: Core (3,2) program details:\n")
+				for i, entryBlock := range entryBlocks {
+					fmt.Printf("  EntryBlock %d: %d instructionGroups\n", i, len(entryBlock.InstructionGroups))
+					for j, instGroup := range entryBlock.InstructionGroups {
+						fmt.Printf("    InstructionGroup %d: %d operations\n", j, len(instGroup.Operations))
+						for k, op := range instGroup.Operations {
+							fmt.Printf("      Operation %d: %s\n", k, op.OpCode)
+						}
+					}
+				}
+			}
 		}
 
 		programMap[coordKey] = program
@@ -465,8 +513,14 @@ func parsePEFormat(content string) map[string]Program {
 						}
 					}
 
+					// Normalize opcode: replace DATA_MOV and CTRL_MOV with MOV
+					normalizedOpcode := opcode
+					if normalizedOpcode == "DATA_MOV" || normalizedOpcode == "CTRL_MOV" {
+						normalizedOpcode = "MOV"
+					}
+
 					operation := Operation{
-						OpCode:      opcode,
+						OpCode:      normalizedOpcode,
 						SrcOperands: OperandList{Operands: srcOps},
 						DstOperands: OperandList{Operands: dstOps},
 					}
@@ -497,8 +551,18 @@ func parsePEFormat(content string) map[string]Program {
 					}
 				}
 
+				// Normalize opcode: replace DATA_MOV/CTRL_MOV with MOV, GRANT_PREDICATE with GPRED, RETURN with RET
+				normalizedOpcode := opcode
+				if normalizedOpcode == "DATA_MOV" || normalizedOpcode == "CTRL_MOV" {
+					normalizedOpcode = "MOV"
+				} else if normalizedOpcode == "GRANT_PREDICATE" {
+					normalizedOpcode = "GPRED"
+				} else if normalizedOpcode == "RETURN" {
+					normalizedOpcode = "RET"
+				}
+
 				operation := Operation{
-					OpCode:      opcode,
+					OpCode:      normalizedOpcode,
 					SrcOperands: OperandList{Operands: srcOps},
 					DstOperands: OperandList{Operands: dstOps},
 				}
@@ -610,8 +674,18 @@ func parseCoreFormat(content string) map[string]Program {
 					}
 				}
 
+				// Normalize opcode: replace DATA_MOV/CTRL_MOV with MOV, GRANT_PREDICATE with GPRED, RETURN with RET
+				normalizedOpcode := opcode
+				if normalizedOpcode == "DATA_MOV" || normalizedOpcode == "CTRL_MOV" {
+					normalizedOpcode = "MOV"
+				} else if normalizedOpcode == "GRANT_PREDICATE" {
+					normalizedOpcode = "GPRED"
+				} else if normalizedOpcode == "RETURN" {
+					normalizedOpcode = "RET"
+				}
+
 				operation := Operation{
-					OpCode:      opcode,
+					OpCode:      normalizedOpcode,
 					SrcOperands: OperandList{Operands: srcOps},
 					DstOperands: OperandList{Operands: dstOps},
 				}

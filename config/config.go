@@ -98,13 +98,15 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 		connections := make(map[int]*directconnection.Comp)
 
 		for x := 0; x < d.width; x++ {
-			for y := 0; y < d.height; y++ {
-				tile := dev.Tiles[y][x]
-				// if has mapping
-				if _, ok := d.memoryShare[[2]int{x, y}]; !ok {
-					panic("No mapping for tile " + strconv.Itoa(x) + "," + strconv.Itoa(y))
+			for yUser := 0; yUser < d.height; yUser++ {
+				// Convert user coordinate to array index
+				yArray := d.height - 1 - yUser
+				tile := dev.Tiles[yArray][x]
+				// if has mapping (memoryShare uses user coordinates)
+				if _, ok := d.memoryShare[[2]int{x, yUser}]; !ok {
+					panic("No mapping for tile " + strconv.Itoa(x) + "," + strconv.Itoa(yUser))
 				}
-				groupID := d.memoryShare[[2]int{x, y}]
+				groupID := d.memoryShare[[2]int{x, yUser}]
 				if _, ok := controllers[groupID]; !ok {
 					// has not been created yet, create it
 					controller := idealmemcontroller.MakeBuilder().
@@ -114,7 +116,7 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 						Build("SharedMemory")
 					controllers[groupID] = controller
 
-					name := fmt.Sprintf("SharedMemory%d%d", x, y)
+					name := fmt.Sprintf("SharedMemory%d%d", x, yUser)
 
 					conn := directconnection.MakeBuilder().
 						WithEngine(d.engine).
@@ -127,10 +129,10 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 					tile.SharedMemoryController = controller
 					dev.SharedMemoryControllers = append(dev.SharedMemoryControllers, controller)
 
-					fmt.Println("Connect Tile (", x, ",", y, ") to SharedMemory Controller (", groupID, ") (new-created)")
+					fmt.Println("Connect Tile (", x, ",", yUser, ") to SharedMemory Controller (", groupID, ") (new-created)")
 				} else {
 					// plug in the controller to the tile
-					fmt.Println("Connect Tile (", x, ",", y, ") to SharedMemory Controller (", groupID, ") (already-created)")
+					fmt.Println("Connect Tile (", x, ",", yUser, ") to SharedMemory Controller (", groupID, ") (already-created)")
 					connections[groupID].PlugIn(tile.Core.GetPortByName("Router"))
 					tile.SetRemotePort(cgra.Router, controllers[groupID].GetPortByName("Top").AsRemote())
 					tile.SharedMemoryController = controllers[groupID]
@@ -140,9 +142,11 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 		}
 	} else if d.memoryMode == "local" {
 		// create DRAM for each of the tiles
-		for y := 0; y < d.height; y++ {
+		for yUser := 0; yUser < d.height; yUser++ {
 			for x := 0; x < d.width; x++ {
-				tile := dev.Tiles[y][x]
+				// Convert user coordinate to array index
+				yArray := d.height - 1 - yUser
+				tile := dev.Tiles[yArray][x]
 				drams := idealmemcontroller.MakeBuilder().
 					WithEngine(d.engine).
 					WithNewStorage(4 * mem.GB).
@@ -163,7 +167,7 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 				tile.SharedMemoryController = drams
 				dev.SharedMemoryControllers = append(dev.SharedMemoryControllers, drams)
 
-				fmt.Println("Init DRAM for tile", tile.Core.Name(), "at", x, y)
+				fmt.Println("Init DRAM for tile", tile.Core.Name(), "at", x, yUser)
 			}
 		}
 	}
@@ -173,11 +177,16 @@ func (d DeviceBuilder) createTiles(
 	dev *device,
 	name string,
 ) {
-	for y := 0; y < d.height; y++ {
-		dev.Tiles[y] = make([]*tile, d.width)
+	// Internal storage: Tiles[y_array][x] where y_array is array index (0=top, height-1=bottom)
+	// User coordinate: (x, y_user) where y_user (0=bottom, height-1=top)
+	// Conversion: y_array = height - 1 - y_user
+	for yArray := 0; yArray < d.height; yArray++ {
+		dev.Tiles[yArray] = make([]*tile, d.width)
 		for x := 0; x < d.width; x++ {
 			tile := &tile{}
-			coreName := fmt.Sprintf("%s.Tile[%d][%d].Core", name, y, x)
+			// Convert array index to user coordinate for naming and MapProgram
+			yUser := d.height - 1 - yArray
+			coreName := fmt.Sprintf("%s.Tile[%d][%d].Core", name, yUser, x)
 			tile.Core = core.Builder{}.
 				WithEngine(d.engine).
 				WithFreq(d.freq).
@@ -187,35 +196,41 @@ func (d DeviceBuilder) createTiles(
 				d.monitor.RegisterComponent(tile.Core)
 			}
 
-			tile.Core.MapProgram(core.Program{}, x, y)
+			// MapProgram uses user coordinates (x, y_user) where (0,0) is bottom-left
+			tile.Core.MapProgram(core.Program{}, x, yUser)
 
-			dev.Tiles[y][x] = tile
+			dev.Tiles[yArray][x] = tile
 		}
 	}
 }
 
 func (d DeviceBuilder) connectTiles(dev *device) {
-	for y := 0; y < d.height; y++ {
+	// Internal storage: Tiles[y_array][x] where y_array is array index (0=top, height-1=bottom)
+	// In user coordinates: South means downward (y decreases), North means upward (y increases)
+	// In array indices: South means y_array increases, North means y_array decreases
+	for yArray := 0; yArray < d.height; yArray++ {
 		for x := 0; x < d.width; x++ {
-			currentTile := dev.Tiles[y][x]
-			// connect to the East tile
+			currentTile := dev.Tiles[yArray][x]
+			// connect to the East tile (same y_array, x+1)
 			if x < d.width-1 {
-				eastTile := dev.Tiles[y][x+1]
+				eastTile := dev.Tiles[yArray][x+1]
 				d.connectTilePorts(currentTile, cgra.East, eastTile, cgra.West)
 			}
-			// connect to the South tile
-			if y < d.height-1 {
-				southTile := dev.Tiles[y+1][x]
+			// connect to the South tile (y_array+1, same x)
+			// In user coords: South = downward = y decreases, so y_array increases
+			// Note: This also establishes the reverse connection (North direction)
+			if yArray < d.height-1 {
+				southTile := dev.Tiles[yArray+1][x]
 				d.connectTilePorts(currentTile, cgra.South, southTile, cgra.North)
 			}
 			// connect to the south east tile
-			if y < d.height-1 && x < d.width-1 {
-				southEastTile := dev.Tiles[y+1][x+1]
+			if yArray < d.height-1 && x < d.width-1 {
+				southEastTile := dev.Tiles[yArray+1][x+1]
 				d.connectTilePorts(currentTile, cgra.SouthEast, southEastTile, cgra.NorthWest)
 			}
 			// connect to the south west tile
-			if y < d.height-1 && x > 0 {
-				southWestTile := dev.Tiles[y+1][x-1]
+			if yArray < d.height-1 && x > 0 {
+				southWestTile := dev.Tiles[yArray+1][x-1]
 				d.connectTilePorts(currentTile, cgra.SouthWest, southWestTile, cgra.NorthEast)
 			}
 		}
@@ -239,9 +254,34 @@ func (d DeviceBuilder) connectTilePorts(srcTile *tile,
 		WithFreq(d.freq).
 		Build(connName)
 
+	// Debug: Log port insertion for Core (2,2) and Core (2,3)
+	srcX, srcY := srcTile.GetTileX(), srcTile.GetTileY()
+	dstX, dstY := dstTile.GetTileX(), dstTile.GetTileY()
+	if (srcX == 2 && srcY == 2) || (srcX == 2 && srcY == 3) || (dstX == 2 && dstY == 2) || (dstX == 2 && dstY == 3) {
+		fmt.Printf("[PLUGIN] Conn: %s, PlugIn srcPort: Core (%d,%d) %s (%s)\n",
+			connName, srcX, srcY, srcSide.Name(), srcPort.Name())
+	}
 	conn.PlugIn(srcPort)
+	if (srcX == 2 && srcY == 2) || (srcX == 2 && srcY == 3) || (dstX == 2 && dstY == 2) || (dstX == 2 && dstY == 3) {
+		fmt.Printf("[PLUGIN] Conn: %s, PlugIn dstPort: Core (%d,%d) %s (%s)\n",
+			connName, dstX, dstY, dstSide.Name(), dstPort.Name())
+	}
 	conn.PlugIn(dstPort)
+
+	// Debug: Log connection establishment for Core (2,2) and Core (2,3)
+	if (srcX == 2 && srcY == 2) || (srcX == 2 && srcY == 3) || (dstX == 2 && dstY == 2) || (dstX == 2 && dstY == 3) {
+		fmt.Printf("[CONN] Connecting: Core (%d,%d) %s -> Core (%d,%d) %s\n",
+			srcX, srcY, srcSide.Name(), dstX, dstY, dstSide.Name())
+	}
 
 	srcTile.SetRemotePort(srcSide, dstPort.AsRemote())
 	dstTile.SetRemotePort(dstSide, srcPort.AsRemote())
+
+	// Debug: Log SetRemotePort calls for Core (2,2) and Core (2,3)
+	if (srcX == 2 && srcY == 2) || (srcX == 2 && srcY == 3) || (dstX == 2 && dstY == 2) || (dstX == 2 && dstY == 3) {
+		fmt.Printf("[SETREMOTE] Core (%d,%d) %s -> %s\n",
+			srcX, srcY, srcSide.Name(), dstPort.Name())
+		fmt.Printf("[SETREMOTE] Core (%d,%d) %s -> %s\n",
+			dstX, dstY, dstSide.Name(), srcPort.Name())
+	}
 }

@@ -103,11 +103,16 @@ func (d *device) GetSize() (int, int) {
 }
 
 // GetTile returns the tile at the given coordinates.
+// Coordinate system: (0,0) at bottom-left, y increases upward, x increases rightward
+// Internal storage: Tiles[y_array][x] where y_array = height - 1 - y (0=top, height-1=bottom)
 func (d *device) GetTile(x, y int) cgra.Tile {
-	return d.Tiles[y][x]
+	// Convert from user coordinate (0=bottom) to array index (0=top)
+	yArray := d.Height - 1 - y
+	return d.Tiles[yArray][x]
 }
 
 // GetSidePorts returns the ports on the given side of the device.
+// Coordinate system: (0,0) at bottom-left, y increases upward, x increases rightward
 func (d *device) GetSidePorts(
 	side cgra.Side,
 	portRange [2]int,
@@ -116,20 +121,26 @@ func (d *device) GetSidePorts(
 
 	switch side {
 	case cgra.North:
+		// North side: top row in user coordinates (y=height-1), which is array index 0
 		for x := portRange[0]; x < portRange[1]; x++ {
 			ports = append(ports, d.Tiles[0][x].GetPort(side))
 		}
 	case cgra.West:
-		for y := portRange[0]; y < portRange[1]; y++ {
-			ports = append(ports, d.Tiles[y][0].GetPort(side))
+		// West side: y-coordinate based, need to convert from user coord to array index
+		for yUser := portRange[0]; yUser < portRange[1]; yUser++ {
+			yArray := d.Height - 1 - yUser
+			ports = append(ports, d.Tiles[yArray][0].GetPort(side))
 		}
 	case cgra.South:
+		// South side: bottom row in user coordinates (y=0), which is array index height-1
 		for x := portRange[0]; x < portRange[1]; x++ {
 			ports = append(ports, d.Tiles[d.Height-1][x].GetPort(side))
 		}
 	case cgra.East:
-		for y := portRange[0]; y < portRange[1]; y++ {
-			ports = append(ports, d.Tiles[y][d.Width-1].GetPort(side))
+		// East side: y-coordinate based, need to convert from user coord to array index
+		for yUser := portRange[0]; yUser < portRange[1]; yUser++ {
+			yArray := d.Height - 1 - yUser
+			ports = append(ports, d.Tiles[yArray][d.Width-1].GetPort(side))
 		}
 	default:
 		panic("invalid side")
