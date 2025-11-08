@@ -153,10 +153,11 @@ func (c *Core) Tick() (madeProgress bool) {
 	// don't force progress to avoid infinite loops
 	if len(c.state.Code.EntryBlocks) > 0 && !madeProgress && c.state.PCInBlock == -1 {
 		// Check if program has already been executed (for single-instruction programs like GRANT_ONCE)
+		// This should match the logic in runProgram() - only true single-instruction programs
 		hasExecuted := false
-		if len(c.state.Code.EntryBlocks) > 0 && len(c.state.Code.EntryBlocks[0].InstructionGroups) > 0 {
+		if len(c.state.Code.EntryBlocks) > 0 && len(c.state.Code.EntryBlocks[0].InstructionGroups) == 1 {
 			firstInstGroup := c.state.Code.EntryBlocks[0].InstructionGroups[0]
-			if len(firstInstGroup.Operations) > 0 && firstInstGroup.Operations[0].OpCode == "GRANT_ONCE" {
+			if len(firstInstGroup.Operations) == 1 && firstInstGroup.Operations[0].OpCode == "GRANT_ONCE" {
 				// Check if GRANT_ONCE has already executed
 				stateKey := fmt.Sprintf("GrantOnce_0")
 				if c.state.States[stateKey] == true {
@@ -358,13 +359,13 @@ func (c *Core) doRecv() bool {
 						"NewPred", msg.Data.Pred,
 					)
 					// Debug: Log when data reception is skipped due to RecvBufHeadReady being true
-					if (c.state.TileX == 1 && c.state.TileY == 2 && i == int(cgra.West)) ||
-						(c.state.TileX == 2 && c.state.TileY == 3 && i == int(cgra.South)) ||
-						(c.state.TileX == 2 && c.state.TileY == 2 && i == int(cgra.East)) {
-						sideName := []string{"North", "East", "South", "West", "Router", "", "", ""}[i]
-						fmt.Fprintf(os.Stderr, "[Recv_SKIP] Core (%d,%d): %s[color=%d] skipped newData=%d, oldData=%d, oldPred=%v\n",
-							c.state.TileX, c.state.TileY, sideName, color, newData, oldData, oldPred)
-					}
+					// if (c.state.TileX == 1 && c.state.TileY == 2 && i == int(cgra.West)) ||
+					// 	(c.state.TileX == 2 && c.state.TileY == 3 && i == int(cgra.South)) ||
+					// 	(c.state.TileX == 2 && c.state.TileY == 2 && i == int(cgra.East)) {
+					// 	sideName := []string{"North", "East", "South", "West", "Router", "", "", ""}[i]
+					// 	fmt.Fprintf(os.Stderr, "[Recv_SKIP] Core (%d,%d): %s[color=%d] skipped newData=%d, oldData=%d, oldPred=%v\n",
+					// 		c.state.TileX, c.state.TileY, sideName, color, newData, oldData, oldPred)
+					// }
 				}
 				continue
 			}
@@ -377,6 +378,27 @@ func (c *Core) doRecv() bool {
 			// In AsyncOp mode, always update RecvBufHead with new data if available
 			// This allows new data to overwrite old data, which is necessary when different
 			// instructions in different instruction groups need different data from the same port
+			// Log backpressure if old data is being overwritten (RecvBufHeadReady was true)
+			if c.state.RecvBufHeadReady[color][i] && c.state.Mode == AsyncOp {
+				// Backpressure: Old data overwritten by new data in AsyncOp mode
+				oldData := c.state.RecvBufHead[color][i].First()
+				oldPred := c.state.RecvBufHead[color][i].Pred
+				newData := msg.Data.First()
+				direction := []string{"North", "East", "South", "West", "Router", "", "", ""}[i]
+				Trace("Backpressure",
+					"Type", "DataOverwritten",
+					"X", c.state.TileX,
+					"Y", c.state.TileY,
+					"Direction", direction,
+					"Color", color,
+					"Time", float64(c.Engine.CurrentTime()*1e9),
+					"Reason", "RecvBufHeadReady=true (old data overwritten by new data in AsyncOp)",
+					"OldData", oldData,
+					"OldPred", oldPred,
+					"NewData", newData,
+					"NewPred", msg.Data.Pred,
+				)
+			}
 			c.state.RecvBufHeadReady[color][i] = true
 			c.state.RecvBufHead[color][i] = msg.Data
 
@@ -465,10 +487,10 @@ func (c *Core) runProgram() bool {
 				stateKey := fmt.Sprintf("GrantOnce_0")
 				if c.state.States[stateKey] == true {
 					isSingleInstructionProgram = true
-					if (c.state.TileX == 2 && c.state.TileY == 2) || (c.state.TileX == 2 && c.state.TileY == 3) {
-						fmt.Fprintf(os.Stderr, "[runProgram] Core (%d,%d) Single-instruction program, returning false\n",
-							c.state.TileX, c.state.TileY)
-					}
+					// if (c.state.TileX == 2 && c.state.TileY == 2) || (c.state.TileX == 2 && c.state.TileY == 3) {
+					// 	fmt.Fprintf(os.Stderr, "[runProgram] Core (%d,%d) Single-instruction program, returning false\n",
+					// 		c.state.TileX, c.state.TileY)
+					// }
 				}
 			}
 		}
