@@ -17,3 +17,6 @@
 .DS_Store
 *.debug
 samples/passthrough/passthrough
+
+# OpenSpec files (internal development)
+openspec/
