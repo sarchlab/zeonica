@@ -6,6 +6,7 @@ Includes:
 2. Link utilization analysis
 3. Backpressure analysis (including port-level)
 4. Generate all heatmaps
+5. Generate timeline trace visualization
 """
 
 import json
@@ -20,9 +21,9 @@ from collections import defaultdict
 plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Liberation Sans']
 plt.rcParams['axes.unicode_minus'] = False
 
-# CGRA grid size
-GRID_ROWS = 4
-GRID_COLS = 4
+# CGRA grid size (will be read from log file)
+GRID_ROWS = None
+GRID_COLS = None
 
 def parse_pe_coord(pe_key):
     """Parse coordinates from PE key, e.g., PE(2,3) -> (2, 3)"""
@@ -56,8 +57,44 @@ def parse_link_info(link_key):
                     return (int(match.group(1)), int(match.group(2))), src_part, 'Recv'
     return None, None, None
 
+def read_grid_config(log_file):
+    """Read grid configuration from log file"""
+    global GRID_ROWS, GRID_COLS
+    rows = None
+    cols = None
+    
+    with open(log_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('GRID_ROWS:'):
+                try:
+                    rows = int(line.split(':', 1)[1].strip())
+                except ValueError:
+                    pass
+            elif line.startswith('GRID_COLS:'):
+                try:
+                    cols = int(line.split(':', 1)[1].strip())
+                except ValueError:
+                    pass
+            # Stop reading config section when we hit the separator
+            if line.startswith('===') and rows is not None and cols is not None:
+                break
+    
+    if rows is None or cols is None:
+        print(f"Warning: Could not read grid configuration from log file, using defaults (4x4)")
+        rows = 4
+        cols = 4
+    
+    GRID_ROWS = rows
+    GRID_COLS = cols
+    print(f"Grid configuration: {GRID_ROWS} rows x {GRID_COLS} cols")
+    return rows, cols
+
 def analyze_all(log_file):
     """Unified analysis of all metrics"""
+    # Read grid configuration from log file
+    read_grid_config(log_file)
+    
     # PE statistics
     pe_stats = defaultdict(lambda: {
         'exec_events': [],
@@ -99,7 +136,7 @@ def analyze_all(log_file):
     with open(log_file, 'r') as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith('='):
+            if not line or line.startswith('=') or line.startswith('GRID_ROWS:') or line.startswith('GRID_COLS:'):
                 continue
             
             try:
@@ -488,6 +525,263 @@ def generate_backpressure_by_type(pe_backpressure, total_cycles, output_file='ba
     print(f"Backpressure by type heatmap saved to {output_file}")
     plt.close()
 
+def parse_trace_data(log_file):
+    """Parse log file to extract trace information for timeline visualization"""
+    # Track instructions by PE and time
+    pe_instructions = defaultdict(lambda: defaultdict(list))  # {(x,y): {time: [instructions]}}
+    data_flows = []  # List of data flow events
+    
+    with open(log_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('=') or line.startswith('GRID_ROWS:') or line.startswith('GRID_COLS:'):
+                continue
+            
+            try:
+                entry = json.loads(line)
+                msg = entry.get('msg', '')
+                time = float(entry.get('Time', 0))
+                x = entry.get('X', -1)
+                y = entry.get('Y', -1)
+                
+                if x >= 0 and y >= 0:
+                    pe_key = (x, y)
+                    time_int = int(time)
+                    
+                    # Track instruction execution
+                    if msg in ['Inst_Exec', 'PHI_Exec', 'GPRED_Exec', 'NOT_Exec']:
+                        opcode = entry.get('OpCode', msg)
+                        pe_instructions[pe_key][time_int].append({
+                            'opcode': opcode,
+                            'time': time,
+                            'type': 'exec',
+                            'label': opcode
+                        })
+                    elif msg == 'Memory':
+                        behavior = entry.get('Behavior', '')
+                        if behavior in ['WriteMemory', 'ReadMemory']:
+                            pe_instructions[pe_key][time_int].append({
+                                'opcode': behavior,
+                                'time': time,
+                                'type': 'memory',
+                                'label': behavior
+                            })
+                    elif msg == 'DataFlow':
+                        behavior = entry.get('Behavior', '')
+                        direction = entry.get('Direction', '')
+                        data = entry.get('Data', '')
+                        
+                        if behavior == 'Send':
+                            data_flows.append({
+                                'time': time_int,
+                                'from': pe_key,
+                                'direction': direction,
+                                'data': data,
+                                'type': 'send'
+                            })
+                            # Also track as instruction
+                            pe_instructions[pe_key][time_int].append({
+                                'opcode': f"Send({direction})",
+                                'time': time,
+                                'type': 'send',
+                                'label': f"Send({direction})"
+                            })
+                        elif behavior == 'Recv':
+                            data_flows.append({
+                                'time': time_int,
+                                'to': pe_key,
+                                'direction': direction,
+                                'data': data,
+                                'type': 'recv'
+                            })
+                            # Also track as instruction
+                            pe_instructions[pe_key][time_int].append({
+                                'opcode': f"Recv({direction})",
+                                'time': time,
+                                'type': 'recv',
+                                'label': f"Recv({direction})"
+                            })
+                    elif msg == 'InstGroup_Blocked':
+                        opcode = entry.get('OpCode', 'Blocked')
+                        pe_instructions[pe_key][time_int].append({
+                            'opcode': f"Blocked({opcode})",
+                            'time': time,
+                            'type': 'blocked',
+                            'label': f"Blocked({opcode})"
+                        })
+                    elif msg == 'InstGroup_NotRun':
+                        pe_instructions[pe_key][time_int].append({
+                            'opcode': 'Idle',
+                            'time': time,
+                            'type': 'idle',
+                            'label': 'Idle'
+                        })
+                
+            except (json.JSONDecodeError, ValueError):
+                continue
+    
+    return pe_instructions, data_flows
+
+def generate_timeline(pe_instructions, data_flows, total_cycles, output_file='timeline_visualization.png'):
+    """Generate linear timeline visualization showing what each PE does at each timestep"""
+    # Get all PEs that have activity
+    all_pe_keys = sorted(set(pe_instructions.keys()))
+    
+    if not all_pe_keys:
+        print("No PE activity found for timeline")
+        return
+    
+    # Get time range
+    all_times = set()
+    for pe_inst in pe_instructions.values():
+        all_times.update(pe_inst.keys())
+    if data_flows:
+        all_times.update(flow['time'] for flow in data_flows)
+    
+    if not all_times:
+        print("No trace data found for timeline")
+        return
+    
+    min_time = min(all_times)
+    max_time = max(all_times)
+    
+    # Create mapping from PE to row index
+    n_pes = len(all_pe_keys)
+    time_range = max_time - min_time + 1
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(max(16, time_range * 0.8), max(8, n_pes * 0.6)))
+    
+    # Color map for different instruction types
+    color_map = {
+        'exec': '#4CAF50',      # Green for execution
+        'memory': '#2196F3',    # Blue for memory
+        'send': '#FF9800',      # Orange for send
+        'recv': '#9C27B0',      # Purple for recv
+        'blocked': '#F44336',   # Red for blocked
+        'idle': '#9E9E9E',      # Gray for idle
+        'default': '#607D8B'    # Default blue-gray
+    }
+    
+    # Track what happens at each timestep for each PE
+    timeline_data = defaultdict(lambda: defaultdict(list))  # {pe: {time: [events]}}
+    
+    # Process instruction executions
+    for pe_key, time_insts in pe_instructions.items():
+        for time, insts in time_insts.items():
+            for inst in insts:
+                timeline_data[pe_key][time].append(inst)
+    
+    # Process data flows
+    for flow in data_flows:
+        time = flow['time']
+        if flow['type'] == 'send' and 'from' in flow:
+            pe_key = flow['from']
+            timeline_data[pe_key][time].append({
+                'type': 'send',
+                'opcode': 'Send',
+                'label': f"Send({flow.get('direction', '')})"
+            })
+        elif flow['type'] == 'recv' and 'to' in flow:
+            pe_key = flow['to']
+            timeline_data[pe_key][time].append({
+                'type': 'recv',
+                'opcode': 'Recv',
+                'label': f"Recv({flow.get('direction', '')})"
+            })
+    
+    # Draw timeline bars for each PE
+    bar_height = 0.7
+    y_positions = {}
+    
+    for pe_idx, pe_key in enumerate(all_pe_keys):
+        y_pos = n_pes - pe_idx - 1
+        y_positions[pe_key] = y_pos
+        
+        # Draw background for this PE row
+        ax.axhspan(y_pos - bar_height/2, y_pos + bar_height/2, 
+                  xmin=min_time-0.5, xmax=max_time+0.5,
+                  facecolor='lightgray', alpha=0.2)
+        
+        # Draw timeline bars for each timestep
+        bar_width = 0.8
+        for time in range(min_time, max_time + 1):
+            x_start = time - 0.4
+            if time in timeline_data[pe_key]:
+                events = timeline_data[pe_key][time]
+                
+                if len(events) == 1:
+                    # Single event - draw one bar
+                    event = events[0]
+                    color = color_map.get(event.get('type', 'default'), color_map['default'])
+                    ax.barh(y_pos, bar_width, height=bar_height, left=x_start,
+                           color=color, edgecolor='black', linewidth=0.5, alpha=0.8)
+                    
+                    # Add label
+                    label = event.get('label', event.get('opcode', 'Unknown'))
+                    if len(label) <= 8:
+                        ax.text(time, y_pos, label, ha='center', va='center',
+                               fontsize=7, fontweight='bold', color='white')
+                    else:
+                        ax.text(time, y_pos, label[:6]+'..', ha='center', va='center',
+                               fontsize=6, fontweight='bold', color='white')
+                else:
+                    # Multiple events - draw side-by-side
+                    n_events = len(events)
+                    sub_width = bar_width / n_events
+                    for idx, event in enumerate(events):
+                        sub_x_start = x_start + idx * sub_width
+                        color = color_map.get(event.get('type', 'default'), color_map['default'])
+                        ax.barh(y_pos, sub_width, height=bar_height, left=sub_x_start,
+                               color=color, edgecolor='black', linewidth=0.5, alpha=0.8)
+                        
+                        # Add short label
+                        opcode = event.get('opcode', 'Unknown')
+                        label = opcode[:4] if len(opcode) > 4 else opcode
+                        ax.text(sub_x_start + sub_width/2, y_pos, label, ha='center', va='center',
+                               fontsize=5, fontweight='bold', color='white', rotation=0)
+            else:
+                # No activity - draw empty bar
+                ax.barh(y_pos, bar_width, height=bar_height, left=x_start,
+                       color='white', edgecolor='lightgray', linewidth=0.5, alpha=0.3)
+    
+    # Set labels and title
+    ax.set_xlabel('Time Step', fontsize=12, fontweight='bold')
+    ax.set_ylabel('PE (Processing Element)', fontsize=12, fontweight='bold')
+    ax.set_title(f'Kernel Execution Timeline (Time {min_time} - {max_time})', 
+                fontsize=14, fontweight='bold', pad=20)
+    
+    # Set x-axis
+    ax.set_xlim(min_time - 0.5, max_time + 0.5)
+    ax.set_xticks(range(min_time, max_time + 1))
+    ax.set_xticklabels(range(min_time, max_time + 1), fontsize=9)
+    
+    # Set y-axis with PE labels
+    ax.set_ylim(-0.5, n_pes - 0.5)
+    pe_labels = [f'PE({x},{y})' for (x, y) in all_pe_keys]
+    ax.set_yticks(range(n_pes))
+    ax.set_yticklabels(pe_labels, fontsize=9)
+    
+    # Add grid
+    ax.grid(True, axis='x', alpha=0.3, linestyle='--', linewidth=0.5)
+    ax.grid(True, axis='y', alpha=0.2, linestyle='-', linewidth=0.5)
+    
+    # Add legend
+    legend_elements = [
+        plt.Rectangle((0,0),1,1, facecolor=color_map['exec'], edgecolor='black', label='Execute'),
+        plt.Rectangle((0,0),1,1, facecolor=color_map['memory'], edgecolor='black', label='Memory'),
+        plt.Rectangle((0,0),1,1, facecolor=color_map['send'], edgecolor='black', label='Send'),
+        plt.Rectangle((0,0),1,1, facecolor=color_map['recv'], edgecolor='black', label='Recv'),
+        plt.Rectangle((0,0),1,1, facecolor=color_map['blocked'], edgecolor='black', label='Blocked'),
+        plt.Rectangle((0,0),1,1, facecolor=color_map['idle'], edgecolor='black', label='Idle'),
+    ]
+    ax.legend(handles=legend_elements, loc='upper right', fontsize=9, framealpha=0.9)
+    
+    plt.tight_layout()
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    print(f"Timeline visualization saved to {output_file}")
+    plt.close()
+
 def print_summary(pe_stats, link_stats, pe_backpressure, port_backpressure, total_cycles):
     """Print summary report"""
     print(f"\nTotal Cycles: {total_cycles}")
@@ -569,6 +863,7 @@ def print_summary(pe_stats, link_stats, pe_backpressure, port_backpressure, tota
 def main():
     log_file = sys.argv[1] if len(sys.argv) > 1 else 'histogram_run.log'
     generate_heatmaps = '--no-heatmap' not in sys.argv
+    generate_timeline_viz = '--timeline' in sys.argv or '--all' in sys.argv
     
     # Analyze log
     pe_stats, link_stats, pe_backpressure, port_backpressure, total_cycles = analyze_all(log_file)
@@ -607,6 +902,23 @@ def main():
         
         print("\n" + "=" * 70)
         print("All heatmaps generated successfully!")
+        print("=" * 70)
+    
+    if generate_timeline_viz:
+        print("\n" + "=" * 70)
+        print("Generating Timeline Visualization")
+        print("=" * 70)
+        
+        # Parse trace data
+        print("Parsing trace data from log file...")
+        pe_instructions, data_flows = parse_trace_data(log_file)
+        
+        # Generate timeline visualization
+        print("Generating timeline visualization...")
+        generate_timeline(pe_instructions, data_flows, total_cycles, 'timeline_visualization.png')
+        
+        print("\n" + "=" * 70)
+        print("Timeline visualization generated successfully!")
         print("=" * 70)
 
 if __name__ == '__main__':

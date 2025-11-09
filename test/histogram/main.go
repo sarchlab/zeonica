@@ -110,7 +110,7 @@ func Histogram() {
 	// According to ASM and YAML analysis:
 	// - Core (2,3) t=3: LOAD [$0] -> [$0] - loads from memory (needs PreloadMemory)
 	// - Core (2,1) t=5,6: DATA_MOV [NORTH, RED] -> receives from Core (2,2) via NORTH
-	// - Core (0,2) t=10: LOAD [NORTH, RED] -> receives from Core (0,3) via NORTH (not from memory)
+	// - Core (0,2) t=10: LOAD [NORTH, RED] -> loads from memory at address received from Core (0,3) via NORTH (needs PreloadMemory)
 	// - No external FeedIn needed - all data flows internally between cores
 
 	// Preload Core (2,3) memory so LOAD can read data
@@ -125,6 +125,32 @@ func Histogram() {
 		// Preload C code actual input data
 		fbits := math.Float32bits(cInputData[addr])
 		driver.PreloadMemory(2, 3, fbits, addr)
+	}
+
+	// Preload Core (0,2) memory so LOAD can read data
+	// Core (0,2) t=10: LOAD [NORTH, RED] -> [EAST, RED] loads from memory at address received from NORTH
+	// The address is a histogram bin index (0-5), and we need to preload initial counts (all 0)
+	// Histogram bins are at addresses 0-5 (for values 0-5)
+	// NOTE: According to the data flow analysis, STORE stores to Core (1,2) memory,
+	// but LOAD reads from Core (0,2) memory. This is a mismatch!
+	// For histogram to work correctly, LOAD should read from the same memory that STORE writes to.
+	// Since STORE is in Core (1,2), we should preload Core (1,2) memory instead of Core (0,2).
+	// But LOAD is in Core (0,2), so it can only read from Core (0,2) memory.
+	// This suggests the design might be: LOAD reads from Core (0,2), but STORE writes to Core (1,2).
+	// For now, let's preload both Core (0,2) and Core (1,2) memory with initial counts (all 0).
+	maxBinIndex := uint32(10) // Preload more than needed to be safe
+	fmt.Printf("Preloading %d memory locations in Core (0,2) with initial histogram bin counts (all 0)...\n", maxBinIndex+1)
+
+	for addr := uint32(0); addr <= maxBinIndex; addr++ {
+		// Preload initial count (0) for each histogram bin
+		driver.PreloadMemory(0, 2, 0, addr)
+	}
+
+	// Also preload Core (1,2) memory since STORE writes to it
+	fmt.Printf("Preloading %d memory locations in Core (1,2) with initial histogram bin counts (all 0)...\n", maxBinIndex+1)
+	for addr := uint32(0); addr <= maxBinIndex; addr++ {
+		// Preload initial count (0) for each histogram bin
+		driver.PreloadMemory(1, 2, 0, addr)
 	}
 
 	// Verify that memory was loaded correctly
@@ -236,21 +262,29 @@ func Histogram() {
 	if len(memoryResults) > 0 {
 		// Read results from addresses 1 to maxValue+1 (histogram bins)
 		// Histogram bins are at addresses 1 to 6 (for values 0 to 5)
+		fmt.Printf("   memoryResults has %d entries\n", len(memoryResults))
+		for addr, val := range memoryResults {
+			fmt.Printf("   memoryResults[%d] = %d\n", addr, val)
+		}
 		maxAddr := uint32(0)
 		for addr := range memoryResults {
 			if addr > maxAddr {
 				maxAddr = addr
 			}
 		}
-		// Limit to reasonable range (1 to 10 for histogram bins)
+		// Limit to reasonable range (0 to 10 for histogram bins)
+		// Histogram bins are at addresses 0-5 (for bin indices 0-5)
 		if maxAddr > 10 {
 			maxAddr = 10
 		}
-		for addr := uint32(1); addr <= maxAddr; addr++ {
+		fmt.Printf("   maxAddr = %d\n", maxAddr)
+		// Read from addresses 0 to maxAddr (histogram bins start at address 0)
+		for addr := uint32(0); addr <= maxAddr; addr++ {
 			if val, ok := memoryResults[addr]; ok {
 				actualOutput = append(actualOutput, val)
+				fmt.Printf("   Added address %d: %d to actualOutput\n", addr, val)
 			} else {
-				// If address not found, try to read directly
+				// If address not found, try to read directly from Core (1,2)
 				value := driver.ReadMemory(1, 2, addr)
 				if value < 100 && value < 1000000 {
 					actualOutput = append(actualOutput, value)
@@ -403,7 +437,13 @@ func Histogram() {
 		fmt.Println("Result  : MISMATCH (see lists above)")
 	}
 
-	// Write concise run log: filtered time lines + results + total cycles
+	// Write concise run log: grid config + filtered time lines + results + total cycles
+	fmt.Fprintln(runFile, "========================")
+	fmt.Fprintln(runFile, "CGRA Grid Configuration")
+	fmt.Fprintln(runFile, "========================")
+	fmt.Fprintf(runFile, "GRID_ROWS: %d\n", height)
+	fmt.Fprintf(runFile, "GRID_COLS: %d\n", width)
+	fmt.Fprintln(runFile, "")
 	fmt.Fprintln(runFile, "========================")
 	fmt.Fprintln(runFile, "Filtered Time Lines")
 	fmt.Fprintln(runFile, "========================")
