@@ -622,6 +622,92 @@ def parse_trace_data(log_file):
     
     return pe_instructions, data_flows
 
+def generate_linear_trace(pe_instructions, data_flows, total_cycles, output_file='linear_trace.txt'):
+    """Generate a linear text-based trace showing what each PE does at each cycle"""
+    # Get all PEs that have activity
+    all_pe_keys = sorted(set(pe_instructions.keys()))
+    
+    if not all_pe_keys:
+        print("No PE activity found for trace")
+        return
+    
+    # Get time range
+    all_times = set()
+    for pe_inst in pe_instructions.values():
+        all_times.update(pe_inst.keys())
+    if data_flows:
+        all_times.update(flow['time'] for flow in data_flows)
+    
+    if not all_times:
+        print("No trace data found for trace")
+        return
+    
+    min_time = min(all_times)
+    max_time = max(all_times)
+    
+    # Build trace data for each PE at each time
+    timeline_data = defaultdict(lambda: defaultdict(list))  # {(x,y): {time: [events]}}
+    
+    for pe_key, time_insts in pe_instructions.items():
+        for time, insts in time_insts.items():
+            for inst in insts:
+                timeline_data[pe_key][time].append(inst)
+    
+    # Collect instruction summary
+    instr_summary = defaultdict(lambda: defaultdict(int))
+    for pe_key, time_insts in pe_instructions.items():
+        for time, insts in time_insts.items():
+            for inst in insts:
+                opcode = inst.get('opcode', 'Unknown')
+                instr_summary[pe_key][opcode] += 1
+    
+    # Write trace to file
+    with open(output_file, 'w') as f:
+        f.write("=" * 140 + "\n")
+        f.write("Linear Trace: PE Activity by Cycle\n")
+        f.write("=" * 140 + "\n\n")
+        
+        # Instruction summary
+        f.write("Instruction Summary by PE:\n")
+        f.write("-" * 140 + "\n")
+        for pe_key in all_pe_keys:
+            f.write(f"PE({pe_key[0]},{pe_key[1]}):\n")
+            for opcode, count in sorted(instr_summary[pe_key].items(), key=lambda x: -x[1]):
+                f.write(f"  {opcode:<20} : {count:3d} times\n")
+        f.write("\n")
+        
+        # Timeline
+        f.write("=" * 140 + "\n")
+        f.write("Detailed Timeline:\n")
+        f.write("=" * 140 + "\n\n")
+        
+        # For each cycle, show what each PE is doing
+        for time in range(min_time, max_time + 1):
+            f.write(f"Cycle {time:3d}: ")
+            
+            # Collect all events for this cycle across all PEs
+            events_per_pe = []
+            for pe_key in all_pe_keys:
+                if time in timeline_data[pe_key]:
+                    events = timeline_data[pe_key][time]
+                    event_strs = []
+                    for event in events:
+                        label = event.get('label', event.get('opcode', 'Unknown'))
+                        event_strs.append(label)
+                    
+                    pe_activity = f"PE({pe_key[0]},{pe_key[1]}): " + ', '.join(event_strs)
+                else:
+                    pe_activity = f"PE({pe_key[0]},{pe_key[1]}): -"
+                
+                events_per_pe.append(pe_activity)
+            
+            f.write(" | ".join(events_per_pe) + "\n")
+        
+        f.write("\n" + "=" * 140 + "\n")
+        f.write(f"Total cycles: {total_cycles}\n")
+        f.write(f"Active PEs: {len(all_pe_keys)}\n")
+        f.write(f"Timeline range: {min_time} - {max_time}\n")
+
 def generate_timeline(pe_instructions, data_flows, total_cycles, output_file='timeline_visualization.png'):
     """Generate linear timeline visualization showing what each PE does at each timestep"""
     # Get all PEs that have activity
@@ -649,8 +735,10 @@ def generate_timeline(pe_instructions, data_flows, total_cycles, output_file='ti
     n_pes = len(all_pe_keys)
     time_range = max_time - min_time + 1
     
-    # Create figure
-    fig, ax = plt.subplots(figsize=(max(16, time_range * 0.8), max(8, n_pes * 0.6)))
+    # Create figure with larger size for better visibility
+    fig_width = min(max(20, time_range * 1.2), 100)  # Cap at reasonable width
+    fig_height = max(10, n_pes * 0.8)
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     
     # Color map for different instruction types
     color_map = {
@@ -864,6 +952,7 @@ def main():
     log_file = sys.argv[1] if len(sys.argv) > 1 else 'histogram_run.log'
     generate_heatmaps = '--no-heatmap' not in sys.argv
     generate_timeline_viz = '--timeline' in sys.argv or '--all' in sys.argv
+    generate_trace = '--trace' in sys.argv or '--all' in sys.argv
     
     # Analyze log
     pe_stats, link_stats, pe_backpressure, port_backpressure, total_cycles = analyze_all(log_file)
@@ -904,21 +993,27 @@ def main():
         print("All heatmaps generated successfully!")
         print("=" * 70)
     
-    if generate_timeline_viz:
+    if generate_timeline_viz or generate_trace:
         print("\n" + "=" * 70)
-        print("Generating Timeline Visualization")
+        print("Generating Trace Visualizations")
         print("=" * 70)
         
         # Parse trace data
         print("Parsing trace data from log file...")
         pe_instructions, data_flows = parse_trace_data(log_file)
         
+        # Generate linear trace text file
+        if generate_trace:
+            print("Generating linear trace text file...")
+            generate_linear_trace(pe_instructions, data_flows, total_cycles, 'linear_trace.txt')
+        
         # Generate timeline visualization
-        print("Generating timeline visualization...")
-        generate_timeline(pe_instructions, data_flows, total_cycles, 'timeline_visualization.png')
+        if generate_timeline_viz:
+            print("Generating timeline visualization...")
+            generate_timeline(pe_instructions, data_flows, total_cycles, 'timeline_visualization.png')
         
         print("\n" + "=" * 70)
-        print("Timeline visualization generated successfully!")
+        print("Trace visualizations generated successfully!")
         print("=" * 70)
 
 if __name__ == '__main__':
