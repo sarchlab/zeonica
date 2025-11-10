@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log/slog"
 	"math"
 	"os"
-	"strings"
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/api"
@@ -18,30 +16,26 @@ import (
 // This matches the histogram ASM/YAML coordinate system, so no conversion needed
 
 func Histogram() {
-	// Prepare log files
-	debugLogPath := "histogram_debug.log"
+	// Prepare log file
 	runLogPath := "histogram_run.log"
-	debugFile, _ := os.Create(debugLogPath)
 	runFile, _ := os.Create(runLogPath)
 
-	// Route JSON logs to debug log
+	// Route all logs to run log file
 	// Trace level is LevelInfo+1, so we need a very low level to capture everything
 	// Use a custom level that's lower than Debug to capture Trace
-	handler := slog.NewJSONHandler(debugFile, &slog.HandlerOptions{
+	handler := slog.NewJSONHandler(runFile, &slog.HandlerOptions{
 		Level: slog.Level(-100), // Very low level to capture everything including Trace
 	})
 	slog.SetDefault(slog.New(handler))
 
-	// Ensure files are closed and flushed at the end
+	// Ensure file is closed and flushed at the end
 	defer func() {
-		debugFile.Sync() // Flush before closing
-		debugFile.Close()
 		runFile.Sync() // Flush before closing
 		runFile.Close()
 	}()
 
 	// Also output important messages to stdout for immediate feedback
-	fmt.Println("Logging to histogram_debug.log with full trace information")
+	fmt.Println("Logging to histogram_run.log with full trace information")
 
 	// Set test parameters - histogram uses a 4x4 CGRA
 	width := 4
@@ -437,26 +431,12 @@ func Histogram() {
 		fmt.Println("Result  : MISMATCH (see lists above)")
 	}
 
-	// Write concise run log: grid config + filtered time lines + results + total cycles
-	fmt.Fprintln(runFile, "========================")
+	// Write final results summary to run log
+	fmt.Fprintln(runFile, "\n========================")
 	fmt.Fprintln(runFile, "CGRA Grid Configuration")
 	fmt.Fprintln(runFile, "========================")
 	fmt.Fprintf(runFile, "GRID_ROWS: %d\n", height)
 	fmt.Fprintf(runFile, "GRID_COLS: %d\n", width)
-	fmt.Fprintln(runFile, "")
-	fmt.Fprintln(runFile, "========================")
-	fmt.Fprintln(runFile, "Filtered Time Lines")
-	fmt.Fprintln(runFile, "========================")
-	if f, err := os.Open(debugLogPath); err == nil {
-		defer f.Close()
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if strings.Contains(line, "\"Time\":") {
-				fmt.Fprintln(runFile, line)
-			}
-		}
-	}
 	fmt.Fprintln(runFile, "\n========================")
 	fmt.Fprintln(runFile, "Histogram Results (Final)")
 	fmt.Fprintln(runFile, "========================")
