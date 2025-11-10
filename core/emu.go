@@ -1819,58 +1819,50 @@ func (i instEmulator) runLTExport(inst Operation, state *coreState) {
 }
 
 func (i instEmulator) runPhi(inst Operation, state *coreState) {
-	src1 := inst.SrcOperands.Operands[0]
-	src2 := inst.SrcOperands.Operands[1]
+	// PHI node: selects between loop-carried value (backedge) and initial value
+	// src0 = backedge / loop-carried value (from previous iteration)
+	// src1 = initial value (from grant_once or one-shot source)
+	src0 := inst.SrcOperands.Operands[0]
+	src1 := inst.SrcOperands.Operands[1]
 
+	src0Struct := i.readOperand(src0, state)
 	src1Struct := i.readOperand(src1, state)
-	src2Struct := i.readOperand(src2, state)
 
-	// PHI selects between two sources based on predicate
-	// If src1 has predicate (true) and src2 doesn't (false), use src1
-	// If src2 has predicate (true) and src1 doesn't (false), use src2
-	// If both have the same predicate, prefer src1 (first source) as default
+	// Priority rule: src0 (backedge) has priority when both predicates are true
+	// 1. If src0.pred == true → choose src0
+	// 2. Else if src1.pred == true → choose src1
+	// 3. Else → no valid input this cycle: choose any value but set pred=false
 	var selectedVal uint32
 	var selectedPred bool
-	var usedRegisterSrc *Operand = nil // Track which register source was used
 
-	if src1Struct.Pred && !src2Struct.Pred {
+	if src0Struct.Pred {
+		// src0 (backedge) has priority
+		selectedVal = src0Struct.First()
+		selectedPred = src0Struct.Pred
+	} else if src1Struct.Pred {
+		// src1 (initial value) is valid
 		selectedVal = src1Struct.First()
 		selectedPred = src1Struct.Pred
-		// If src1 is a register, mark it for predicate clearing
-		if strings.HasPrefix(src1.Impl, "$") {
-			usedRegisterSrc = &src1
-		}
-	} else if !src1Struct.Pred && src2Struct.Pred {
-		selectedVal = src2Struct.First()
-		selectedPred = src2Struct.Pred
-		// If src2 is a register, mark it for predicate clearing
-		if strings.HasPrefix(src2.Impl, "$") {
-			usedRegisterSrc = &src2
-		}
 	} else {
-		// Both have the same predicate - use src1 (first source) as default
-		selectedVal = src1Struct.First()
-		selectedPred = src1Struct.Pred
-		// If src1 is a register, mark it for predicate clearing
-		if strings.HasPrefix(src1.Impl, "$") {
-			usedRegisterSrc = &src1
-		}
+		// Both predicates are false: no valid input this cycle
+		// Use src0's value but set predicate to false
+		selectedVal = src0Struct.First()
+		selectedPred = false
 	}
 
-	// IMPORTANT: Clear the source register's predicate BEFORE writing to destinations
-	// This prevents the predicate from being re-set if the destination is the same register
-	// This is critical for loop control: after using $0, set its predicate to false
-	// so that in the next iteration, $1 (with predicate=true) will be selected
-	if usedRegisterSrc != nil {
-		registerIndex, err := strconv.Atoi(strings.TrimPrefix(usedRegisterSrc.Impl, "$"))
-		if err == nil && registerIndex >= 0 && registerIndex < len(state.Registers) {
-			// Save the current value but clear the predicate
-			oldVal := state.Registers[registerIndex].First()
-			state.Registers[registerIndex] = cgra.NewScalarWithPred(oldVal, false)
-		}
+	// Optional: Log debug message if both predicates are true (src0 has priority)
+	if src0Struct.Pred && src1Struct.Pred {
+		Trace("PHI_BothPredTrue",
+			"X", state.TileX,
+			"Y", state.TileY,
+			"Selected", "src0 (backedge has priority)",
+			"Src0Val", src0Struct.First(),
+			"Src1Val", src1Struct.First(),
+		)
 	}
 
-	// Now write to destination operands
+	// Write the selected (value, pred) to ALL destination operands
+	// PHI is pure selection - does NOT modify source register predicates
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalarWithPred(selectedVal, selectedPred), state)
 	}
