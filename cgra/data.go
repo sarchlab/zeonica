@@ -1,8 +1,13 @@
 package cgra
 
+// TokenID uniquely identifies a data token flowing through the CGRA
+// This type is defined in cgra package to avoid circular imports
+type TokenID uint64
+
 type Data struct {
-	Data []uint32
-	Pred bool
+	Data    []uint32
+	Pred    bool
+	TokenID TokenID // Unique identifier for tracking this token through the network
 }
 
 // NewScalar creates a Data that wraps a single uint32 value with Pred=true by default.

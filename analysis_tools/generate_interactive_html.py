@@ -14,6 +14,189 @@ try:
 except ImportError:
     YAML_AVAILABLE = False
 
+def build_dataflow_graph_for_tracing(log_file):
+    """
+    Build a dataflow graph for backward tracing capability.
+    Returns a dict mapping node keys to their source nodes.
+    """
+    graph = {}  # Maps (cycle, to_pe, direction, channel) -> [(cycle, from_pe, direction, channel), edge_info]
+    
+    print(f"[*] Building dataflow graph for tracing...")
+    
+    try:
+        with open(log_file, 'r') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    event = json.loads(line)
+                    
+                    if event.get('msg') == 'DataFlow':
+                        time = event.get('cycle', event.get('Time'))
+                        from_pe = event.get('From')
+                        to_pe = event.get('To')
+                        direction = event.get('Direction', '')
+                        channel = str(event.get('Color', event.get('ColorIdx', '')))
+                        data = str(event.get('Data', ''))
+                        behavior = event.get('Behavior', '')
+                        
+                        if from_pe and to_pe and time is not None:
+                            to_node_key = (int(time), to_pe, direction, channel)
+                            from_node = (int(time), from_pe, direction, channel)
+                            edge_info = {
+                                'data': data,
+                                'behavior': behavior,
+                            }
+                            
+                            if to_node_key not in graph:
+                                graph[to_node_key] = []
+                            graph[to_node_key].append((from_node, edge_info))
+                except json.JSONDecodeError:
+                    pass
+    except Exception as e:
+        print(f"[-] Error building dataflow graph: {e}")
+        return {}
+    
+    print(f"[+] Built dataflow graph with {len(graph)} nodes")
+    return graph
+
+
+def build_token_events(log_file):
+    """
+    Build token event tracking data structures:
+    
+    token_events: dict mapping token_id -> list of events (sorted by time)
+      Each event contains: time, x, y, behavior, direction, data, pred, color, from, to, token_id
+    
+    point_index: dict mapping "time,x,y,direction,behavior" -> token_id
+      Allows quick lookup of token_id for a clicked grid point
+    """
+    token_events = defaultdict(list)
+    point_index = {}
+    
+    print(f"[*] Building token event tracking...")
+    
+    try:
+        with open(log_file, 'r') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    event = json.loads(line)
+                    
+                    # ===== Parse DataFlow events =====
+                    if event.get('msg') == 'DataFlow':
+                        time = event.get('cycle', event.get('Time'))
+                        x = event.get('X')
+                        y = event.get('Y')
+                        behavior = event.get('Behavior', '')  # 'Send' or 'Recv'
+                        direction = event.get('Direction', '')
+                        data = event.get('Data')
+                        pred = event.get('Pred', True)
+                        color = event.get('Color', event.get('ColorIdx'))
+                        from_str = event.get('From', '')
+                        to_str = event.get('To', '')
+                        token_id = event.get('TokenID', event.get('token_id'))
+                        
+                        if time is not None and x is not None and y is not None and token_id is not None:
+                            time = int(time)
+                            token_id = int(token_id)
+                            
+                            # Add to token_events
+                            token_event = {
+                                'time': time,
+                                'x': x,
+                                'y': y,
+                                'behavior': behavior,
+                                'direction': direction,
+                                'data': data,
+                                'pred': pred,
+                                'color': color,
+                                'from': from_str,
+                                'to': to_str,
+                                'token_id': token_id,
+                            }
+                            token_events[token_id].append(token_event)
+                            
+                            # Add to point_index: key format "time,x,y,direction,behavior"
+                            key = f"{time},{x},{y},{direction},{behavior}"
+                            point_index[key] = token_id
+                    
+                    # ===== Parse PEState events =====
+                    elif event.get('msg') == 'PEState':
+                        state = event.get('state', {})
+                        time = state.get('time')
+                        x = state.get('x')
+                        y = state.get('y')
+                        
+                        if time is not None and x is not None and y is not None:
+                            time = int(time)
+                            
+                            # Process inputs
+                            for inp in state.get('inputs', []):
+                                token_id = inp.get('token_id', inp.get('TokenID'))
+                                if token_id is not None:
+                                    token_id = int(token_id)
+                                    direction = inp.get('direction', '')
+                                    
+                                    token_event = {
+                                        'time': time,
+                                        'x': x,
+                                        'y': y,
+                                        'behavior': 'PE_IN',
+                                        'direction': direction,
+                                        'data': inp.get('data'),
+                                        'pred': inp.get('pred', True),
+                                        'color': inp.get('color'),
+                                        'from': '',
+                                        'to': '',
+                                        'token_id': token_id,
+                                    }
+                                    token_events[token_id].append(token_event)
+                                    
+                                    # Add to point_index
+                                    key = f"{time},{x},{y},{direction},PE_IN"
+                                    point_index[key] = token_id
+                            
+                            # Process outputs
+                            for out in state.get('outputs', []):
+                                token_id = out.get('token_id', out.get('TokenID'))
+                                if token_id is not None:
+                                    token_id = int(token_id)
+                                    direction = out.get('direction', '')
+                                    
+                                    token_event = {
+                                        'time': time,
+                                        'x': x,
+                                        'y': y,
+                                        'behavior': 'PE_OUT',
+                                        'direction': direction,
+                                        'data': out.get('data'),
+                                        'pred': out.get('pred', True),
+                                        'color': out.get('color'),
+                                        'from': '',
+                                        'to': '',
+                                        'token_id': token_id,
+                                    }
+                                    token_events[token_id].append(token_event)
+                                    
+                                    # Add to point_index
+                                    key = f"{time},{x},{y},{direction},PE_OUT"
+                                    point_index[key] = token_id
+                
+                except json.JSONDecodeError:
+                    pass
+    except Exception as e:
+        print(f"[-] Error building token events: {e}")
+        return {}, {}
+    
+    # Sort each token's events by time
+    for token_id in token_events:
+        token_events[token_id].sort(key=lambda e: e['time'])
+    
+    print(f"[+] Built token tracking: {len(token_events)} unique tokens, {len(point_index)} grid points indexed")
+    return dict(token_events), point_index
+
 def generate_interactive_html(log_file, output_file="cgra_debug.html"):
     """Generate interactive HTML debugger"""
     
@@ -535,7 +718,163 @@ def generate_interactive_html(log_file, output_file="cgra_debug.html"):
             color: #f44747;
             font-weight: bold;
         }
+        
+        /* Token Trace Panel Styles */
+        #tokenTracePanel {
+            position: fixed;
+            right: 20px;
+            top: 120px;
+            width: 450px;
+            max-height: 70vh;
+            background-color: #1e1e1e;
+            border: 2px solid #4ec9b0;
+            border-radius: 8px;
+            padding: 15px;
+            z-index: 999;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 0 20px rgba(78, 201, 176, 0.3);
+        }
+        
+        #tokenTracePanel.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .token-trace-header {
+            color: #4ec9b0;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #444;
+        }
+        
+        .token-trace-close {
+            background: none;
+            border: none;
+            color: #858585;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .token-trace-close:hover {
+            color: #d4d4d4;
+        }
+        
+        .token-trace-info {
+            font-size: 12px;
+            color: #858585;
+            margin-bottom: 12px;
+            padding: 8px;
+            background-color: #252526;
+            border-left: 3px solid #4ec9b0;
+            border-radius: 3px;
+        }
+        
+        .token-trace-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        
+        .token-trace-table th {
+            background-color: #252526;
+            color: #9cdcfe;
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #444;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+        
+        .token-trace-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .token-trace-table tr:hover {
+            background-color: #2a2a2e;
+        }
+        
+        .token-trace-table tr:nth-child(even) {
+            background-color: #1e1e1e;
+        }
+        
+        .trace-time {
+            color: #4fc3f7;
+            font-weight: bold;
+        }
+        
+        .trace-pe {
+            color: #66bb6a;
+            font-weight: bold;
+        }
+        
+        .trace-behavior {
+            color: #ce9178;
+        }
+        
+        .trace-direction {
+            color: #dcdcaa;
+        }
+        
+        .trace-data {
+            color: #c586c0;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .trace-highlight {
+            background-color: #1a4a4a !important;
+            border-color: #4fc3f7 !important;
+            box-shadow: 0 0 15px rgba(79, 195, 247, 0.5), inset 0 0 8px rgba(79, 195, 247, 0.2) !important;
+        }
+        
+        .token-trace-clear {
+            margin-top: 12px;
+            padding: 8px 12px;
+            background-color: #3e3e42;
+            color: #d4d4d4;
+            border: 1px solid #555;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            width: 100%;
+        }
+        
+        .token-trace-clear:hover {
+            background-color: #454547;
+        }
     </style>
+    <script>
+        // Dataflow Graph for Backward Tracing (injected by Python)
+        const dataflowGraph = DATAFLOW_GRAPH_DATA;
+        
+        // Token Event Tracking (injected by Python)
+        const tokenEvents = TOKEN_EVENTS_DATA;
+        const pointIndex = POINT_INDEX_DATA;
+    </script>
 </head>
 <body>
     <div class="container">
@@ -578,6 +917,23 @@ def generate_interactive_html(log_file, output_file="cgra_debug.html"):
                 </div>
             </div>
         </div>
+    </div>
+    
+    <!-- Token Trace Panel (Verdi-like token tracer) -->
+    <div id="tokenTracePanel">
+        <div class="token-trace-header">
+            🎫 Token Tracer
+            <button class="token-trace-close" onclick="closeTokenTracePanel()">&times;</button>
+        </div>
+        <div id="tokenTraceInfo" class="token-trace-info">
+            Click on a PE cell to trace a specific token through the network
+        </div>
+        <div id="tokenTraceContent" style="max-height: 500px; overflow-y: auto;">
+            <div style="color: #858585; text-align: center; padding: 20px; font-size: 12px;">
+                Select a PE cell to view token path
+            </div>
+        </div>
+        <button class="token-trace-clear" onclick="clearTokenTrace()">Clear Trace & Highlights</button>
     </div>
     
     <!-- Timeline Modal -->
@@ -1109,6 +1465,8 @@ def generate_interactive_html(log_file, output_file="cgra_debug.html"):
                 pe.className = 'pe-core';
                 pe.setAttribute('data-x', x);
                 pe.setAttribute('data-y', y);
+                pe.setAttribute('data-cycle', String(currentCycle));
+                pe.setAttribute('data-pe', `Device.Tile[${x}][${y}].Core`);
 
                 // Position using CSS grid: grid-column starts at 1; grid-row start inverted for bottom-left origin
                 pe.style.gridColumnStart = (x + 1).toString();
@@ -1186,9 +1544,23 @@ def generate_interactive_html(log_file, output_file="cgra_debug.html"):
 
                 pe.onclick = (e) => {
                     e.stopPropagation();
-                    selectedPE = key;
-                    updateGrid();
-                    updateDetail(x, y);
+                    
+                    // Token tracing on Shift+Click
+                    if (e.shiftKey) {
+                        const tokenId = findTokenForCell(currentCycle, x, y, '', 'PE');
+                        if (tokenId !== undefined) {
+                            console.log(`Found Token ${tokenId} at PE(${x},${y}) cycle ${currentCycle}`);
+                            showTokenTrace(tokenId, currentCycle, x, y);
+                        } else {
+                            console.log(`No token found at PE(${x},${y}) cycle ${currentCycle}`);
+                            alert(`No token data at PE(${x},${y}) @ Cycle ${currentCycle}`);
+                        }
+                    } else {
+                        // Normal click: select PE for detailed view
+                        selectedPE = key;
+                        updateGrid();
+                        updateDetail(x, y);
+                    }
                 };
 
                 gridContainer.appendChild(pe);
@@ -1819,6 +2191,179 @@ def generate_interactive_html(log_file, output_file="cgra_debug.html"):
             }
         };
         
+        // ===== TOKEN TRACING FUNCTIONS (Verdi-like Token Tracer) =====
+        
+        /**
+         * Find TokenID for a clicked grid point
+         * @param {number} cycle - Current cycle
+         * @param {number} x - PE X coordinate
+         * @param {number} y - PE Y coordinate
+         * @param {string} direction - Direction (optional)
+         * @param {string} kind - Event kind: "Send", "Recv", "PE_IN", "PE_OUT", or "PE" for any
+         * @returns {number|undefined} TokenID if found
+         */
+        function findTokenForCell(cycle, x, y, direction = '', kind = 'PE') {
+            // Try specific kind first (Send, Recv, PE_IN, PE_OUT)
+            if (kind !== 'PE') {
+                const key = `${cycle},${x},${y},${direction},${kind}`;
+                if (pointIndex[key] !== undefined) {
+                    return pointIndex[key];
+                }
+            }
+            
+            // If looking for generic "PE", try all kinds at this cycle/x/y
+            if (kind === 'PE') {
+                for (const key in pointIndex) {
+                    const parts = key.split(',');
+                    if (parts.length >= 5) {
+                        const keyCycle = parseInt(parts[0]);
+                        const keyx = parseInt(parts[1]);
+                        const keyY = parseInt(parts[2]);
+                        if (keyCycle === cycle && keyx === x && keyY === y) {
+                            return pointIndex[key];
+                        }
+                    }
+                }
+            }
+            
+            return undefined;
+        }
+        
+        /**
+         * Get the complete path for a token
+         * @param {number} tokenId - Token ID to trace
+         * @returns {array} List of events for this token, sorted by time
+         */
+        function getPathForToken(tokenId) {
+            return tokenEvents[tokenId] || [];
+        }
+        
+        /**
+         * Display token trace in the trace panel with highlighting
+         * @param {number} tokenId - Token ID being traced
+         * @param {number} startCycle - Cycle where trace was initiated
+         * @param {number} startX - X coordinate of start PE
+         * @param {number} startY - Y coordinate of start PE
+         */
+        function showTokenTrace(tokenId, startCycle, startX, startY) {
+            const path = getPathForToken(tokenId);
+            
+            if (!path || path.length === 0) {
+                console.log(`Token ${tokenId} not found`);
+                return;
+            }
+            
+            const panel = document.getElementById('tokenTracePanel');
+            const infoDiv = document.getElementById('tokenTraceInfo');
+            const contentDiv = document.getElementById('tokenTraceContent');
+            
+            // Clear previous highlights
+            clearTokenHighlights();
+            
+            // Build info header
+            infoDiv.innerHTML = `
+                <div>
+                    <strong>🎫 Token ID: ${tokenId}</strong><br>
+                    <span style="color: #999;">Start: PE(${startX},${startY}) @ Cycle ${startCycle}</span><br>
+                    <span style="color: #999;">Path Length: ${path.length} hops</span>
+                </div>
+            `;
+            
+            // Build path table
+            let html = `
+                <table class="token-trace-table">
+                    <thead>
+                        <tr>
+                            <th>Hop</th>
+                            <th>Time</th>
+                            <th>PE</th>
+                            <th>Behavior</th>
+                            <th>Direction</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            path.forEach((event, idx) => {
+                const time = event.time;
+                const x = event.x;
+                const y = event.y;
+                const behavior = event.behavior;
+                const direction = event.direction || '-';
+                const data = event.data !== undefined ? `0x${event.data.toString(16)}` : '-';
+                
+                html += `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td class="trace-time">C${time}</td>
+                        <td class="trace-pe">PE(${x},${y})</td>
+                        <td class="trace-behavior">${behavior}</td>
+                        <td class="trace-direction">${direction}</td>
+                        <td class="trace-data">${data}</td>
+                    </tr>
+                `;
+                
+                // Highlight this PE cell in the grid
+                highlightTokenCell(time, x, y);
+            });
+            
+            html += `
+                    </tbody>
+                </table>
+            `;
+            
+            contentDiv.innerHTML = html;
+            panel.classList.add('show');
+        }
+        
+        /**
+         * Highlight a PE cell for the token trace
+         * @param {number} cycle - Cycle to highlight
+         * @param {number} x - X coordinate
+         * @param {number} y - Y coordinate
+         */
+        function highlightTokenCell(cycle, x, y) {
+            // If we're at the current cycle, highlight the cell in the grid
+            if (cycle === currentCycle) {
+                const peKey = `${x},${y}`;
+                const cells = document.querySelectorAll(`.pe-core[data-x='${x}'][data-y='${y}']`);
+                cells.forEach(cell => {
+                    cell.classList.add('trace-highlight');
+                    // Store original style for restoration
+                    if (!cell.dataset.originalBoxShadow) {
+                        cell.dataset.originalBoxShadow = cell.style.boxShadow;
+                    }
+                });
+            }
+        }
+        
+        /**
+         * Clear token trace highlights from all cells
+         */
+        function clearTokenHighlights() {
+            document.querySelectorAll('.trace-highlight').forEach(el => {
+                el.style.boxShadow = el.dataset.originalBoxShadow || '';
+                el.classList.remove('trace-highlight');
+            });
+        }
+        
+        /**
+         * Close token trace panel
+         */
+        function closeTokenTracePanel() {
+            document.getElementById('tokenTracePanel').classList.remove('show');
+            clearTokenHighlights();
+        }
+        
+        /**
+         * Clear token trace completely
+         */
+        function clearTokenTrace() {
+            closeTokenTracePanel();
+            clearTokenHighlights();
+        }
+        
         // Initial render
         updateGrid();
         initWaveform();
@@ -1855,11 +2400,36 @@ def generate_interactive_html(log_file, output_file="cgra_debug.html"):
     expected_schedule_json_dict = {f"{x},{y}": schedule for (x, y), schedule in expected_schedule.items()}
     expected_schedule_json = json.dumps(expected_schedule_json_dict)
     
+    # Build dataflow graph for tracing
+    dataflow_graph = build_dataflow_graph_for_tracing(log_file)
+    # Convert to JSON-serializable format with string keys
+    dataflow_graph_json_dict = {}
+    for node_tuple, sources_list in dataflow_graph.items():
+        node_key = json.dumps(list(node_tuple))
+        dataflow_graph_json_dict[node_key] = [
+            {
+                'from_node': list(from_node),
+                'info': edge_info
+            }
+            for from_node, edge_info in sources_list
+        ]
+    dataflow_graph_json = json.dumps(dataflow_graph_json_dict)
+    
+    # Build token event tracking data
+    token_events_dict, point_index_dict = build_token_events(log_file)
+    token_events_json = json.dumps(token_events_dict)
+    point_index_json = json.dumps(point_index_dict)
+    
+    # IMPORTANT: Replace more specific placeholders FIRST to avoid partial replacements
+    # E.g., replace TOKEN_EVENTS_DATA before EVENTS_DATA to avoid double-replacement
+    html = html.replace('TOKEN_EVENTS_DATA', token_events_json)
+    html = html.replace('POINT_INDEX_DATA', point_index_json)
+    html = html.replace('DATAFLOW_GRAPH_DATA', dataflow_graph_json)
+    html = html.replace('EXPECTED_SCHEDULE_DATA', expected_schedule_json)
+    html = html.replace('PESTATE_DATA', pestate_json)
     html = html.replace('EVENTS_DATA', events_json)
     html = html.replace('CORES_LIST', cores_json)
-    html = html.replace('PESTATE_DATA', pestate_json)
     html = html.replace('HAS_PESTATE', 'true' if has_pestate else 'false')
-    html = html.replace('EXPECTED_SCHEDULE_DATA', expected_schedule_json)
     html = html.replace('MAXCYCLE', str(int(max_cycle)))
     html = html.replace('KERNEL', kernel_name)
     

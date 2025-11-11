@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 
 	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/sarchlab/zeonica/cgra"
 )
 
 const (
@@ -15,15 +17,29 @@ const (
 	EnableWaveformLog            = true // Set to false to disable waveform logging for performance
 )
 
+// TokenID is a type alias for cgra.TokenID for convenience in the core package
+type TokenID = cgra.TokenID
+
+// Global token ID counter - incremented for each new token
+var tokenIDCounter atomic.Uint64
+
+// NextTokenID returns a unique ID for a new data token
+// Call this when data first enters the CGRA (e.g., memory load, constant, external input)
+// or when a PE produces a new output value
+func NextTokenID() cgra.TokenID {
+	return cgra.TokenID(tokenIDCounter.Add(1))
+}
+
 // PortState represents data on a single port for a given cycle
 type PortState struct {
-	Direction string `json:"direction"`       // "North", "East", "South", "West", etc.
-	HasData   bool   `json:"has_data"`        // true if data was received/sent this cycle
-	Data      uint32 `json:"data,omitempty"`  // the actual data value (if HasData)
-	Pred      bool   `json:"pred"`            // predicate bit
-	Color     int    `json:"color"`           // color/channel index (0=Red, 1=Yellow, 2=Blue)
-	Ready     bool   `json:"ready,omitempty"` // whether buffer was ready when checked
-	Sent      bool   `json:"sent,omitempty"`  // for output: true if data was successfully sent
+	Direction string       `json:"direction"`          // "North", "East", "South", "West", etc.
+	HasData   bool         `json:"has_data"`           // true if data was received/sent this cycle
+	Data      uint32       `json:"data,omitempty"`     // the actual data value (if HasData)
+	Pred      bool         `json:"pred"`               // predicate bit
+	Color     int          `json:"color"`              // color/channel index (0=Red, 1=Yellow, 2=Blue)
+	Ready     bool         `json:"ready,omitempty"`    // whether buffer was ready when checked
+	Sent      bool         `json:"sent,omitempty"`     // for output: true if data was successfully sent
+	TokenID   cgra.TokenID `json:"token_id,omitempty"` // unique ID for this data token
 }
 
 // MemOpLog represents a memory operation that occurred in this cycle
@@ -123,7 +139,7 @@ func UpdateCycleAccumulatorFromCheckFlags(acc *CycleAccumulator, opCode string, 
 }
 
 // AddInputPort adds a received data entry to the accumulator
-func (acc *CycleAccumulator) AddInputPort(direction string, hasData bool, data uint32, pred bool, color int, ready bool) {
+func (acc *CycleAccumulator) AddInputPort(direction string, hasData bool, data uint32, pred bool, color int, ready bool, tokenID cgra.TokenID) {
 	if hasData || ready { // Only add if there's something meaningful
 		acc.Inputs = append(acc.Inputs, PortState{
 			Direction: direction,
@@ -132,13 +148,14 @@ func (acc *CycleAccumulator) AddInputPort(direction string, hasData bool, data u
 			Pred:      pred,
 			Color:     color,
 			Ready:     ready,
+			TokenID:   tokenID,
 		})
 		acc.Changed = true
 	}
 }
 
 // AddOutputPort adds a sent data entry to the accumulator
-func (acc *CycleAccumulator) AddOutputPort(direction string, hasData bool, data uint32, pred bool, color int, sent bool) {
+func (acc *CycleAccumulator) AddOutputPort(direction string, hasData bool, data uint32, pred bool, color int, sent bool, tokenID cgra.TokenID) {
 	if hasData || sent { // Only add if there's something meaningful
 		acc.Outputs = append(acc.Outputs, PortState{
 			Direction: direction,
@@ -147,6 +164,7 @@ func (acc *CycleAccumulator) AddOutputPort(direction string, hasData bool, data 
 			Pred:      pred,
 			Color:     color,
 			Sent:      sent,
+			TokenID:   tokenID,
 		})
 		acc.Changed = true
 	}

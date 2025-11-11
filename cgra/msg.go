@@ -8,8 +8,9 @@ import (
 type MoveMsg struct {
 	sim.MsgMeta
 
-	Data  Data
-	Color int
+	Data    Data
+	Color   int
+	TokenID TokenID // Unique token identifier for tracing
 	//create a new branch predicate data
 	//Predicate int
 }
@@ -33,6 +34,7 @@ type MoveMsgBuilder struct {
 	sendTime sim.VTimeInSec
 	data     Data
 	color    int
+	tokenID  TokenID // Token identifier for tracing
 	// predicate value
 	//predicate int
 }
@@ -67,6 +69,12 @@ func (m MoveMsgBuilder) WithColor(color int) MoveMsgBuilder {
 	return m
 }
 
+// WithTokenID sets the token ID for tracking
+func (m MoveMsgBuilder) WithTokenID(tokenID TokenID) MoveMsgBuilder {
+	m.tokenID = tokenID
+	return m
+}
+
 //WithPredicate sets the predicate of the msg
 // func (m MoveMsgBuilder) WithPredicate(predicate int) MoveMsgBuilder {
 // 	m.predicate = predicate
@@ -81,7 +89,8 @@ func (m MoveMsgBuilder) Build() *MoveMsg {
 			Src: m.src,
 			Dst: m.dst,
 		},
-		Data:  m.data,
-		Color: m.color,
+		Data:    m.data,
+		Color:   m.color,
+		TokenID: m.tokenID,
 	}
 }

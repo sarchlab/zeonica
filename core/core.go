@@ -214,12 +214,20 @@ func (c *Core) doSend() bool {
 				continue
 			}
 
+			// Generate TokenID if not already set (when data first enters the network)
+			sendData := c.state.SendBufHead[color][i]
+			if sendData.TokenID == 0 {
+				sendData.TokenID = NextTokenID()
+				c.state.SendBufHead[color][i] = sendData
+			}
+
 			msg := cgra.MoveMsgBuilder{}.
 				WithDst(c.ports[cgra.Side(i)].remote).
 				WithSrc(c.ports[cgra.Side(i)].local.AsRemote()).
-				WithData(c.state.SendBufHead[color][i]).
+				WithData(sendData).
 				WithSendTime(c.Engine.CurrentTime()).
 				WithColor(color).
+				WithTokenID(sendData.TokenID).
 				Build()
 
 			err := c.ports[cgra.Side(i)].local.Send(msg)
@@ -236,6 +244,7 @@ func (c *Core) doSend() bool {
 					"Error", fmt.Sprintf("%v", err),
 					"Data", c.state.SendBufHead[color][i].First(),
 					"Pred", c.state.SendBufHead[color][i].Pred,
+					"TokenID", uint64(c.state.SendBufHead[color][i].TokenID),
 				)
 				continue
 			}
@@ -252,6 +261,7 @@ func (c *Core) doSend() bool {
 				"X", c.state.TileX,
 				"Y", c.state.TileY,
 				"Direction", []string{"North", "East", "South", "West", "Router", "", "", ""}[i],
+				"TokenID", uint64(c.state.SendBufHead[color][i].TokenID),
 			)
 
 			// ==== NEW: Add to waveform accumulator ====
@@ -264,6 +274,7 @@ func (c *Core) doSend() bool {
 					c.state.SendBufHead[color][i].Pred,
 					color,
 					true, // sent
+					c.state.SendBufHead[color][i].TokenID,
 				)
 			}
 
@@ -444,6 +455,7 @@ func (c *Core) doRecv() bool {
 					msg.Data.Pred,
 					color,
 					true, // ready
+					msg.Data.TokenID,
 				)
 			}
 
@@ -459,6 +471,7 @@ func (c *Core) doRecv() bool {
 				"X", c.state.TileX,
 				"Y", c.state.TileY,
 				"Direction", []string{"North", "East", "South", "West", "Router", "", "", ""}[i],
+				"TokenID", uint64(msg.Data.TokenID),
 			)
 
 			c.ports[cgra.Side(i)].local.RetrieveIncoming()
