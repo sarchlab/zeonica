@@ -44,9 +44,10 @@ type YAMLOperand struct {
 
 // ArrayConfig represents the top-level YAML structure
 type ArrayConfig struct {
-	Rows  int               `yaml:"rows"`
-	Cols  int               `yaml:"columns"`
-	Cores []YAMLCoreProgram `yaml:"cores"`
+	Rows       int               `yaml:"rows"`
+	Cols       int               `yaml:"columns"`
+	CompiledII int               `yaml:"compiled_ii"`
+	Cores      []YAMLCoreProgram `yaml:"cores"`
 }
 
 // YAMLRoot represents the root structure of the YAML file
@@ -56,6 +57,7 @@ type YAMLRoot struct {
 
 type Program struct {
 	EntryBlocks []EntryBlock
+	CompiledII  int // Iteration Interval for modulo scheduled loops; 0 if not modulo-scheduled
 }
 
 type EntryBlock struct {
@@ -211,6 +213,7 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 
 		program := Program{
 			EntryBlocks: entryBlocks,
+			CompiledII:  config.CompiledII,
 		}
 		if len(entryBlocks) == 0 || len(entryBlocks[0].InstructionGroups) == 0 {
 			fmt.Printf("Warning: Core at %s has empty program (entryBlocks=%d)\n", coordKey, len(entryBlocks))
