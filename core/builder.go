@@ -60,6 +60,7 @@ func (b Builder) Build(name string) *Core {
 			OpToExec:        0,
 			RefCountRuntime: make(map[string]int),
 		},
+		CycleAcc: NewCycleAccumulator(),
 	}
 
 	for i := 0; i < 4; i++ {

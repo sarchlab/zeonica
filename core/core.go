@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 	"log/slog"
-	"os"
 	"strconv"
 	"strings"
 
@@ -48,6 +47,17 @@ func (c *Core) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
 	//fmt.Printf("Core [%d][%d] receive WriteMemory(x=%d, y=%d)\n", c.state.TileX, c.state.TileY, x, y)
 	if x == int(c.state.TileX) && y == int(c.state.TileY) {
 		c.state.Memory[baseAddr] = data
+
+		// ==== NEW: Add to waveform accumulator ====
+		if c.state.CycleAcc != nil {
+			c.state.CycleAcc.AddMemoryOp(
+				"STORE",
+				baseAddr,
+				data,
+				"Local",
+			)
+		}
+
 		//fmt.Printf("Core [%d][%d] write memory[%d] = %d\n", c.state.TileX, c.state.TileY, baseAddr, c.state.Memory[baseAddr])
 		Trace("Memory",
 			"Behavior", "WriteMemory",
@@ -136,6 +146,10 @@ func (c *Core) MapProgram(program interface{}, x int, y int) {
 
 // Tick runs the program for one cycle.
 func (c *Core) Tick() (madeProgress bool) {
+	// ==== NEW: Initialize accumulator for this cycle ====
+	c.state.CycleAcc = NewCycleAccumulator()
+	currentTime := float64(c.Engine.CurrentTime() * 1e9)
+
 	// Removed verbose CoreTick trace to reduce log size
 
 	// Original execution order:
@@ -178,6 +192,11 @@ func (c *Core) Tick() (madeProgress bool) {
 	// REMOVED: Code that was causing infinite loops - cores with finished programs (PCInBlock == -1)
 	// were constantly returning madeProgress=true, causing the engine to never stop.
 	// The logic above (lines 153-176) already handles the case where programs haven't started yet.
+
+	// ==== NEW: Emit canonical PEState log at cycle end ====
+	if EnableWaveformLog && c.state.CycleAcc != nil {
+		LogPEState(currentTime, c.state.TileX, c.state.TileY, c.state.CycleAcc)
+	}
 
 	return madeProgress
 }
@@ -234,6 +253,20 @@ func (c *Core) doSend() bool {
 				"Y", c.state.TileY,
 				"Direction", []string{"North", "East", "South", "West", "Router", "", "", ""}[i],
 			)
+
+			// ==== NEW: Add to waveform accumulator ====
+			if c.state.CycleAcc != nil {
+				direction := []string{"North", "East", "South", "West", "Router", "", "", ""}[i]
+				c.state.CycleAcc.AddOutputPort(
+					direction,
+					true, // hasData
+					c.state.SendBufHead[color][i].First(),
+					c.state.SendBufHead[color][i].Pred,
+					color,
+					true, // sent
+				)
+			}
+
 			c.state.SendBufHeadBusy[color][i] = false
 		}
 	}
@@ -358,7 +391,6 @@ func (c *Core) doRecv() bool {
 						"NewData", newData,
 						"NewPred", msg.Data.Pred,
 					)
-					// Debug: Log when data reception is skipped due to RecvBufHeadReady being true
 					// if (c.state.TileX == 1 && c.state.TileY == 2 && i == int(cgra.West)) ||
 					// 	(c.state.TileX == 2 && c.state.TileY == 3 && i == int(cgra.South)) ||
 					// 	(c.state.TileX == 2 && c.state.TileY == 2 && i == int(cgra.East)) {
@@ -401,6 +433,19 @@ func (c *Core) doRecv() bool {
 			}
 			c.state.RecvBufHeadReady[color][i] = true
 			c.state.RecvBufHead[color][i] = msg.Data
+
+			// ==== NEW: Add to waveform accumulator ====
+			if c.state.CycleAcc != nil {
+				direction := []string{"North", "East", "South", "West", "Router", "", "", ""}[i]
+				c.state.CycleAcc.AddInputPort(
+					direction,
+					true, // hasData
+					msg.Data.First(),
+					msg.Data.Pred,
+					color,
+					true, // ready
+				)
+			}
 
 			// DataFlow Recv trace for link utilization analysis
 			Trace("DataFlow",
@@ -468,7 +513,6 @@ func (c *Core) doRecv() bool {
 }
 
 func (c *Core) runProgram() bool {
-	// Debug: Log when Core (3,2) tries to run program (by name)
 	// Removed verbose CoreRunProgram trace to reduce log size
 	// If this core has no program, do nothing
 	if len(c.state.Code.EntryBlocks) == 0 {

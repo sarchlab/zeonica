@@ -77,19 +77,11 @@ func Histogram() {
 	}
 
 	// Map the program to all cores
-	// Coordinate system: (0,0) at bottom-left, y increases upward, x increases rightward
-	fmt.Printf("Debug: Total programs loaded: %d\n", len(program))
-	for coord, prog := range program {
-		fmt.Printf("Debug: Program exists at coord: %s (EntryBlocks: %d)\n", coord, len(prog.EntryBlocks))
-	}
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			coord := fmt.Sprintf("(%d,%d)", x, y)
 			if prog, exists := program[coord]; exists {
 				driver.MapProgram(prog, [2]int{x, y})
-				fmt.Printf("Mapped program to coord (%d, %d)\n", x, y)
-			} else {
-				fmt.Printf("Debug: No program found for coord (%d, %d)\n", x, y)
 			}
 		}
 	}

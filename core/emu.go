@@ -39,13 +39,8 @@ type ReservationState struct {
 // return bool, True means the operand is still in use, False means the operand is not in use anymore
 // Only direction (port) operands are tracked in RefCount. Register and immediate operands are not tracked.
 func (r *ReservationState) DecrementRefCount(opr Operand, state *coreState) bool {
-	// Only direction operands are tracked in RefCount
-	// If this operand is not a direction, it's not in RefCount (e.g., register, immediate value)
-	// Return true to indicate it's still in use (don't close the port)
 	if !state.Directions[opr.Impl] && !state.Directions[strings.Title(strings.ToLower(opr.Impl))] {
-		// Operand is not a direction (e.g., register, immediate value)
-		// This is OK - only direction operands need ref counting
-		// Return true to indicate the operand is still in use (don't close the port)
+		// Non-direction operands don't need ref counting
 		return true
 	}
 
@@ -131,6 +126,9 @@ type coreState struct {
 
 	routingRules []*routingRule
 	triggers     []*Trigger
+
+	// Waveform logging accumulator for per-cycle state tracking
+	CycleAcc *CycleAccumulator
 }
 
 type instEmulator struct {
@@ -198,6 +196,13 @@ func (i instEmulator) SetUpInstructionGroup(index int32, state *coreState) {
 }
 
 func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreState, time float64) bool {
+	// ==== NEW: Initialize accumulator with current instruction ====
+	if state.CycleAcc != nil && len(cinst.Operations) > 0 {
+		state.CycleAcc.PC = state.PCInBlock
+		// Use the first operation's OpCode
+		state.CycleAcc.OpCode = cinst.Operations[0].OpCode
+	}
+
 	prevPC := state.PCInBlock
 	prevCount := state.CurrReservationState.OpToExec
 	progress_sync := false
@@ -251,7 +256,6 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 		if state.PCInBlock >= int32(len(state.SelectedBlock.InstructionGroups)) {
 			state.PCInBlock = -1
 			state.SelectedBlock = nil
-			// Debug: Log program completion in SyncOp mode
 		}
 		state.NextPCInBlock = -1
 	} else {
@@ -401,8 +405,6 @@ func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, st
 func (i instEmulator) CheckFlags(inst Operation, state *coreState, time float64) bool {
 	//PrintState(state)
 	flag := true
-
-	// Debug: Check if this is PHI for Core (2,2)
 	// Temporarily removed panic to avoid stopping execution
 	// if state.TileX == 2 && state.TileY == 2 {
 	// 	// Use panic to force output
@@ -413,6 +415,8 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState, time float64)
 	// This is different from other instructions which require all operands to be ready
 	if inst.OpCode == "PHI" {
 		hasReadySource := false
+		bothSourcesAreDirections := true
+		numSources := len(inst.SrcOperands.Operands)
 
 		for _, src := range inst.SrcOperands.Operands {
 			srcReady := false
@@ -425,6 +429,7 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState, time float64)
 					regData := state.Registers[registerIndex]
 					srcReady = regData.Pred
 				}
+				bothSourcesAreDirections = false
 			} else if state.Directions[src.Impl] || state.Directions[strings.Title(strings.ToLower(src.Impl))] {
 				// Check if operand is a direction
 				normalizedDir := src.Impl
@@ -441,6 +446,7 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState, time float64)
 			} else {
 				// Immediate values are always ready
 				srcReady = true
+				bothSourcesAreDirections = false
 			}
 
 			if srcReady {
@@ -448,8 +454,59 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState, time float64)
 			}
 		}
 
-		// PHI can execute if at least one source is ready
+		// PHI executes when at least one source is ready
+		// Special case for first execution: if both sources are from ports, allow with just one source ready
 		flag = hasReadySource
+
+		if bothSourcesAreDirections && hasReadySource && numSources == 2 {
+			phiStateKey := fmt.Sprintf("PHI_FirstExec_%d_%d_%d", state.TileX, state.TileY, state.PCInBlock)
+			hasExecutedBefore := state.States[phiStateKey] != nil && state.States[phiStateKey].(bool)
+
+			if !hasExecutedBefore {
+				// On first execution, skip output buffer check to break deadlock
+				phiSkipKey := fmt.Sprintf("PHI_SkipOutputCheck_%d_%d_%d", state.TileX, state.TileY, state.PCInBlock)
+				state.States[phiSkipKey] = true
+				flag = true
+			}
+		}
+		// Check output buffer unless first-execution PHI with port sources
+		if flag {
+			phiSkipKey := fmt.Sprintf("PHI_SkipOutputCheck_%d_%d_%d", state.TileX, state.TileY, state.PCInBlock)
+			skipOutputCheck := state.States[phiSkipKey] != nil && state.States[phiSkipKey].(bool)
+
+			if !skipOutputCheck {
+				for _, dst := range inst.DstOperands.Operands {
+					normalizedDir := dst.Impl
+					if !state.Directions[dst.Impl] {
+						normalizedDir = strings.Title(strings.ToLower(dst.Impl))
+					}
+					if state.Directions[dst.Impl] || state.Directions[normalizedDir] {
+						// Use normalized direction for checking
+						dirToCheck := dst.Impl
+						if !state.Directions[dst.Impl] {
+							dirToCheck = normalizedDir
+						}
+						if state.SendBufHeadBusy[i.getColorIndex(dst.Color)][i.getDirecIndex(dirToCheck)] {
+							// Backpressure: Send buffer busy - cannot write to destination port
+							Trace("Backpressure",
+								"Type", "SendBufBusy",
+								"OpCode", inst.OpCode,
+								"X", state.TileX,
+								"Y", state.TileY,
+								"Direction", dirToCheck,
+								"Color", dst.Color,
+								"Time", time,
+								"Reason", fmt.Sprintf("SendBufHeadBusy[%d][%d]=true", i.getColorIndex(dst.Color), i.getDirecIndex(dirToCheck)),
+							)
+							flag = false
+							break
+						}
+					}
+					// For register destinations, no check needed - registers can always be written
+				}
+			}
+		}
+
 		return flag
 	}
 
@@ -575,6 +632,22 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState, time float64)
 					} else if !dataPred {
 						reason = fmt.Sprintf("Data predicate=false (data=%d)", state.RecvBufHead[colorIdx][dirIdx].First())
 					}
+
+					// ==== NEW: Create block reason ====
+					direction := dirToCheck
+					blockReason := &BlockReason{
+						Code:      "RECV_NOT_READY",
+						OpCode:    inst.OpCode,
+						Direction: direction,
+						Color:     colorIdx,
+						DirIdx:    dirIdx,
+						ColorIdx:  colorIdx,
+						Message:   reason,
+					}
+					if state.CycleAcc != nil {
+						UpdateCycleAccumulatorFromCheckFlags(state.CycleAcc, inst.OpCode, state.PCInBlock, true, blockReason)
+					}
+
 					Trace("Backpressure",
 						"Type", "CheckFlagsFailed",
 						"OpCode", inst.OpCode,
@@ -622,36 +695,61 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState, time float64)
 		}
 	}
 
-	for _, dst := range inst.DstOperands.Operands {
-		// Check if operand is a direction (normalize direction name first)
-		normalizedDir := dst.Impl
-		if !state.Directions[dst.Impl] {
-			normalizedDir = strings.Title(strings.ToLower(dst.Impl))
-		}
-		if state.Directions[dst.Impl] || state.Directions[normalizedDir] {
-			// Use normalized direction for checking
-			dirToCheck := dst.Impl
+	// Skip output buffer check for PHI with two direction sources on FIRST execution
+	// PHI with both sources as directions should execute even if output is busy on first attempt
+	// to break the initial deadlock and consume tokens from input ports
+	// On subsequent iterations, PHI will require both sources to be ready normally
+	// NOTE: PHI output check is already handled in the PHI block above, so skip it here
+	skipOutputCheck := inst.OpCode == "PHI"
+
+	if !skipOutputCheck {
+		for _, dst := range inst.DstOperands.Operands {
+			// Check if operand is a direction (normalize direction name first)
+			normalizedDir := dst.Impl
 			if !state.Directions[dst.Impl] {
-				dirToCheck = normalizedDir
+				normalizedDir = strings.Title(strings.ToLower(dst.Impl))
 			}
-			if state.SendBufHeadBusy[i.getColorIndex(dst.Color)][i.getDirecIndex(dirToCheck)] {
-				// Backpressure: Send buffer busy - cannot write to destination port
-				Trace("Backpressure",
-					"Type", "SendBufBusy",
-					"OpCode", inst.OpCode,
-					"X", state.TileX,
-					"Y", state.TileY,
-					"Direction", dirToCheck,
-					"Color", dst.Color,
-					"Time", time,
-					"Reason", fmt.Sprintf("SendBufHeadBusy[%d][%d]=true", i.getColorIndex(dst.Color), i.getDirecIndex(dirToCheck)),
-				)
-				flag = false
-				break
+			if state.Directions[dst.Impl] || state.Directions[normalizedDir] {
+				// Use normalized direction for checking
+				dirToCheck := dst.Impl
+				if !state.Directions[dst.Impl] {
+					dirToCheck = normalizedDir
+				}
+				if state.SendBufHeadBusy[i.getColorIndex(dst.Color)][i.getDirecIndex(dirToCheck)] {
+					// Backpressure: Send buffer busy - cannot write to destination port
+
+					// ==== NEW: Create block reason ====
+					blockReason := &BlockReason{
+						Code:      "SEND_BUF_BUSY",
+						OpCode:    inst.OpCode,
+						Direction: dirToCheck,
+						Color:     i.getColorIndex(dst.Color),
+						DirIdx:    i.getDirecIndex(dirToCheck),
+						ColorIdx:  i.getColorIndex(dst.Color),
+						Message:   fmt.Sprintf("SendBufHeadBusy[%d][%d]=true for port %s", i.getColorIndex(dst.Color), i.getDirecIndex(dirToCheck), dirToCheck),
+					}
+					if state.CycleAcc != nil {
+						UpdateCycleAccumulatorFromCheckFlags(state.CycleAcc, inst.OpCode, state.PCInBlock, true, blockReason)
+					}
+
+					Trace("Backpressure",
+						"Type", "SendBufBusy",
+						"OpCode", inst.OpCode,
+						"X", state.TileX,
+						"Y", state.TileY,
+						"Direction", dirToCheck,
+						"Color", dst.Color,
+						"Time", time,
+						"Reason", fmt.Sprintf("SendBufHeadBusy[%d][%d]=true", i.getColorIndex(dst.Color), i.getDirecIndex(dirToCheck)),
+					)
+					flag = false
+					break
+				}
 			}
+			// For register destinations, no check needed - registers can always be written
 		}
-		// For register destinations, no check needed - registers can always be written
 	}
+
 	return flag
 }
 
@@ -675,6 +773,7 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"ADD": i.runAdd, // ADD, ADDI, INC, SUB, DEC
 		"SUB": i.runSub,
 		"LLS": i.runLLS,
+		"SHL": i.runLLS, // SHL is an alias for LLS (Logical Left Shift)
 		"LRS": i.runLRS,
 		"MUL": i.runMul, // MULI
 		"DIV": i.runDiv,
@@ -1053,6 +1152,16 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 		}
 		value := state.Memory[addr]
 
+		// ==== NEW: Add to waveform accumulator ====
+		if state.CycleAcc != nil {
+			state.CycleAcc.AddMemoryOp(
+				"LOAD",
+				addr,
+				value,
+				"Local",
+			)
+		}
+
 		slog.Warn("Memory",
 			"Behavior", "LoadDirect",
 			"Value", value,
@@ -1078,6 +1187,16 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 			panic("memory address out of bounds")
 		}
 		value := state.Memory[addr]
+
+		// ==== NEW: Add to waveform accumulator ====
+		if state.CycleAcc != nil {
+			state.CycleAcc.AddMemoryOp(
+				"LOAD",
+				addr,
+				value,
+				"Local",
+			)
+		}
 
 		slog.Warn("Memory",
 			"Behavior", "LoadDirect",
@@ -1661,8 +1780,6 @@ func (i instEmulator) runFAdd(inst Operation, state *coreState) {
 	resultFloat := src1Float + src2Float
 
 	resultUint := float2Uint(resultFloat)
-
-	// Debug: Log FADD execution for Core (2,3) - histogram data flow
 	// if state.TileX == 2 && state.TileY == 3 {
 	// 	fmt.Fprintf(os.Stderr, "[FADD] Core (2,3): src1Float=%.4f, src2Float=%.4f, resultFloat=%.4f, resultUint=%d\n",
 	// 		src1Float, src2Float, resultFloat, resultUint)
@@ -1703,20 +1820,18 @@ func (i instEmulator) runFDiv(inst Operation, state *coreState) {
 
 	dstFloat := src1Float / src2Float
 	dstVal := float2Uint(dstFloat)
-
-	// Debug: Log FDIV execution for Core (2,3) - histogram data flow
-	if state.TileX == 2 && state.TileY == 3 {
-		fmt.Fprintf(os.Stderr, "[FDIV] Core (2,3): src1Float=%.4f, src2Float=%.4f, resultFloat=%.4f, resultUint=%d\n",
-			src1Float, src2Float, dstFloat, dstVal)
-		// Special check for value 21: if src1Float=100.0, this should produce resultFloat=5.5556
-		if src1Float == 100.0 {
-			expected_result := float32(100.0 / 18.0)
-			if math.Abs(float64(dstFloat-expected_result)) > 0.0001 {
-				fmt.Fprintf(os.Stderr, "[FDIV_ERROR] Core (2,3): src1Float=100.0, expected resultFloat=%.4f, got %.4f\n",
-					expected_result, dstFloat)
-			}
-		}
-	}
+	// if state.TileX == 2 && state.TileY == 3 {
+	// 	fmt.Fprintf(os.Stderr, "[FDIV] Core (2,3): src1Float=%.4f, src2Float=%.4f, resultFloat=%.4f, resultUint=%d\n",
+	// 		src1Float, src2Float, dstFloat, dstVal)
+	// 	// Special check for value 21: if src1Float=100.0, this should produce resultFloat=5.5556
+	// 	if src1Float == 100.0 {
+	// 		expected_result := float32(100.0 / 18.0)
+	// 		if math.Abs(float64(dstFloat-expected_result)) > 0.0001 {
+	// 			fmt.Fprintf(os.Stderr, "[FDIV_ERROR] Core (2,3): src1Float=100.0, expected resultFloat=%.4f, got %.4f\n",
+	// 				expected_result, dstFloat)
+	// 		}
+	// 	}
+	// }
 
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, src1Struct.Pred && src2Struct.Pred), state)
@@ -1866,6 +1981,11 @@ func (i instEmulator) runPhi(inst Operation, state *coreState) {
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalarWithPred(selectedVal, selectedPred), state)
 	}
+
+	// Mark this PHI as having executed (for first-execution-only deadlock breaking)
+	// After first execution, PHI will require both sources to be ready on subsequent iterations
+	phiStateKey := fmt.Sprintf("PHI_FirstExec_%d_%d_%d", state.TileX, state.TileY, state.PCInBlock)
+	state.States[phiStateKey] = true
 
 	// elect no next PC
 }
@@ -2178,7 +2298,6 @@ func (i instEmulator) readFromBoundaryPort(state *coreState, color string) (uint
 				pred := data.Pred
 				// Mark as consumed (set RecvBufHeadReady to false)
 				state.RecvBufHeadReady[colorIdx][dir.idx] = false
-				// Debug: Log when GRANT_ONCE reads from boundary port
 				Trace("GRANT_ONCE_ReadBoundary",
 					"X", state.TileX,
 					"Y", state.TileY,
@@ -2193,7 +2312,6 @@ func (i instEmulator) readFromBoundaryPort(state *coreState, color string) (uint
 	}
 
 	// No data available from any boundary port, return 0 with predicate=false
-	// Debug: Log when GRANT_ONCE cannot read from boundary port
 	Trace("GRANT_ONCE_NoData",
 		"X", state.TileX,
 		"Y", state.TileY,

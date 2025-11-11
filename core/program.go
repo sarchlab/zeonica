@@ -118,9 +118,6 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 
 	config := root.ArrayConfig
 
-	// Debug: Print the parsed config
-	fmt.Printf("Debug: Parsed config - Rows: %d, Cols: %d, Cores: %d\n", config.Rows, config.Cols, len(config.Cores))
-
 	// Convert to map[(x,y)]Program
 	programMap := make(map[string]Program)
 
@@ -215,8 +212,6 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 		program := Program{
 			EntryBlocks: entryBlocks,
 		}
-
-		// Debug: Check if program is empty
 		if len(entryBlocks) == 0 || len(entryBlocks[0].InstructionGroups) == 0 {
 			fmt.Printf("Warning: Core at %s has empty program (entryBlocks=%d)\n", coordKey, len(entryBlocks))
 		} else {
