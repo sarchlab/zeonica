@@ -562,9 +562,12 @@ func (c *Core) runProgram() bool {
 		// Removed verbose CoreAboutToStart and CoreStart trace to reduce log size
 		c.state.PCInBlock = 0
 		c.state.SelectedBlock = &c.state.Code.EntryBlocks[0] // just temp, only one block\
-		if c.state.Mode == AsyncOp {
-			c.emu.SetUpInstructionGroup(0, &c.state)
-		}
+		// CRITICAL FIX: Both AsyncOp and SyncOp need to initialize state for loop restart
+		// AsyncOp needs to reset ReservationMap and OpToExec
+		// SyncOp needs to initialize OpToExec for subsequent instruction group PC advancement
+		// if c.state.Mode == AsyncOp {
+		c.emu.SetUpInstructionGroup(0, &c.state)
+		// }
 		c.state.NextPCInBlock = -1
 		// Note: We do NOT reset GRANT_ONCE state for loop programs
 		// GRANT_ONCE will execute again, but with predicate=false on subsequent iterations
