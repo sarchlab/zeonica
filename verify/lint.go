@@ -113,124 +113,143 @@ func RunLint(programs map[string]core.Program, arch *ArchInfo) []Issue {
 // - D=0: same iteration (t_cons - t_prod >= hopLatency)
 // - D=1: next iteration (t_cons - t_prod + ii >= hopLatency)
 // If either interpretation is valid, no error is reported (reduces false positives).
+//
+// CRITICAL FIX: This now correctly:
+//  1. Uses real timesteps from InstructionGroup indices (not operation indices)
+//  2. Distinguishes producer (dst operands) from consumer (src operands)
+//  3. Matches producer/consumer ports via mesh neighbor + opposite direction:
+//     - If consumer reads NORTH, producer is at (x, y-1) and writes SOUTH
+//     - If consumer reads SOUTH, producer is at (x, y+1) and writes NORTH
+//     - Similarly for EAST/WEST
 func checkTimingConstraints(programs map[string]core.Program, arch *ArchInfo, ii int) []Issue {
 	var issues []Issue
 
-	// Build a map of all operations by (PE, timestep, opIdx)
-	opMap := make(map[string]*operationInfo)        // key: "x,y,t,opIdx"
-	coordToOps := make(map[string][]*operationInfo) // key: "x,y"
+	// Build a map of all operations by (PE, timestep)
+	// Key: "x,y" → list of (timestep, operations)
+	// This ensures we use REAL timesteps from InstructionGroup indices
+	prodConsEdges := make(map[string]*producerInfo) // key: "prodX,prodY,prodT,port,color"
 
+	// Step 1: Collect all PRODUCER operations (those with dst ports)
 	for coordStr, prog := range programs {
-		x, y, err := parseCoordinate(coordStr)
-		if err != nil || x < 0 || x >= arch.Columns || y < 0 || y >= arch.Rows {
+		prodX, prodY, err := parseCoordinate(coordStr)
+		if err != nil || prodX < 0 || prodX >= arch.Columns || prodY < 0 || prodY >= arch.Rows {
 			continue
 		}
 
 		for entryIdx, entry := range prog.EntryBlocks {
+			// CRITICAL: t is the real timestep index from InstructionGroups slice
 			for t, ig := range entry.InstructionGroups {
 				for opIdx, op := range ig.Operations {
-					info := &operationInfo{
-						x:     x,
-						y:     y,
-						t:     t,
-						opIdx: opIdx,
-						entry: entryIdx,
-						op:    op,
+					// Scan dst_operands for port writes
+					for _, dst := range op.DstOperands.Operands {
+						if isPortOperand(dst.Impl) {
+							// This operation WRITES to a port at time t
+							key := fmt.Sprintf("%d,%d,%d,%s,%s", prodX, prodY, t, strings.ToUpper(dst.Impl), dst.Color)
+							prodConsEdges[key] = &producerInfo{
+								x:     prodX,
+								y:     prodY,
+								t:     t, // Real timestep from InstructionGroup index
+								port:  strings.ToUpper(dst.Impl),
+								color: dst.Color,
+								opIdx: opIdx,
+								entry: entryIdx,
+								op:    op,
+							}
+						}
 					}
-					key := fmt.Sprintf("%d,%d,%d,%d", x, y, t, opIdx)
-					opMap[key] = info
-
-					coordKey := fmt.Sprintf("%d,%d", x, y)
-					coordToOps[coordKey] = append(coordToOps[coordKey], info)
 				}
 			}
 		}
 	}
 
-	// For each operation, check its source operands
-	for _, opInfo := range opMap {
-		for _, src := range opInfo.op.SrcOperands.Operands {
-			// Check if this is a port operand (cross-PE data dependency)
-			if isPortOperand(src.Impl) {
-				// This is a port read. Find the corresponding writer.
-				// For mesh topology, infer the neighbor.
-				dirUpper := strings.ToUpper(src.Impl)
+	// Step 2: For each CONSUMER operation (those with src ports), find matching producer
+	for coordStr, prog := range programs {
+		consX, consY, err := parseCoordinate(coordStr)
+		if err != nil || consX < 0 || consX >= arch.Columns || consY < 0 || consY >= arch.Rows {
+			continue
+		}
 
-				// Infer source PE (producer)
-				var srcX, srcY int
-				switch dirUpper {
-				case "NORTH":
-					// We're reading from NORTH, so producer is to our north
-					srcX, srcY = opInfo.x, opInfo.y+1
-				case "SOUTH":
-					srcX, srcY = opInfo.x, opInfo.y-1
-				case "EAST":
-					srcX, srcY = opInfo.x+1, opInfo.y
-				case "WEST":
-					srcX, srcY = opInfo.x-1, opInfo.y
-				default:
-					continue
-				}
+		for _, entry := range prog.EntryBlocks {
+			// CRITICAL: t is the real timestep index from InstructionGroups slice
+			for consT, ig := range entry.InstructionGroups {
+				for opIdx, op := range ig.Operations {
+					// Scan src_operands for port reads (consumers only read from src)
+					for _, src := range op.SrcOperands.Operands {
+						if isPortOperand(src.Impl) {
+							// This operation READS from a port at time consT
+							// Find the producer at the neighbor PE with opposite port direction
 
-				// Check bounds
-				if srcX < 0 || srcX >= arch.Columns || srcY < 0 || srcY >= arch.Rows {
-					continue // Out of bounds, skip
-				}
+							consPort := strings.ToUpper(src.Impl)
+							prodPort := oppositePort(consPort)
+							prodX, prodY := neighborCoord(consX, consY, consPort)
 
-				// The producer writes to the opposite port direction
-				producerPort := oppositePort(dirUpper)
-				producerCoordKey := fmt.Sprintf("%d,%d", srcX, srcY)
+							// Check bounds
+							if prodX < 0 || prodX >= arch.Columns || prodY < 0 || prodY >= arch.Rows {
+								continue // Neighbor is out of bounds
+							}
 
-				// Find producer operation (scan all operations on producer PE)
-				for _, producerOp := range coordToOps[producerCoordKey] {
-					// Check if this producer writes to the port we're reading from
-					for _, dst := range producerOp.op.DstOperands.Operands {
-						if strings.ToUpper(dst.Impl) == producerPort && dst.Color == src.Color {
-							// Found the producer! Check timing with modulo scheduling model.
-							reqLatency := arch.HopLatency
-							tProd := producerOp.t
-							tCons := opInfo.t
+							// Look for a producer at (prodX, prodY) that writes prodPort with same color
+							// We search across ALL timesteps in the producer's program
+							for prodT := 0; prodT < 1000; prodT++ { // arbitrary large number
+								prodKey := fmt.Sprintf("%d,%d,%d,%s,%s", prodX, prodY, prodT, prodPort, src.Color)
+								prodInfo, exists := prodConsEdges[prodKey]
+								if !exists {
+									continue // No producer at this timestep
+								}
 
-							// Compute deltas for D=0 (same iteration) and D=1 (next iteration)
-							delta0 := tCons - tProd
-							delta1 := tCons - tProd + ii
+								// Found a producer! Apply D∈{0,1} timing model
+								reqLatency := arch.HopLatency
+								tProd := prodInfo.t // Real timestep from producer's InstructionGroup index
+								tCons := consT      // Real timestep from consumer's InstructionGroup index
 
-							// Check if either interpretation satisfies the latency constraint
-							ok0 := delta0 >= reqLatency
-							ok1 := delta1 >= reqLatency
+								// D∈{0,1} model: two interpretations of data dependence
+								// D=0: same iteration
+								delta0 := tCons - tProd
+								ok0 := delta0 >= reqLatency
 
-							// Only report an issue if BOTH interpretations fail
-							if !ok0 && !ok1 {
-								issues = append(issues, Issue{
-									Type: IssueTiming,
-									PEX:  opInfo.x,
-									PEY:  opInfo.y,
-									Time: opInfo.t,
-									OpID: opInfo.opIdx,
-									Message: fmt.Sprintf(
-										"Insufficient latency under both D=0 and D=1 assumptions: "+
-											"producer PE(%d,%d) t=%d, consumer PE(%d,%d) t=%d, "+
-											"hop=%d, ii=%d (delta0=%d, delta1=%d)",
-										srcX, srcY, tProd, opInfo.x, opInfo.y, tCons,
-										reqLatency, ii, delta0, delta1,
-									),
-									Details: map[string]interface{}{
-										"consumer_x":       opInfo.x,
-										"consumer_y":       opInfo.y,
-										"consumer_t":       tCons,
-										"producer_x":       srcX,
-										"producer_y":       srcY,
-										"producer_t":       tProd,
-										"required_latency": reqLatency,
-										"delta0":           delta0, // Assuming D=0
-										"delta1":           delta1, // Assuming D=1
-										"ii":               ii,
-										"ok0":              ok0,
-										"ok1":              ok1,
-										"port":             producerPort,
-										"color":            src.Color,
-									},
-								})
+								// D=1: next iteration (if ii > 0, i.e., modulo scheduled)
+								ok1 := false
+								delta1 := 0
+								if ii > 0 {
+									delta1 = tCons - tProd + ii
+									ok1 = delta1 >= reqLatency
+								}
+
+								// Only report violation if BOTH interpretations fail
+								// (both D=0 and D=1 are invalid, meaning this is a real violation)
+								if !ok0 && !ok1 {
+									issues = append(issues, Issue{
+										Type: IssueTiming,
+										PEX:  consX,
+										PEY:  consY,
+										Time: consT,
+										OpID: opIdx,
+										Message: fmt.Sprintf(
+											"Insufficient latency under both D=0 and D=1 assumptions: "+
+												"producer PE(%d,%d) t=%d, consumer PE(%d,%d) t=%d, "+
+												"hop=%d, ii=%d (delta0=%d, delta1=%d)",
+											prodX, prodY, tProd, consX, consY, tCons,
+											reqLatency, ii, delta0, delta1,
+										),
+										Details: map[string]interface{}{
+											"consumer_x":       consX,
+											"consumer_y":       consY,
+											"consumer_t":       tCons,
+											"producer_x":       prodX,
+											"producer_y":       prodY,
+											"producer_t":       tProd,
+											"consumer_port":    consPort,
+											"producer_port":    prodPort,
+											"required_latency": reqLatency,
+											"delta0":           delta0, // D=0: same iteration
+											"delta1":           delta1, // D=1: next iteration
+											"ii":               ii,
+											"ok0":              ok0,
+											"ok1":              ok1,
+											"color":            src.Color,
+										},
+									})
+								}
 							}
 						}
 					}
@@ -240,16 +259,6 @@ func checkTimingConstraints(programs map[string]core.Program, arch *ArchInfo, ii
 	}
 
 	return issues
-}
-
-// operationInfo tracks metadata about an operation for dependency analysis
-type operationInfo struct {
-	x     int
-	y     int
-	t     int
-	opIdx int
-	entry int
-	op    core.Operation
 }
 
 // isPortOperand checks if an operand is a port (direction name)
@@ -281,4 +290,41 @@ func oppositePort(dir string) string {
 	default:
 		return ""
 	}
+}
+
+// neighborCoord calculates the neighbor PE coordinate when reading from a port.
+// For 2D mesh topology:
+// - Reading NORTH means producer is at (x, y-1) writing SOUTH
+// - Reading SOUTH means producer is at (x, y+1) writing NORTH
+// - Reading EAST means producer is at (x+1, y) writing WEST
+// - Reading WEST means producer is at (x-1, y) writing EAST
+func neighborCoord(x, y int, readDir string) (nx, ny int) {
+	switch strings.ToUpper(readDir) {
+	case "NORTH":
+		// Reading from north means the producer is north of us
+		return x, y - 1
+	case "SOUTH":
+		// Reading from south means the producer is south of us
+		return x, y + 1
+	case "EAST":
+		// Reading from east means the producer is east of us
+		return x + 1, y
+	case "WEST":
+		// Reading from west means the producer is west of us
+		return x - 1, y
+	default:
+		return -1, -1
+	}
+}
+
+// producerInfo tracks metadata about a producer operation that writes to a port
+type producerInfo struct {
+	x     int
+	y     int
+	t     int // Real timestep from InstructionGroup index
+	port  string
+	color string
+	opIdx int
+	entry int
+	op    core.Operation
 }
