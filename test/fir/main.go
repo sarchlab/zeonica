@@ -27,8 +27,8 @@ func Fir() {
 		Build("Driver")
 
 	// 创建设备
-	device := config.DeviceBuilder{}
-	WithEngine(engine).
+	device := config.DeviceBuilder{}.
+		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		WithWidth(width).
 		WithHeight(height).
