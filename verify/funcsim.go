@@ -143,6 +143,36 @@ func (fs *FunctionalSimulator) executeOp(x, y int, op *core.Operation) {
 		fs.runStore(x, y, op)
 	case "GEP":
 		fs.runGep(x, y, op)
+	case "LLS", "SHL":
+		fs.runLLS(x, y, op)
+	case "LRS":
+		fs.runLRS(x, y, op)
+	case "OR":
+		fs.runOr(x, y, op)
+	case "XOR":
+		fs.runXor(x, y, op)
+	case "AND":
+		fs.runAnd(x, y, op)
+	case "NOT":
+		fs.runNot(x, y, op)
+	case "ICMP_EQ", "ICMP_SGT", "ICMP_SLT", "ICMP_SGE", "ICMP_SLE", "ICMP_SNE":
+		fs.runIcmp(x, y, op)
+	case "LT_EX":
+		fs.runLtEx(x, y, op)
+	case "SEXT":
+		fs.runSext(x, y, op)
+	case "ZEXT":
+		fs.runZext(x, y, op)
+	case "CAST_FPTOSI":
+		fs.runCastFptoSi(x, y, op)
+	case "FMUL_FADD":
+		fs.runFMulFAdd(x, y, op)
+	case "PHI_CONST":
+		fs.runPhiConst(x, y, op)
+	case "GRANT_ONCE":
+		fs.runGrantOnce(x, y, op)
+	case "CONSTANT":
+		fs.runConstant(x, y, op)
 	case "NOP":
 		// No-op: do nothing
 	default:
@@ -416,6 +446,314 @@ func (fs *FunctionalSimulator) runGep(x, y int, op *core.Operation) {
 		base.First()+index.First(),
 		base.Pred && index.Pred,
 	)
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, result)
+}
+
+// runLLS implements LLS (Logical Left Shift) and SHL (alias)
+// Semantics: dst = src0 << src1
+func (fs *FunctionalSimulator) runLLS(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) < 2 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src0 := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+	src1 := fs.readOperand(x, y, &op.SrcOperands.Operands[1])
+
+	result := core.NewScalarWithPred(
+		src0.First()<<src1.First(),
+		src0.Pred && src1.Pred,
+	)
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, result)
+}
+
+// runLRS implements LRS (Logical Right Shift)
+// Semantics: dst = src0 >> src1
+func (fs *FunctionalSimulator) runLRS(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) < 2 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src0 := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+	src1 := fs.readOperand(x, y, &op.SrcOperands.Operands[1])
+
+	result := core.NewScalarWithPred(
+		src0.First()>>src1.First(),
+		src0.Pred && src1.Pred,
+	)
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, result)
+}
+
+// runOr implements OR (bitwise OR)
+// Semantics: dst = src0 | src1
+func (fs *FunctionalSimulator) runOr(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) < 2 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src0 := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+	src1 := fs.readOperand(x, y, &op.SrcOperands.Operands[1])
+
+	result := core.NewScalarWithPred(
+		src0.First()|src1.First(),
+		src0.Pred && src1.Pred,
+	)
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, result)
+}
+
+// runXor implements XOR (bitwise XOR)
+// Semantics: dst = src0 ^ src1
+func (fs *FunctionalSimulator) runXor(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) < 2 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src0 := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+	src1 := fs.readOperand(x, y, &op.SrcOperands.Operands[1])
+
+	result := core.NewScalarWithPred(
+		src0.First()^src1.First(),
+		src0.Pred && src1.Pred,
+	)
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, result)
+}
+
+// runAnd implements AND (bitwise AND)
+// Semantics: dst = src0 & src1
+func (fs *FunctionalSimulator) runAnd(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) < 2 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src0 := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+	src1 := fs.readOperand(x, y, &op.SrcOperands.Operands[1])
+
+	result := core.NewScalarWithPred(
+		src0.First()&src1.First(),
+		src0.Pred && src1.Pred,
+	)
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, result)
+}
+
+// runNot implements NOT (logical NOT)
+// Semantics: dst = src == 0 ? 1 : 0
+func (fs *FunctionalSimulator) runNot(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) == 0 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+
+	var result uint32
+	if src.First() == 0 {
+		result = 1
+	} else {
+		result = 0
+	}
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, core.NewScalarWithPred(result, src.Pred))
+}
+
+// runIcmp implements integer comparison operations
+// Semantics: ICMP_EQ, ICMP_SGT, ICMP_SLT, ICMP_SGE, ICMP_SLE, ICMP_SNE
+func (fs *FunctionalSimulator) runIcmp(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) < 2 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src0 := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+	src1 := fs.readOperand(x, y, &op.SrcOperands.Operands[1])
+
+	val0 := int32(src0.First())
+	val1 := int32(src1.First())
+
+	var result uint32
+	switch strings.ToUpper(op.OpCode) {
+	case "ICMP_EQ":
+		if val0 == val1 {
+			result = 1
+		}
+	case "ICMP_SGT":
+		if val0 > val1 {
+			result = 1
+		}
+	case "ICMP_SLT":
+		if val0 < val1 {
+			result = 1
+		}
+	case "ICMP_SGE":
+		if val0 >= val1 {
+			result = 1
+		}
+	case "ICMP_SLE":
+		if val0 <= val1 {
+			result = 1
+		}
+	case "ICMP_SNE":
+		if val0 != val1 {
+			result = 1
+		}
+	}
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, core.NewScalarWithPred(result, src0.Pred && src1.Pred))
+}
+
+// runLtEx implements LT_EX (Less Than Export)
+// Semantics: dst = (src0 < src1) ? 1 : 0
+func (fs *FunctionalSimulator) runLtEx(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) < 2 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src0 := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+	src1 := fs.readOperand(x, y, &op.SrcOperands.Operands[1])
+
+	var result uint32
+	if src0.First() < src1.First() {
+		result = 1
+	}
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, core.NewScalarWithPred(result, src0.Pred && src1.Pred))
+}
+
+// runSext implements SEXT (Sign Extend)
+// For now, pass-through since we work with 32-bit values
+func (fs *FunctionalSimulator) runSext(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) == 0 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, src)
+}
+
+// runZext implements ZEXT (Zero Extend)
+// For now, pass-through since we work with 32-bit values
+func (fs *FunctionalSimulator) runZext(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) == 0 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, src)
+}
+
+// runCastFptoSi implements CAST_FPTOSI (Float to Signed Integer)
+// Semantics: dst = (int32)src (convert float32 bits to signed int)
+func (fs *FunctionalSimulator) runCastFptoSi(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) == 0 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+
+	// Convert float32 bits to float32, then to int32
+	srcFloat := math.Float32frombits(src.First())
+	srcInt := int32(srcFloat)
+
+	result := core.NewScalarWithPred(uint32(srcInt), src.Pred)
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, result)
+}
+
+// runFMulFAdd implements FMUL_FADD (Fused Multiply-Add)
+// Semantics: dst = (src0 * src1) + src2 (float operations)
+func (fs *FunctionalSimulator) runFMulFAdd(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) < 3 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src0 := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+	src1 := fs.readOperand(x, y, &op.SrcOperands.Operands[1])
+	src2 := fs.readOperand(x, y, &op.SrcOperands.Operands[2])
+
+	// Convert to float32
+	f0 := math.Float32frombits(src0.First())
+	f1 := math.Float32frombits(src1.First())
+	f2 := math.Float32frombits(src2.First())
+
+	// Fused multiply-add
+	resultFloat := f0*f1 + f2
+
+	result := core.NewScalarWithPred(
+		math.Float32bits(resultFloat),
+		src0.Pred && src1.Pred && src2.Pred,
+	)
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, result)
+}
+
+// runPhiConst implements PHI_CONST (Phi with Constant)
+// Semantics: First execution selects src0, subsequent executions select src1
+func (fs *FunctionalSimulator) runPhiConst(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) < 2 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src0 := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+	src1 := fs.readOperand(x, y, &op.SrcOperands.Operands[1])
+
+	// For simplicity in functional simulation, select first ready source
+	var selectedData core.Data
+	if src0.Pred {
+		selectedData = src0
+	} else if src1.Pred {
+		selectedData = src1
+	} else {
+		selectedData = core.NewScalarWithPred(0, false)
+	}
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, selectedData)
+}
+
+// runGrantOnce implements GRANT_ONCE (Grant Once)
+// Semantics: Pass through source value with predicate=true
+func (fs *FunctionalSimulator) runGrantOnce(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) == 0 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+
+	// GRANT_ONCE sets predicate=true (valid mark)
+	result := core.NewScalarWithPred(src.First(), true)
+
+	dst := &op.DstOperands.Operands[0]
+	fs.writeOperand(x, y, dst, result)
+}
+
+// runConstant implements CONSTANT (Constant generation)
+// Semantics: Output the constant value with predicate=true
+func (fs *FunctionalSimulator) runConstant(x, y int, op *core.Operation) {
+	if len(op.SrcOperands.Operands) == 0 || len(op.DstOperands.Operands) == 0 {
+		return
+	}
+
+	src := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
+
+	// CONSTANT always outputs with predicate=true
+	result := core.NewScalarWithPred(src.First(), true)
 
 	dst := &op.DstOperands.Operands[0]
 	fs.writeOperand(x, y, dst, result)
