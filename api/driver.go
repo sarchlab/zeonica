@@ -8,6 +8,7 @@ import (
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/akita/v4/sim/directconnection"
 	"github.com/sarchlab/zeonica/cgra"
+	"github.com/sarchlab/zeonica/config"
 	"github.com/sarchlab/zeonica/core"
 )
 
@@ -43,6 +44,8 @@ type Driver interface {
 
 	//
 	ReadMemory(x int, y int, addr uint32) uint32
+
+	hasInput() bool
 
 	// Run will run all the tasks that have been added to the driver.
 	Run()
@@ -443,9 +446,32 @@ func (d *driverImpl) SetPerPEKernels(kernels PerPEKernels) error {
 	return nil
 }
 
+func (d *driverImpl) hasInput() bool {
+	for i := 0; i < 4; i++ {
+		if len(d.feedInTasks[i]) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // Run runs all the tasks in the driver.
 func (d *driverImpl) Run() {
 	d.TickNow()
+	if !d.hasInput() {
+		// Get all cores from the device and tick those that need explicit startup
+		cores := config.GetAllCores(d.device)
+		tickedCount := 0
+		for _, c := range cores {
+			if c.NeedsExplicitTick() {
+				c.TickNow()
+				tickedCount++
+			}
+		}
+		fmt.Printf("[Driver] No external input, ticked %d cores that need explicit startup (total cores: %d)\n", tickedCount, len(cores))
+	}
+	//if there is an input from outside, just use engine run
+	//else, tick all cores in the device
 	err := d.Engine.Run()
 	if err != nil {
 		panic(err)

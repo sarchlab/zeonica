@@ -6,6 +6,7 @@ import (
 	"github.com/sarchlab/akita/v4/mem/idealmemcontroller"
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
+	"github.com/sarchlab/zeonica/core"
 )
 
 type tileCore interface {
@@ -147,4 +148,27 @@ func (d *device) GetSidePorts(
 	}
 
 	return ports
+}
+
+// GetAllCores returns all Core instances from a device.
+// This is used by the driver to access all cores for unified startup.
+func GetAllCores(d cgra.Device) []*core.Core {
+	// Type assert to the concrete device type to access internal Tiles structure
+	if dev, ok := d.(*device); ok {
+		cores := make([]*core.Core, 0, dev.Width*dev.Height)
+		for yArray := 0; yArray < dev.Height; yArray++ {
+			for x := 0; x < dev.Width; x++ {
+				if dev.Tiles[yArray][x] != nil {
+					// Type assert Core to *core.Core
+					if c, ok := dev.Tiles[yArray][x].Core.(*core.Core); ok {
+						cores = append(cores, c)
+					}
+				}
+			}
+		}
+		return cores
+	}
+	// If device is not a *device, return empty slice
+	// This handles mock devices in tests
+	return []*core.Core{}
 }

@@ -76,6 +76,58 @@ func (c *Core) SetRemotePort(side cgra.Side, remote sim.RemotePort) {
 	c.ports[side].remote = remote
 }
 
+// NeedsExplicitTick returns true if this core needs an explicit tick to start.
+// This is for cores with programs that don't need external input (e.g., GRANT_ONCE,
+// or instructions with all immediate operands).
+// TickingComponent doesn't automatically schedule the first tick, so we need to do it manually
+// for instructions that can execute without external data.
+func (c *Core) NeedsExplicitTick() bool {
+	if len(c.state.Code.EntryBlocks) == 0 {
+		return false
+	}
+	// Check if the first instruction group contains instructions that don't need external input
+	if len(c.state.Code.EntryBlocks[0].InstructionGroups) == 0 {
+		return false
+	}
+	firstInstGroup := c.state.Code.EntryBlocks[0].InstructionGroups[0]
+	for _, op := range firstInstGroup.Operations {
+		// Instructions that don't need external input (constants, grants, etc.)
+		// These instructions can execute immediately without waiting for external data
+		if op.OpCode == "GRANT_ONCE" || op.OpCode == "GRANT_ONCE_CONST" {
+			return true
+		}
+		// Check if all source operands are immediate values (constants)
+		// If so, this instruction doesn't need external input
+		allImmediate := true
+		for _, src := range op.SrcOperands.Operands {
+			// Check if operand is an immediate value (starts with # or is a number)
+			if strings.HasPrefix(src.Impl, "#") {
+				continue // Immediate value
+			}
+			// Check if it's a register (starts with $)
+			if strings.HasPrefix(src.Impl, "$") {
+				allImmediate = false
+				break
+			}
+			// Check if it's a direction (needs external input)
+			if c.state.Directions[src.Impl] || c.state.Directions[strings.Title(strings.ToLower(src.Impl))] {
+				allImmediate = false
+				break
+			}
+			// Try to parse as number (immediate value)
+			if _, err := strconv.Atoi(src.Impl); err != nil {
+				// Not a number, might need external input
+				allImmediate = false
+				break
+			}
+		}
+		if allImmediate && len(op.SrcOperands.Operands) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // MapProgram sets the program that the core needs to run.
 func (c *Core) MapProgram(program interface{}, x int, y int) {
 	if prog, ok := program.(Program); ok {
@@ -88,60 +140,7 @@ func (c *Core) MapProgram(program interface{}, x int, y int) {
 	c.state.TileX = uint32(x)
 	c.state.TileY = uint32(y)
 	// Removed verbose MapProgramAfter trace to reduce log size
-
-	// CRITICAL: If this core has a program with instructions that don't need external input,
-	// schedule the first tick event explicitly.
-	// TickingComponent doesn't automatically schedule the first tick, so we need to do it manually
-	// for instructions like GRANT_ONCE that can execute without external input.
-	if len(c.state.Code.EntryBlocks) > 0 {
-		// Check if the first instruction group contains instructions that don't need external input
-		needsExplicitTick := false
-		if len(c.state.Code.EntryBlocks[0].InstructionGroups) > 0 {
-			firstInstGroup := c.state.Code.EntryBlocks[0].InstructionGroups[0]
-			for _, op := range firstInstGroup.Operations {
-				// Instructions that don't need external input (constants, grants, etc.)
-				// These instructions can execute immediately without waiting for external data
-				if op.OpCode == "GRANT_ONCE" || op.OpCode == "GRANT_ONCE_CONST" {
-					needsExplicitTick = true
-					break
-				}
-				// Check if all source operands are immediate values (constants)
-				// If so, this instruction doesn't need external input
-				allImmediate := true
-				for _, src := range op.SrcOperands.Operands {
-					// Check if operand is an immediate value (starts with # or is a number)
-					if strings.HasPrefix(src.Impl, "#") {
-						continue // Immediate value
-					}
-					// Check if it's a register (starts with $)
-					if strings.HasPrefix(src.Impl, "$") {
-						allImmediate = false
-						break
-					}
-					// Check if it's a direction (needs external input)
-					if c.state.Directions[src.Impl] || c.state.Directions[strings.Title(strings.ToLower(src.Impl))] {
-						allImmediate = false
-						break
-					}
-					// Try to parse as number (immediate value)
-					if _, err := strconv.Atoi(src.Impl); err != nil {
-						// Not a number, might need external input
-						allImmediate = false
-						break
-					}
-				}
-				if allImmediate && len(op.SrcOperands.Operands) > 0 {
-					needsExplicitTick = true
-					break
-				}
-			}
-		}
-
-		if needsExplicitTick {
-			c.TickNow()
-			// Removed verbose MapProgramTickNow trace to reduce log size
-		}
-	}
+	// Note: Explicit tick logic has been moved to driver.Run() for centralized management
 }
 
 // Tick runs the program for one cycle.

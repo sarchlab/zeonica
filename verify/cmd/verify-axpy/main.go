@@ -35,12 +35,14 @@ func main() {
 	// ========== LINT CHECK ==========
 	fmt.Println("==============================================================================")
 	fmt.Println("STAGE 1: LINT CHECK (Structural & Timing Validation)")
-	fmt.Println("==============================================================================\n")
+	fmt.Println("==============================================================================")
+	fmt.Println()
 
 	issues := verify.RunLint(programs, arch)
 
 	if len(issues) == 0 {
-		fmt.Println("✅ LINT PASSED - No structural or timing issues found\n")
+		fmt.Println("✅ LINT PASSED - No structural or timing issues found")
+		fmt.Println()
 	} else {
 		fmt.Printf("❌ LINT FAILED - Found %d issues:\n\n", len(issues))
 		for i, issue := range issues {
@@ -58,7 +60,8 @@ func main() {
 	// ========== FUNCTIONAL SIMULATOR ==========
 	fmt.Println("==============================================================================")
 	fmt.Println("STAGE 2: FUNCTIONAL SIMULATOR (Dataflow Verification)")
-	fmt.Println("==============================================================================\n")
+	fmt.Println("==============================================================================")
+	fmt.Println()
 
 	fs := verify.NewFunctionalSimulator(programs, arch)
 	if fs == nil {
@@ -75,12 +78,14 @@ func main() {
 		log.Fatalf("Simulation failed: %v", err)
 	}
 
-	fmt.Println("✅ FUNCTIONAL SIMULATOR PASSED - Execution completed successfully\n")
+	fmt.Println("✅ FUNCTIONAL SIMULATOR PASSED - Execution completed successfully")
+	fmt.Println()
 
 	// Display simulation results
 	fmt.Println("------------------------------------------------------------------------------")
 	fmt.Println("Simulation Results by PE:")
-	fmt.Println("------------------------------------------------------------------------------\n")
+	fmt.Println("------------------------------------------------------------------------------")
+	fmt.Println()
 
 	for y := 0; y < arch.Rows; y++ {
 		for x := 0; x < arch.Columns; x++ {
@@ -102,9 +107,11 @@ func main() {
 	}
 
 	// ========== SUMMARY ==========
-	fmt.Println("\n==============================================================================")
+	fmt.Println()
+	fmt.Println("==============================================================================")
 	fmt.Println("VERIFICATION SUMMARY")
-	fmt.Println("==============================================================================\n")
+	fmt.Println("==============================================================================")
+	fmt.Println()
 
 	if len(issues) == 0 {
 		fmt.Println("✅ Lint Check:       PASSED")
@@ -113,8 +120,9 @@ func main() {
 	}
 
 	fmt.Println("✅ Functional Sim:   PASSED")
-
-	fmt.Println("\n==============================================================================\n")
+	fmt.Println()
+	fmt.Println("==============================================================================")
+	fmt.Println()
 
 	// Exit with error code if lint failed
 	if len(issues) > 0 {
