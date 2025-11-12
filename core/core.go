@@ -110,7 +110,7 @@ func (c *Core) NeedsExplicitTick() bool {
 				break
 			}
 			// Check if it's a direction (needs external input)
-			if c.state.Directions[src.Impl] || c.state.Directions[strings.Title(strings.ToLower(src.Impl))] {
+			if c.state.Directions[src.Impl] || c.state.Directions[toTitleCase(src.Impl)] {
 				allImmediate = false
 				break
 			}
@@ -401,13 +401,6 @@ func (c *Core) doRecv() bool {
 						"NewData", newData,
 						"NewPred", msg.Data.Pred,
 					)
-					// if (c.state.TileX == 1 && c.state.TileY == 2 && i == int(cgra.West)) ||
-					// 	(c.state.TileX == 2 && c.state.TileY == 3 && i == int(cgra.South)) ||
-					// 	(c.state.TileX == 2 && c.state.TileY == 2 && i == int(cgra.East)) {
-					// 	sideName := []string{"North", "East", "South", "West", "Router", "", "", ""}[i]
-					// 	fmt.Fprintf(os.Stderr, "[Recv_SKIP] Core (%d,%d): %s[color=%d] skipped newData=%d, oldData=%d, oldPred=%v\n",
-					// 		c.state.TileX, c.state.TileY, sideName, color, newData, oldData, oldPred)
-					// }
 				}
 				continue
 			}
@@ -525,82 +518,18 @@ func (c *Core) doRecv() bool {
 }
 
 func (c *Core) runProgram() bool {
-	// Removed verbose CoreRunProgram trace to reduce log size
-	// If this core has no program, do nothing
-	if len(c.state.Code.EntryBlocks) == 0 {
-		// Removed verbose CoreNoProgram trace to reduce log size
-		return false
-	}
-
 	if c.state.PCInBlock == -1 {
-		// Check if this is a single-instruction program (like GRANT_ONCE) that should only execute once
-		// For loop programs, we should restart execution
-		isSingleInstructionProgram := false
-		if len(c.state.Code.EntryBlocks) > 0 && len(c.state.Code.EntryBlocks[0].InstructionGroups) == 1 {
-			firstInstGroup := c.state.Code.EntryBlocks[0].InstructionGroups[0]
-			if len(firstInstGroup.Operations) == 1 && firstInstGroup.Operations[0].OpCode == "GRANT_ONCE" {
-				// Check if GRANT_ONCE has already executed
-				stateKey := fmt.Sprintf("GrantOnce_0")
-				if c.state.States[stateKey] == true {
-					isSingleInstructionProgram = true
-					// if (c.state.TileX == 2 && c.state.TileY == 2) || (c.state.TileX == 2 && c.state.TileY == 3) {
-					// 	fmt.Fprintf(os.Stderr, "[runProgram] Core (%d,%d) Single-instruction program, returning false\n",
-					// 		c.state.TileX, c.state.TileY)
-					// }
-				}
-			}
-		}
-
-		if isSingleInstructionProgram {
-			// Single-instruction program has already executed, don't restart
-			return false
-		}
-
-		// For loop programs or programs that haven't started yet, restart execution
-		// This allows loops to iterate multiple times
-		// Removed verbose CoreAboutToStart and CoreStart trace to reduce log size
 		c.state.PCInBlock = 0
 		c.state.SelectedBlock = &c.state.Code.EntryBlocks[0] // just temp, only one block\
-		// CRITICAL FIX: Both AsyncOp and SyncOp need to initialize state for loop restart
-		// AsyncOp needs to reset ReservationMap and OpToExec
-		// SyncOp needs to initialize OpToExec for subsequent instruction group PC advancement
-		// if c.state.Mode == AsyncOp {
-		c.emu.SetUpInstructionGroup(0, &c.state)
-		// }
+		if c.state.Mode == AsyncOp {
+			c.emu.SetUpInstructionGroup(0, &c.state)
+		}
 		c.state.NextPCInBlock = -1
-		// Note: We do NOT reset GRANT_ONCE state for loop programs
-		// GRANT_ONCE will execute again, but with predicate=false on subsequent iterations
-		// This allows PHI to correctly select the value from previous ADD instead of GRANT_ONCE
-		// The GRANT_ONCE implementation in emu.go handles this by checking hasExecuted
-		// and setting predicate=false for subsequent executions
 	}
-	//print("Op2Exec: ", c.state.CurrReservationState.OpToExec, "\n")
-
 	iGroup := c.state.SelectedBlock.InstructionGroups[c.state.PCInBlock]
-
-	//fmt.Printf("%10f, %s, inst: %v inst_length: %d\n", c.Engine.CurrentTime()*1e9, c.Name(), combInst, len(combInst.Insts))
-
-	/* do not have label in codes
-	for inst[len(inst)-1] == ':' {
-		c.state.PC++
-		inst = c.state.Code[c.state.PC]
-	}
-	*/
-	//fmt.Printf("start run inst \n")
 	makeProgress := c.emu.RunInstructionGroup(iGroup, &c.state, float64(c.Engine.CurrentTime()*1e9))
-	//fmt.Printf("end run inst, current PC = %d\n", nextPC)
-
-	// Removed verbose InstGroup trace to reduce log size
-	// Only log critical events or errors
 
 	return makeProgress
-	//debug reg value
-	//fmt.Printf("Core (%d, %d) Register values:\n", c.state.TileX, c.state.TileY)
-	// for i, val := range c.state.Registers {
-	// 	if val != 0 { // Only print registers that are used
-	// 		fmt.Printf("  $%-2d: %d\n", i, val) // More readable formatting
-	// 	}
-	// }
 }
 
 // If the source data is available, send the result to next core after computation.

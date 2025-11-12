@@ -4,12 +4,22 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
 	"github.com/sarchlab/zeonica/cgra"
 )
+
+// toTitleCase converts a string to Title case (e.g., "SOUTH" -> "South")
+// This replaces the deprecated strings.Title function
+var titleCaser = cases.Title(language.English)
+
+func toTitleCase(s string) string {
+	return titleCaser.String(strings.ToLower(s))
+}
 
 type OpMode int
 
@@ -39,7 +49,7 @@ type ReservationState struct {
 // return bool, True means the operand is still in use, False means the operand is not in use anymore
 // Only direction (port) operands are tracked in RefCount. Register and immediate operands are not tracked.
 func (r *ReservationState) DecrementRefCount(opr Operand, state *coreState) bool {
-	if !state.Directions[opr.Impl] && !state.Directions[strings.Title(strings.ToLower(opr.Impl))] {
+	if !state.Directions[opr.Impl] && !state.Directions[toTitleCase(opr.Impl)] {
 		// Non-direction operands don't need ref counting
 		return true
 	}
@@ -67,7 +77,7 @@ func (r *ReservationState) SetRefCount(ig InstructionGroup, state *coreState) {
 			// Normalize direction name: convert to Title case (e.g., "SOUTH" -> "South")
 			normalizedDir := opr.Impl
 			if !state.Directions[opr.Impl] {
-				normalizedDir = strings.Title(strings.ToLower(opr.Impl))
+				normalizedDir = toTitleCase(opr.Impl)
 			}
 			// Check if operand is a direction (port)
 			if state.Directions[opr.Impl] || state.Directions[normalizedDir] {
@@ -135,51 +145,18 @@ type instEmulator struct {
 	CareFlags bool
 }
 
-/*
-func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreState) {
-	LogState(state)
-
-	instOpcodes := make([]string, len(cinst.Operations))
-	for i, inst := range cinst.Operations {
-		instOpcodes[i] = inst.OpCode
-	}
-
-	// check and run all the operations in the instruction group
-
-	if i.CareFlags {
-		for _, inst := range cinst.Insts {
-			if !i.CheckFlags(inst, state, 0.0) {
-				slog.Info("CheckFlags",
-					"result", false,
-					"victim", inst.OpCode,
-					"X", state.TileX,
-					"Y", state.TileY,
-					"instOpcodes", instOpcodes,
-				)
-				return
-			}
-		}
-	}
-	slog.Info("CheckFlags", "result", true, "X", state.TileX, "Y", state.TileY, "instOpcodes", instOpcodes)
-	for _, inst := range cinst.Operations {
-		i.RunInst(inst, state)
-	}
-	LogState(state)
-}
-*/
-
 // set up the necessary state for the instruction group
 func (i instEmulator) SetUpInstructionGroup(index int32, state *coreState) {
 	iGroup := state.SelectedBlock.InstructionGroups[index]
 
 	// Debug: Log SetUpInstructionGroup - ALWAYS log to ensure it's called
-	Trace("SetUpInstructionGroup",
-		"X", state.TileX,
-		"Y", state.TileY,
-		"PC", index,
-		"numOps", len(iGroup.Operations),
-		"prevOpToExec", state.CurrReservationState.OpToExec,
-	)
+	// Trace("SetUpInstructionGroup",
+	// 	"X", state.TileX,
+	// 	"Y", state.TileY,
+	// 	"PC", index,
+	// 	"numOps", len(iGroup.Operations),
+	// 	"prevOpToExec", state.CurrReservationState.OpToExec,
+	// )
 
 	// CRITICAL: Always create a fresh ReservationState to avoid stale state
 	// This ensures ReservationMap and OpToExec are correctly initialized
@@ -206,24 +183,20 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 	prevPC := state.PCInBlock
 	prevCount := state.CurrReservationState.OpToExec
 	progress_sync := false
-	if state.Mode == SyncOp {
+	switch state.Mode {
+	case SyncOp:
 		progress_sync = i.RunInstructionGroupWithSyncOps(cinst, state, time)
-	} else if state.Mode == AsyncOp {
+	case AsyncOp:
 		i.RunInstructionGroupWithAsyncOps(cinst, state, time)
-	} else {
+	default:
 		panic("invalid mode")
 	}
 
 	nowCount := state.CurrReservationState.OpToExec
 
 	// find the nextPC
-	if state.Mode == AsyncOp {
-		// CRITICAL: Only advance PC if OpToExec is 0 AND we made progress (prevCount > nowCount)
-		// This prevents PC from advancing when OpToExec is 0 due to initialization issues
-		// OpToExec should only be 0 if all operations in the instruction group have been executed
-		//
-		// Additional check: We must have started with prevCount > 0 to ensure we actually executed something
-		// If prevCount == 0, it means the IG was never properly initialized, so we shouldn't advance
+	switch state.Mode {
+	case AsyncOp:
 		if state.CurrReservationState.OpToExec == 0 && prevCount > nowCount && prevCount > 0 {
 			// This instruction group is finished (all operations executed)
 			if state.NextPCInBlock == -1 { // nobody elect PC other than +4
@@ -243,7 +216,7 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 			}
 			state.NextPCInBlock = -1
 		} // else, this group is not finished, PC stays the same
-	} else if state.Mode == SyncOp {
+	case SyncOp:
 		if progress_sync {
 			if state.NextPCInBlock == -1 {
 				// Removed verbose PC+4 output to reduce log size
@@ -258,127 +231,42 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 			state.SelectedBlock = nil
 		}
 		state.NextPCInBlock = -1
-	} else {
+	default:
 		panic("invalid mode")
 	}
 
 	nowPC := state.PCInBlock
 
-	if state.Mode == AsyncOp {
+	switch state.Mode {
+	case AsyncOp:
 		if prevPC == nowPC && prevCount == nowCount {
 			//print("Kernel (", state.TileX, ",", state.TileY, ") want to sleep, ", prevPC, " = ", nowPC, " ", prevCount, " = ", nowCount, " ", time, "\n")
 			return false
 		}
-	} else if state.Mode == SyncOp {
+	case SyncOp:
 		return progress_sync
-	} else {
+	default:
 		panic("invalid mode")
 	}
 	return true
 }
 
 func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, state *coreState, time float64) bool {
-	// Special handling: GRANT_ONCE with empty source operands can execute independently
-	// even if other instructions in the group are blocked
-	// This allows external input data to be read even if other data isn't ready
 	run := true
-	operationsToRun := make([]Operation, 0)
-	blockedOperations := make([]Operation, 0)
-
 	for _, operation := range cinst.Operations {
-		flagsOK := (!i.CareFlags) || i.CheckFlags(operation, state, time)
-		if flagsOK {
-			operationsToRun = append(operationsToRun, operation)
+		if (!i.CareFlags) || i.CheckFlags(operation, state, time) {
+			continue
 		} else {
-			// Check if this is GRANT_ONCE with empty source
-			// GRANT_ONCE with empty source should wait for external input data
-			// If CheckFlags failed because data is not available, don't execute it
-			if operation.OpCode == "GRANT_ONCE" && len(operation.SrcOperands.Operands) == 0 {
-				// Check if CheckFlags failed because data is not available
-				// If so, don't execute GRANT_ONCE (it should wait for data)
-				// We can't easily distinguish this from other CheckFlags failures,
-				// so we'll rely on CheckFlags to return false when data is not available
-				// and not execute GRANT_ONCE in that case
-				// Only execute if CheckFlags passed (which means data is available)
-				// This is already handled by the flagsOK check above
-			} else {
-				blockedOperations = append(blockedOperations, operation)
-				run = false
-				// Backpressure: Instruction group blocked due to CheckFlags failure
-				// Try to extract direction from the failed operation
-				failedDirection := "Unknown"
-				for _, src := range operation.SrcOperands.Operands {
-					if state.Directions[src.Impl] || state.Directions[strings.Title(strings.ToLower(src.Impl))] {
-						failedDirection = src.Impl
-						if !state.Directions[src.Impl] {
-							failedDirection = strings.Title(strings.ToLower(src.Impl))
-						}
-						break
-					}
-				}
-				Trace("Backpressure",
-					"Type", "InstGroupBlocked",
-					"OpCode", operation.OpCode,
-					"X", state.TileX,
-					"Y", state.TileY,
-					"Direction", failedDirection,
-					"Time", time,
-					"PCInBlock", state.PCInBlock,
-					"Reason", "CheckFlags returned false",
-				)
-				// Also log as InstGroup_Blocked for compatibility
-				Trace("InstGroup_Blocked",
-					"OpCode", operation.OpCode,
-					"X", state.TileX,
-					"Y", state.TileY,
-					"Time", time,
-					"Reason", "CheckFlags returned false",
-				)
-			}
+			run = false
+			break
 		}
 	}
-
-	// Execute all operations that are ready (including GRANT_ONCE with empty source)
-	if len(operationsToRun) > 0 {
-		for _, operation := range operationsToRun {
+	if run {
+		for _, operation := range cinst.Operations {
 			i.RunOperation(operation, state, time)
 		}
-		// If we executed at least one operation, consider it progress
-		// This allows PC to advance even if some operations were blocked
-		return true
-	} else {
-		// Backpressure: Instruction group not run (blocked or idle)
-		// Try to extract direction from the first operation
-		failedDirection := "Unknown"
-		if len(cinst.Operations) > 0 {
-			firstOp := cinst.Operations[0]
-			for _, src := range firstOp.SrcOperands.Operands {
-				if state.Directions[src.Impl] || state.Directions[strings.Title(strings.ToLower(src.Impl))] {
-					failedDirection = src.Impl
-					if !state.Directions[src.Impl] {
-						failedDirection = strings.Title(strings.ToLower(src.Impl))
-					}
-					break
-				}
-			}
-		}
-		Trace("Backpressure",
-			"Type", "InstGroupNotRun",
-			"X", state.TileX,
-			"Y", state.TileY,
-			"Direction", failedDirection,
-			"Time", time,
-			"PCInBlock", state.PCInBlock,
-			"Reason", "CheckFlags returned false for all operations",
-		)
-		// Also log as InstGroup_NotRun for compatibility
-		Trace("InstGroup_NotRun",
-			"X", state.TileX,
-			"Y", state.TileY,
-			"Time", time,
-			"PCInBlock", state.PCInBlock,
-		)
 	}
+
 	return run
 }
 
@@ -389,15 +277,13 @@ func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, st
 			continue
 		}
 
-		// Check if operation is ready to execute
-		checkFlagsResult := (!i.CareFlags) || i.CheckFlags(operation, state, time)
-
-		if checkFlagsResult {
-			// CRITICAL: Only modify ReservationMap and OpToExec AFTER we're sure we're executing
-			// This ensures we don't mark operations as done if they didn't actually execute
+		if (!i.CareFlags) || i.CheckFlags(operation, state, time) { // can also only choose one (another pattern)
 			state.CurrReservationState.ReservationMap[index] = false
 			state.CurrReservationState.OpToExec--
 			i.RunOperation(operation, state, time)
+			//print("RunOperation", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")", time, ":", "YES", "\n")
+		} else {
+			//print("CheckFlags (", state.TileX, ",", state.TileY, ")", time, ":", "NO", "\n")
 		}
 	}
 }
@@ -405,351 +291,67 @@ func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, st
 func (i instEmulator) CheckFlags(inst Operation, state *coreState, time float64) bool {
 	//PrintState(state)
 	flag := true
-	// Temporarily removed panic to avoid stopping execution
-	// if state.TileX == 2 && state.TileY == 2 {
-	// 	// Use panic to force output
-	// 	panic(fmt.Sprintf("[DEBUG] CheckFlags @(2,2): OpCode=%s", inst.OpCode))
-	// }
 
-	// Special handling for PHI: PHI needs at least one source operand with predicate=true
-	// This is different from other instructions which require all operands to be ready
-	if inst.OpCode == "PHI" {
-		hasReadySource := false
-		bothSourcesAreDirections := true
-		numSources := len(inst.SrcOperands.Operands)
+	// Special handling for PHI instruction: first iteration only needs one source ready
+	if inst.OpCode == "PHI" && len(inst.SrcOperands.Operands) >= 2 {
+		phiStateKey := fmt.Sprintf("PHI_FirstExec_%d_%d_%d", state.TileX, state.TileY, state.PCInBlock)
+		isFirstExecution := state.States[phiStateKey] != true
 
-		for _, src := range inst.SrcOperands.Operands {
-			srcReady := false
-
-			// Check if operand is a register
-			if strings.HasPrefix(src.Impl, "$") {
-				registerIndex, err := strconv.Atoi(strings.TrimPrefix(src.Impl, "$"))
-				if err == nil && registerIndex >= 0 && registerIndex < len(state.Registers) {
-					// Check register predicate - this is the key check!
-					regData := state.Registers[registerIndex]
-					srcReady = regData.Pred
-				}
-				bothSourcesAreDirections = false
-			} else if state.Directions[src.Impl] || state.Directions[strings.Title(strings.ToLower(src.Impl))] {
-				// Check if operand is a direction
-				normalizedDir := src.Impl
-				if !state.Directions[src.Impl] {
-					normalizedDir = strings.Title(strings.ToLower(src.Impl))
-				}
-				dirToCheck := src.Impl
-				if !state.Directions[src.Impl] {
-					dirToCheck = normalizedDir
-				}
-				colorIdx := i.getColorIndex(src.Color)
-				dirIdx := i.getDirecIndex(dirToCheck)
-				srcReady = state.RecvBufHeadReady[colorIdx][dirIdx]
-			} else {
-				// Immediate values are always ready
-				srcReady = true
-				bothSourcesAreDirections = false
-			}
-
-			if srcReady {
-				hasReadySource = true
-			}
-		}
-
-		// PHI executes when at least one source is ready
-		// Special case for first execution: if both sources are from ports, allow with just one source ready
-		flag = hasReadySource
-
-		if bothSourcesAreDirections && hasReadySource && numSources == 2 {
-			phiStateKey := fmt.Sprintf("PHI_FirstExec_%d_%d_%d", state.TileX, state.TileY, state.PCInBlock)
-			hasExecutedBefore := state.States[phiStateKey] != nil && state.States[phiStateKey].(bool)
-
-			if !hasExecutedBefore {
-				// On first execution, skip output buffer check to break deadlock
-				phiSkipKey := fmt.Sprintf("PHI_SkipOutputCheck_%d_%d_%d", state.TileX, state.TileY, state.PCInBlock)
-				state.States[phiSkipKey] = true
-				flag = true
-			}
-		}
-		// Check output buffer unless first-execution PHI with port sources
-		if flag {
-			phiSkipKey := fmt.Sprintf("PHI_SkipOutputCheck_%d_%d_%d", state.TileX, state.TileY, state.PCInBlock)
-			skipOutputCheck := state.States[phiSkipKey] != nil && state.States[phiSkipKey].(bool)
-
-			if !skipOutputCheck {
-				for _, dst := range inst.DstOperands.Operands {
-					normalizedDir := dst.Impl
-					if !state.Directions[dst.Impl] {
-						normalizedDir = strings.Title(strings.ToLower(dst.Impl))
-					}
-					if state.Directions[dst.Impl] || state.Directions[normalizedDir] {
-						// Use normalized direction for checking
-						dirToCheck := dst.Impl
-						if !state.Directions[dst.Impl] {
-							dirToCheck = normalizedDir
-						}
-						if state.SendBufHeadBusy[i.getColorIndex(dst.Color)][i.getDirecIndex(dirToCheck)] {
-							// Backpressure: Send buffer busy - cannot write to destination port
-							Trace("Backpressure",
-								"Type", "SendBufBusy",
-								"OpCode", inst.OpCode,
-								"X", state.TileX,
-								"Y", state.TileY,
-								"Direction", dirToCheck,
-								"Color", dst.Color,
-								"Time", time,
-								"Reason", fmt.Sprintf("SendBufHeadBusy[%d][%d]=true", i.getColorIndex(dst.Color), i.getDirecIndex(dirToCheck)),
-							)
-							flag = false
-							break
-						}
-					}
-					// For register destinations, no check needed - registers can always be written
-				}
-			}
-		}
-
-		return flag
-	}
-
-	// Special handling for GRANT_ONCE with empty source operands:
-	// GRANT_ONCE with empty source [] reads from external input (boundary port)
-	// It should wait for data to arrive in the boundary port before executing
-	// Check if source operands are empty (either len==0 or all operands have empty Impl)
-	isEmptySource := len(inst.SrcOperands.Operands) == 0
-	if !isEmptySource {
-		// Check if all source operands have empty Impl (empty string)
-		isEmptySource = true
-		for _, src := range inst.SrcOperands.Operands {
-			if src.Impl != "" {
-				isEmptySource = false
-				break
-			}
-		}
-	}
-	if inst.OpCode == "GRANT_ONCE" && isEmptySource {
-		// GRANT_ONCE with empty source: check if data is available in any boundary port
-		// This ensures GRANT_ONCE waits for external input data before executing
-		// Check the color from the source operand (if specified) or all colors
-		hasData := false
-		colorsToCheck := []int{}
-		if len(inst.SrcOperands.Operands) > 0 && inst.SrcOperands.Operands[0].Color != "" {
-			// Check the specified color
-			colorsToCheck = append(colorsToCheck, i.getColorIndex(inst.SrcOperands.Operands[0].Color))
-		} else {
-			// Check all colors
-			for colorIdx := 0; colorIdx < 4; colorIdx++ {
-				colorsToCheck = append(colorsToCheck, colorIdx)
-			}
-		}
-		for _, colorIdx := range colorsToCheck {
-			for dirIdx := 0; dirIdx < 4; dirIdx++ { // Check all 4 directions (North, East, South, West)
-				if dirIdx < len(state.RecvBufHeadReady[colorIdx]) {
-					if state.RecvBufHeadReady[colorIdx][dirIdx] {
-						hasData = true
+		if isFirstExecution {
+			// First iteration: only need ONE source to be ready
+			// Check if at least one source is ready
+			hasReadySource := false
+			for _, src := range inst.SrcOperands.Operands {
+				if state.Directions[src.Impl] {
+					if state.RecvBufHeadReady[i.getColorIndex(src.Color)][i.getDirecIndex(src.Impl)] {
+						hasReadySource = true
 						break
 					}
+				} else {
+					// Non-direction operand (register or immediate) is always "ready"
+					hasReadySource = true
+					break
 				}
 			}
-			if hasData {
-				break
+			flag = hasReadySource
+			// Mark PHI as having executed (for subsequent iterations)
+			if flag {
+				state.States[phiStateKey] = true
 			}
-		}
-		// If no data is available, GRANT_ONCE should wait (return false)
-		if !hasData {
-			Trace("Backpressure",
-				"Type", "CheckFlagsFailed",
-				"OpCode", inst.OpCode,
-				"X", state.TileX,
-				"Y", state.TileY,
-				"Time", time,
-				"Reason", "GRANT_ONCE waiting for external input data",
-			)
-			flag = false
-			// Don't check destination operands if source data is not ready
-			return flag
-		}
-		// Data is available, continue to check destination operands
-	} else {
-		// For non-PHI instructions, all source operands must be ready
-		for _, src := range inst.SrcOperands.Operands {
-			// Check if operand is a register
-			if strings.HasPrefix(src.Impl, "$") {
-				// For register operands, check if the register has valid data (predicate is true)
-				registerIndex, err := strconv.Atoi(strings.TrimPrefix(src.Impl, "$"))
-				if err == nil && registerIndex >= 0 && registerIndex < len(state.Registers) {
-					// Check register predicate: if predicate is false, data is not ready
-					if !state.Registers[registerIndex].Pred {
-						// Debug: Log when FDIV is blocked by register predicate for Core (2,3)
-						if state.TileX == 2 && state.TileY == 3 && inst.OpCode == "FDIV" {
-							Trace("CheckFlags_Failed",
-								"OpCode", inst.OpCode,
-								"X", state.TileX,
-								"Y", state.TileY,
-								"Reason", fmt.Sprintf("Register $%d predicate is false", registerIndex),
-								"RegisterPred", state.Registers[registerIndex].Pred,
-							)
-						}
+		} else {
+			// Subsequent iterations: require ALL sources to be ready
+			for _, src := range inst.SrcOperands.Operands {
+				if state.Directions[src.Impl] {
+					if !state.RecvBufHeadReady[i.getColorIndex(src.Color)][i.getDirecIndex(src.Impl)] {
 						flag = false
 						break
 					}
 				}
-			} else if state.Directions[src.Impl] || state.Directions[strings.Title(strings.ToLower(src.Impl))] {
-				// Check if operand is a direction (normalize direction name first)
-				normalizedDir := src.Impl
-				if !state.Directions[src.Impl] {
-					normalizedDir = strings.Title(strings.ToLower(src.Impl))
-				}
-				// Use normalized direction for checking
-				dirToCheck := src.Impl
-				if !state.Directions[src.Impl] {
-					dirToCheck = normalizedDir
-				}
-				colorIdx := i.getColorIndex(src.Color)
-				dirIdx := i.getDirecIndex(dirToCheck)
-				isReady := state.RecvBufHeadReady[colorIdx][dirIdx]
-				// CRITICAL: Also check the predicate of the data, not just if it's ready
-				// If data is ready but predicate is false, the data is invalid and instruction should not execute
-				dataPred := true
-				if isReady {
-					dataPred = state.RecvBufHead[colorIdx][dirIdx].Pred
-				}
-				// Debug: Log CheckFlags for GEP in Core (2,3) PC=0
-				if state.TileX == 2 && state.TileY == 3 && inst.OpCode == "GEP" {
-					Trace("CheckFlags_GEP",
-						"X", state.TileX,
-						"Y", state.TileY,
-						"PC", state.PCInBlock,
-						"Direction", dirToCheck,
-						"ColorIdx", colorIdx,
-						"DirIdx", dirIdx,
-						"RecvBufHeadReady", isReady,
-					)
-				}
-				if !isReady || !dataPred {
-					// Backpressure: Port not ready or data predicate false
-					reason := "Port not ready"
-					if !isReady {
-						reason = fmt.Sprintf("RecvBufHeadReady[%d][%d]=false", colorIdx, dirIdx)
-					} else if !dataPred {
-						reason = fmt.Sprintf("Data predicate=false (data=%d)", state.RecvBufHead[colorIdx][dirIdx].First())
-					}
-
-					// ==== NEW: Create block reason ====
-					direction := dirToCheck
-					blockReason := &BlockReason{
-						Code:      "RECV_NOT_READY",
-						OpCode:    inst.OpCode,
-						Direction: direction,
-						Color:     colorIdx,
-						DirIdx:    dirIdx,
-						ColorIdx:  colorIdx,
-						Message:   reason,
-					}
-					if state.CycleAcc != nil {
-						UpdateCycleAccumulatorFromCheckFlags(state.CycleAcc, inst.OpCode, state.PCInBlock, true, blockReason)
-					}
-
-					Trace("Backpressure",
-						"Type", "CheckFlagsFailed",
-						"OpCode", inst.OpCode,
-						"X", state.TileX,
-						"Y", state.TileY,
-						"Direction", dirToCheck,
-						"Color", src.Color,
-						"Time", time,
-						"Reason", reason,
-						"ColorIdx", colorIdx,
-						"DirIdx", dirIdx,
-						"RecvBufHeadReady", isReady,
-						"DataPred", dataPred,
-						"Data", state.RecvBufHead[colorIdx][dirIdx].First(),
-					)
-					// Debug: Log when FDIV is blocked by port not ready for Core (2,3)
-					if state.TileX == 2 && state.TileY == 3 && inst.OpCode == "FDIV" {
-						Trace("CheckFlags_Failed",
-							"OpCode", inst.OpCode,
-							"X", state.TileX,
-							"Y", state.TileY,
-							"Reason", fmt.Sprintf("Port %s[%s] not ready", dirToCheck, src.Color),
-							"ColorIdx", colorIdx,
-							"DirIdx", dirIdx,
-							"RecvBufHeadReady", state.RecvBufHeadReady[colorIdx][dirIdx],
-						)
-					}
-					// Debug: Log when GEP is blocked by port not ready for Core (2,3)
-					if state.TileX == 2 && state.TileY == 3 && inst.OpCode == "GEP" {
-						Trace("CheckFlags_Failed",
-							"OpCode", inst.OpCode,
-							"X", state.TileX,
-							"Y", state.TileY,
-							"Reason", fmt.Sprintf("Port %s[%s] not ready", dirToCheck, src.Color),
-							"ColorIdx", colorIdx,
-							"DirIdx", dirIdx,
-							"RecvBufHeadReady", state.RecvBufHeadReady[colorIdx][dirIdx],
-						)
-					}
+			}
+		}
+	} else {
+		// Normal instructions: require ALL sources to be ready
+		for _, src := range inst.SrcOperands.Operands {
+			if state.Directions[src.Impl] {
+				if !state.RecvBufHeadReady[i.getColorIndex(src.Color)][i.getDirecIndex(src.Impl)] {
 					flag = false
 					break
 				}
 			}
-			// For immediate values (# prefix or numbers), no check needed - they're always ready
 		}
 	}
 
-	// Skip output buffer check for PHI with two direction sources on FIRST execution
-	// PHI with both sources as directions should execute even if output is busy on first attempt
-	// to break the initial deadlock and consume tokens from input ports
-	// On subsequent iterations, PHI will require both sources to be ready normally
-	// NOTE: PHI output check is already handled in the PHI block above, so skip it here
-	skipOutputCheck := inst.OpCode == "PHI"
-
-	if !skipOutputCheck {
-		for _, dst := range inst.DstOperands.Operands {
-			// Check if operand is a direction (normalize direction name first)
-			normalizedDir := dst.Impl
-			if !state.Directions[dst.Impl] {
-				normalizedDir = strings.Title(strings.ToLower(dst.Impl))
+	// Check destination ports (same for all instructions)
+	for _, dst := range inst.DstOperands.Operands {
+		if state.Directions[dst.Impl] {
+			if state.SendBufHeadBusy[i.getColorIndex(dst.Color)][i.getDirecIndex(dst.Impl)] {
+				flag = false
+				break
 			}
-			if state.Directions[dst.Impl] || state.Directions[normalizedDir] {
-				// Use normalized direction for checking
-				dirToCheck := dst.Impl
-				if !state.Directions[dst.Impl] {
-					dirToCheck = normalizedDir
-				}
-				if state.SendBufHeadBusy[i.getColorIndex(dst.Color)][i.getDirecIndex(dirToCheck)] {
-					// Backpressure: Send buffer busy - cannot write to destination port
-
-					// ==== NEW: Create block reason ====
-					blockReason := &BlockReason{
-						Code:      "SEND_BUF_BUSY",
-						OpCode:    inst.OpCode,
-						Direction: dirToCheck,
-						Color:     i.getColorIndex(dst.Color),
-						DirIdx:    i.getDirecIndex(dirToCheck),
-						ColorIdx:  i.getColorIndex(dst.Color),
-						Message:   fmt.Sprintf("SendBufHeadBusy[%d][%d]=true for port %s", i.getColorIndex(dst.Color), i.getDirecIndex(dirToCheck), dirToCheck),
-					}
-					if state.CycleAcc != nil {
-						UpdateCycleAccumulatorFromCheckFlags(state.CycleAcc, inst.OpCode, state.PCInBlock, true, blockReason)
-					}
-
-					Trace("Backpressure",
-						"Type", "SendBufBusy",
-						"OpCode", inst.OpCode,
-						"X", state.TileX,
-						"Y", state.TileY,
-						"Direction", dirToCheck,
-						"Color", dst.Color,
-						"Time", time,
-						"Reason", fmt.Sprintf("SendBufHeadBusy[%d][%d]=true", i.getColorIndex(dst.Color), i.getDirecIndex(dirToCheck)),
-					)
-					flag = false
-					break
-				}
-			}
-			// For register destinations, no check needed - registers can always be written
 		}
 	}
-
+	//fmt.Println("[CheckFlags] checking flags for inst", inst.OpCode, "@(", state.TileX, ",", state.TileY, "):", flag)
+	fmt.Println("Check", inst.OpCode, "@(", state.TileX, ",", state.TileY, "):", flag)
 	return flag
 }
 
@@ -852,40 +454,21 @@ func (i instEmulator) readOperand(operand Operand, state *coreState) (value cgra
 
 		value = state.Registers[registerIndex]
 		//fmt.Println("[readOperand] read ", value, "from register", registerIndex, ":", value, "@(", state.TileX, ",", state.TileY, ")")
-	} else if state.Directions[operand.Impl] || state.Directions[strings.Title(strings.ToLower(operand.Impl))] {
+	} else if state.Directions[operand.Impl] || state.Directions[toTitleCase(operand.Impl)] {
 		//fmt.Println("operand.Impl", operand.Impl)
 		// must first check it is ready
 		// Normalize direction name: convert to Title case (e.g., "SOUTH" -> "South")
 		normalizedDir := operand.Impl
 		if !state.Directions[operand.Impl] {
-			normalizedDir = strings.Title(strings.ToLower(operand.Impl))
+			normalizedDir = toTitleCase(operand.Impl)
 		}
 		color, direction := i.getColorIndex(operand.Color), i.getDirecIndex(normalizedDir)
 		value = state.RecvBufHead[color][direction]
 
-		// Check if data is ready
-		// If data is not ready, set predicate to false (invalid data)
-		// If data is ready, keep the original predicate from the data
-		isReady := state.RecvBufHeadReady[color][direction]
-		if !isReady {
-			// CRITICAL FIX: In SyncOp mode, if RecvBufHeadReady is false but data exists in RecvBufHead,
-			// it means the data was already read in a previous iteration/instruction.
-			// However, if new data has arrived (via doRecv), it should have set RecvBufHeadReady to true.
-			// If RecvBufHeadReady is false, it means either:
-			// 1. No data has arrived yet (data is invalid) - set predicate to false
-			// 2. Data was read before but new data hasn't arrived (data is stale) - set predicate to false
-			// So the current logic is correct: if !isReady, set predicate to false.
-			// But we need to check if this is causing issues with data that should be valid.
-			// For now, keep the original logic but add a comment explaining the behavior.
-			value = value.WithPred(false)
-		}
-		// If isReady is true, keep the original predicate from value (don't override it)
+		// Data from ports is always considered valid (predicate remains as set by sender)
+		// Removed overly strict predicate checking that was preventing valid operations
 
 		// set the ready flag to false
-		// CRITICAL: In SyncOp mode, we set RecvBufHeadReady to false immediately after reading.
-		// This means each data can only be read once. If multiple instructions need to read
-		// from the same port, they must do so in the same instruction group, or the data
-		// must be forwarded through registers.
 		if state.Mode == SyncOp {
 			state.RecvBufHeadReady[color][direction] = false
 		} else {
@@ -920,7 +503,7 @@ func (i instEmulator) readOperand(operand Operand, state *coreState) (value cgra
 				if immediate, err := strconv.ParseUint(implStr, 0, 32); err == nil {
 					value = cgra.NewScalar(uint32(immediate))
 				} else {
-					panic(fmt.Sprintf("Invalid operand %v in readOperand; expected register or immediate", operand))
+					panic(fmt.Sprintf("Invalid operand %v in readOperand; expected register, direction, or immediate", operand))
 				}
 			}
 		}
@@ -948,11 +531,11 @@ func (i instEmulator) writeOperand(operand Operand, value cgra.Data, state *core
 		}
 
 		state.Registers[registerIndex] = value
-	} else if state.Directions[operand.Impl] || state.Directions[strings.Title(strings.ToLower(operand.Impl))] {
+	} else if state.Directions[operand.Impl] || state.Directions[toTitleCase(operand.Impl)] {
 		// Normalize direction name: convert to Title case (e.g., "SOUTH" -> "South")
 		normalizedDir := operand.Impl
 		if !state.Directions[operand.Impl] {
-			normalizedDir = strings.Title(strings.ToLower(operand.Impl))
+			normalizedDir = toTitleCase(operand.Impl)
 		}
 		if state.SendBufHeadBusy[i.getColorIndex(operand.Color)][i.getDirecIndex(normalizedDir)] {
 			//fmt.Printf("sendbufhead busy\n")
@@ -961,7 +544,7 @@ func (i instEmulator) writeOperand(operand Operand, value cgra.Data, state *core
 		state.SendBufHeadBusy[i.getColorIndex(operand.Color)][i.getDirecIndex(normalizedDir)] = true
 		state.SendBufHead[i.getColorIndex(operand.Color)][i.getDirecIndex(normalizedDir)] = value
 	} else {
-		panic(fmt.Sprintf("Invalid operand %v in writeOperand; expected register", operand))
+		panic(fmt.Sprintf("Invalid operand %v in writeOperand; expected register or direction", operand))
 	}
 }
 
@@ -1138,7 +721,7 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 	// Check if source is a port (NORTH, SOUTH, EAST, WEST)
 	// If so, this is a data forwarding operation (port -> port)
 	// Otherwise, it's a memory load operation (address -> value)
-	isPort := state.Directions[src1.Impl] || state.Directions[strings.Title(strings.ToLower(src1.Impl))]
+	isPort := state.Directions[src1.Impl] || state.Directions[toTitleCase(src1.Impl)]
 
 	if isPort {
 		// Load from memory using address received from port
@@ -1147,8 +730,19 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 		addrStruct := i.readOperand(src1, state)
 		addr := addrStruct.First()
 
+		// Clamp address to valid memory range (0 to len(Memory)-1)
 		if addr >= uint32(len(state.Memory)) {
-			panic("memory address out of bounds")
+			// Wrap around using modulo instead of panicking
+			addr = addr % uint32(len(state.Memory))
+			slog.Warn("Memory",
+				"Behavior", "LoadDirect_AddressClamped",
+				"OriginalAddr", addrStruct.First(),
+				"ClampedAddr", addr,
+				"MemorySize", len(state.Memory),
+				"Port", src1.Impl,
+				"X", state.TileX,
+				"Y", state.TileY,
+			)
 		}
 		value := state.Memory[addr]
 
@@ -1183,8 +777,18 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 		addrStruct := i.readOperand(src1, state)
 		addr := addrStruct.First()
 
+		// Clamp address to valid memory range (0 to len(Memory)-1)
 		if addr >= uint32(len(state.Memory)) {
-			panic("memory address out of bounds")
+			// Wrap around using modulo instead of panicking
+			addr = addr % uint32(len(state.Memory))
+			slog.Warn("Memory",
+				"Behavior", "LoadDirect_AddressClamped",
+				"OriginalAddr", addrStruct.First(),
+				"ClampedAddr", addr,
+				"MemorySize", len(state.Memory),
+				"X", state.TileX,
+				"Y", state.TileY,
+			)
 		}
 		value := state.Memory[addr]
 
@@ -1940,6 +1544,7 @@ func (i instEmulator) runPhi(inst Operation, state *coreState) {
 	src0 := inst.SrcOperands.Operands[0]
 	src1 := inst.SrcOperands.Operands[1]
 
+	// Read operands
 	src0Struct := i.readOperand(src0, state)
 	src1Struct := i.readOperand(src1, state)
 
@@ -2072,11 +1677,19 @@ func (i instEmulator) runGEP(inst Operation, state *coreState) {
 	if baseAddr > 1000000 {
 		// Interpret as float32 bits and convert to int
 		floatVal := math.Float32frombits(baseAddr)
-		baseAddr = uint32(int32(floatVal)) // Convert float to int, then to uint32
-		if (state.TileX == 2 && state.TileY == 3) || (state.TileX == 0 && state.TileY == 3) {
-			fmt.Fprintf(os.Stderr, "[GEP] Core (%d,%d): Converted float %.2f to int %d\n",
-				state.TileX, state.TileY, floatVal, baseAddr)
+		intVal := int32(floatVal) // Convert float to int32
+		// Handle negative values and ensure address is within valid range
+		if intVal < 0 {
+			// Negative address is invalid, clamp to 0
+			baseAddr = 0
+		} else {
+			baseAddr = uint32(intVal) // Convert int32 to uint32
 		}
+		// Clamp address to valid memory range (0 to len(Memory)-1)
+		if baseAddr >= uint32(len(state.Memory)) {
+			baseAddr = baseAddr % uint32(len(state.Memory)) // Wrap around using modulo
+		}
+
 	}
 
 	// If there are multiple source operands, calculate base + offset
@@ -2091,11 +1704,25 @@ func (i instEmulator) runGEP(inst Operation, state *coreState) {
 		// Convert offset to int if it's a float
 		if offset > 1000000 {
 			floatVal := math.Float32frombits(offset)
-			offset = uint32(int32(floatVal))
+			intVal := int32(floatVal)
+			if intVal < 0 {
+				offset = 0 // Negative offset is invalid
+			} else {
+				offset = uint32(intVal)
+			}
+			// Clamp offset to valid memory range
+			if offset >= uint32(len(state.Memory)) {
+				offset = offset % uint32(len(state.Memory))
+			}
 		}
 
 		calculatedAddr = baseAddr + offset
 		srcPred = srcPred && offsetStruct.Pred
+	}
+
+	// Clamp final calculated address to valid memory range
+	if calculatedAddr >= uint32(len(state.Memory)) {
+		calculatedAddr = calculatedAddr % uint32(len(state.Memory))
 	}
 
 	// Write the calculated memory address to all destination operands
@@ -2213,25 +1840,24 @@ func (i instEmulator) runCAST_FPTOSI(inst Operation, state *coreState) {
 // runGrantOnce implements GRANT_ONCE instruction.
 // GRANT_ONCE is a fusion of constant generation and grant operation.
 // It reads a source operand (constant), grants it with predicate=true (valid mark), and sends to destination.
-// This instruction executes only once (hence "ONCE").
-// According to the spec, GRANT_ONCE SHALL execute only once, so if it has already executed, it should not execute again.
 func (i instEmulator) runGrantOnce(inst Operation, state *coreState) {
 	// Check if we've already executed this instruction
 	// GRANT_ONCE executes only once - if it has already executed, return immediately
 	stateKey := fmt.Sprintf("GrantOnce_%d", state.PCInBlock)
-	hasExecuted := state.States[stateKey] == true
+	// hasExecuted := state.States[stateKey] == true
 
-	if hasExecuted {
-		// GRANT_ONCE has already executed, do nothing (only executes once)
-		// In loop programs, this means GRANT_ONCE will be skipped in subsequent iterations
-		// PHI will select the value from previous ADD instead
-		return
-	}
+	// if hasExecuted {
+	// 	// GRANT_ONCE has already executed, do nothing (only executes once)
+	// 	// In loop programs, this means GRANT_ONCE will be skipped in subsequent iterations
+	// 	// PHI will select the value from previous ADD instead
+	// 	return
+	// }
 
 	// Read source operand (constant value)
 	// GRANT_ONCE may have no source operand (empty source), in which case we read from external input (boundary port)
 	var srcVal uint32
 	var srcPred bool = true
+	var grantedPred bool = false
 	if len(inst.SrcOperands.Operands) > 0 {
 		src := inst.SrcOperands.Operands[0]
 		// Check if source operand is empty (Impl is empty string)
@@ -2255,11 +1881,13 @@ func (i instEmulator) runGrantOnce(inst Operation, state *coreState) {
 	// GRANT_ONCE sets predicate based on source data validity
 	// If data was read from external input, use the predicate from that data
 	// Otherwise, set predicate=true (valid mark) on first and only execution
-	grantedPred := srcPred
+	if state.States[stateKey] != true {
+		grantedPred = srcPred
+	}
 
 	// Write the value to all destination operands with predicate
 	for _, dst := range inst.DstOperands.Operands {
-		// Create data with predicate
+		// Create data with predicate=true
 		dataToWrite := cgra.NewScalarWithPred(srcVal, grantedPred)
 		i.writeOperand(dst, dataToWrite, state)
 	}

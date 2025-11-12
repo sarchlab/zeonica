@@ -10,6 +10,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// toTitleCase is defined in emu.go and shared across the core package
+
 // CoreProgram represents a program for a specific core
 type YAMLCoreProgram struct {
 	Row     int         `yaml:"row"`
@@ -295,7 +297,7 @@ func parseASMOperand(opStr string) Operand {
 		color := strings.TrimSpace(parts[1])
 
 		// Normalize direction: NORTH -> North, etc.
-		direction = strings.Title(strings.ToLower(direction))
+		direction = toTitleCase(direction)
 		if direction == "North" || direction == "South" || direction == "East" || direction == "West" {
 			// Normalize color: RED -> R, YELLOW -> Y, BLUE -> B
 			colorNormalized := ""
@@ -338,7 +340,7 @@ func parseASMOperand(opStr string) Operand {
 	}
 
 	// Parse direction only: North, East, South, West
-	direction := strings.Title(strings.ToLower(opStr))
+	direction := toTitleCase(opStr)
 	if direction == "North" || direction == "South" || direction == "East" || direction == "West" {
 		return Operand{
 			Flag:  false,
