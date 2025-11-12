@@ -210,9 +210,9 @@ var _ = Describe("Driver", func() {
 		// Mock PeekIncoming and RetrieveIncoming for first round
 		// Note: allDataReady checks PeekIncoming multiple times (once per port),
 		// then doOneCollectTask calls RetrieveIncoming for each port
-		msg1 := cgra.MoveMsgBuilder{}.WithData(1).Build()
-		msg2 := cgra.MoveMsgBuilder{}.WithData(2).Build()
-		msg3 := cgra.MoveMsgBuilder{}.WithData(3).Build()
+		msg1 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(1)).Build()
+		msg2 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(2)).Build()
+		msg3 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(3)).Build()
 		// allDataReady will call PeekIncoming for all ports (at least once each)
 		// Since allDataReady may be called multiple times, we use AnyTimes
 		localPort1.EXPECT().PeekIncoming().Return(msg1).AnyTimes()
@@ -226,9 +226,9 @@ var _ = Describe("Driver", func() {
 		driver.Tick()
 
 		// Mock PeekIncoming and RetrieveIncoming for second round
-		msg4 := cgra.MoveMsgBuilder{}.WithData(4).Build()
-		msg5 := cgra.MoveMsgBuilder{}.WithData(5).Build()
-		msg6 := cgra.MoveMsgBuilder{}.WithData(6).Build()
+		msg4 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(4)).Build()
+		msg5 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(5)).Build()
+		msg6 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(6)).Build()
 		localPort1.EXPECT().PeekIncoming().Return(msg4).AnyTimes()
 		localPort2.EXPECT().PeekIncoming().Return(msg5).AnyTimes()
 		localPort3.EXPECT().PeekIncoming().Return(msg6).AnyTimes()
@@ -257,7 +257,7 @@ func expectPortsToSend(
 					Expect(string(msg.Src)).NotTo(BeEmpty())
 					// msg.Dst is a RemotePort (string), not a MockPort
 					Expect(string(msg.Dst)).NotTo(BeEmpty())
-					Expect(msg.Data).To(Equal(data))
+					Expect(msg.Data.First()).To(Equal(data))
 				})
 		}(port, data[i], i)
 	}
@@ -269,7 +269,7 @@ func expectPortsToRecv(
 ) {
 	for i, port := range ports {
 		func(port *MockPort, data uint32, i int) {
-			msg := cgra.MoveMsgBuilder{}.WithData(data).Build()
+			msg := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(data)).Build()
 			port.EXPECT().RetrieveIncoming().Return(msg)
 		}(port, data[i], i)
 	}
