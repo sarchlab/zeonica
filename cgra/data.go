@@ -8,16 +8,22 @@ type Data struct {
 	Data    []uint32
 	Pred    bool
 	TokenID TokenID // Unique identifier for tracking this token through the network
+	EOS     bool    // End of Stream flag - indicates this is the last data item in the stream
 }
 
 // NewScalar creates a Data that wraps a single uint32 value with Pred=true by default.
 func NewScalar(v uint32) Data {
-	return Data{Data: []uint32{v}, Pred: true}
+	return Data{Data: []uint32{v}, Pred: true, EOS: false}
 }
 
-// NewScalar creates a Data that wraps a single uint32 value with Pred=true by default.
+// NewScalarWithPred creates a Data that wraps a single uint32 value with the given predicate.
 func NewScalarWithPred(v uint32, pred bool) Data {
-	return Data{Data: []uint32{v}, Pred: pred}
+	return Data{Data: []uint32{v}, Pred: pred, EOS: false}
+}
+
+// NewScalarWithEOS creates a Data with EOS flag set.
+func NewScalarWithEOS(v uint32, pred bool, eos bool) Data {
+	return Data{Data: []uint32{v}, Pred: pred, EOS: eos}
 }
 
 // First returns the first lane value. If empty, returns 0.
@@ -34,7 +40,13 @@ func (d Data) WithPred(pred bool) Data {
 	return d
 }
 
+// WithEOS returns a copy with the given EOS flag.
+func (d Data) WithEOS(eos bool) Data {
+	d.EOS = eos
+	return d
+}
+
 // FromSlice constructs a Data from a slice and optional predicate.
 func FromSlice(vals []uint32, pred bool) Data {
-	return Data{Data: vals, Pred: pred}
+	return Data{Data: vals, Pred: pred, EOS: false}
 }

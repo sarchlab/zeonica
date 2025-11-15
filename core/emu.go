@@ -2,13 +2,13 @@ package core
 
 import (
 	"fmt"
-	"log/slog"
-	"math"
-	"strconv"
-	"strings"
-
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	"log/slog"
+	"math"
+	"os"
+	"strconv"
+	"strings"
 
 	"github.com/sarchlab/zeonica/cgra"
 )
@@ -28,17 +28,17 @@ const (
 	AsyncOp
 )
 
-type routingRule struct {
-	src   cgra.Side
-	dst   cgra.Side
-	color string
-}
+// type routingRule struct {
+// 	src   cgra.Side
+// 	dst   cgra.Side
+// 	color string
+// }
 
-type Trigger struct {
-	src    [12]bool
-	color  int
-	branch string
-}
+// type Trigger struct {
+// 	src    [12]bool
+// 	color  int
+// 	branch string
+// }
 
 type ReservationState struct {
 	ReservationMap  map[int]bool // to show whether each operation of a instruction group is finished.
@@ -134,8 +134,8 @@ type coreState struct {
 	AddrBuf          uint32 // buffer for the address of the memory
 	IsToWriteMemory  bool
 
-	routingRules []*routingRule
-	triggers     []*Trigger
+	// routingRules []*routingRule
+	// triggers     []*Trigger
 
 	// Waveform logging accumulator for per-cycle state tracking
 	CycleAcc *CycleAccumulator
@@ -648,6 +648,10 @@ func (i instEmulator) runMov(inst Operation, state *coreState) {
 	opr := oprStruct.First()
 
 	// Write the value into the destination register
+	// EOS propagation: MOV passes through the EOS flag from source to destination
+	// for _, dst := range inst.DstOperands.Operands {
+	// 	i.writeOperand(dst, cgra.NewScalarWithEOS(opr, oprStruct.Pred, oprStruct.EOS), state)
+	// }
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalarWithPred(opr, oprStruct.Pred), state)
 	}
@@ -851,33 +855,14 @@ func (i instEmulator) runLoadWaitDRAM(inst Operation, state *coreState) {
 }
 
 func (i instEmulator) runStoreDirect(inst Operation, state *coreState) {
-	// STORE instruction format can be either:
-	// 1. STORE, [address], [value] (histogram format: STORE, [$0], [$1])
-	// 2. STORE, [value], [address] (axpy format: STORE, [WEST, RED], [$0])
-	//
-	// We detect the format by checking if the first operand is a register ($)
-	// If it's a register, assume it's address (format 1)
-	// If it's a direction (port), assume it's value (format 2)
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	var addrStruct, valueStruct cgra.Data
-	var addr, value uint32
-
-	// Check if src1 is a register (starts with $) - format 1: [address], [value]
-	if strings.HasPrefix(src1.Impl, "$") {
-		// Format 1: STORE, [address], [value]
-		addrStruct = i.readOperand(src1, state)
-		addr = addrStruct.First()
-		valueStruct = i.readOperand(src2, state)
-		value = valueStruct.First()
-	} else {
-		// Format 2: STORE, [value], [address]
-		valueStruct = i.readOperand(src1, state)
-		value = valueStruct.First()
-		addrStruct = i.readOperand(src2, state)
-		addr = addrStruct.First()
-	}
+	// Standard format: src1 = value, src2 = address
+	valueStruct := i.readOperand(src1, state)
+	value := valueStruct.First()
+	addrStruct := i.readOperand(src2, state)
+	addr := addrStruct.First()
 
 	if addr >= uint32(len(state.Memory)) {
 		panic("memory address out of bounds")
@@ -889,49 +874,27 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) {
 		return
 	}
 
-	// For histogram operations, STORE should accumulate counts rather than overwrite
-	// Histogram bins store the count of occurrences, not the value itself
-	// According to histogram data flow:
-	// - STORE, [$0], [$1] where $0 should be address (bin index) and $1 should be value (count)
-	// - But actual data flow: $0 = ADD [WEST, RED], [#1] = current count + 1 (value)
-	//   and $1 = DATA_MOV [NORTH, RED] = bin index (address)
-	// - So for histogram, we need to swap: address = $1 (bin index), value = $0 (current count + 1)
-	// - STORE should store: memory[bin index] = current count + 1 (increment count by 1)
-	// For axpy and other operations, STORE should overwrite the value
-
 	// Check if this is a histogram operation:
-	// - Format 1: STORE, [address], [value] where both are registers
-	// - For histogram: actual data flow has address and value swapped
+	// - Histogram format: STORE, [$0], [$1] where both are registers
 	// - $0 = current count + 1 (value), $1 = bin index (address)
-	// - If both operands are registers and value is small (< 100), it's likely histogram
+	// - For histogram, we need to accumulate (increment) instead of overwrite
+	// - If both operands are registers and address is small (< 100), it's likely histogram
 	isHistogramFormat := strings.HasPrefix(src1.Impl, "$") && strings.HasPrefix(src2.Impl, "$")
-	if isHistogramFormat && value < 100 {
-		// For histogram, data flow is swapped:
-		// - addr = $0 = current count + 1 (this is actually the value)
-		// - value = $1 = bin index (this is actually the address)
-		// - So we need to swap: actualAddr = value (bin index), actualValue = addr (current count + 1)
-		actualAddr := value // bin index (from $1)
-		actualValue := addr // current count + 1 (from $0)
-
-		if actualAddr >= uint32(len(state.Memory)) {
-			panic("memory address out of bounds")
-		}
-
-		// Histogram accumulation:
-		// - LOAD reads from PE(0,2) memory (always 0)
-		// - STORE writes to PE(1,2) memory
-		// - So we need to accumulate the OLD value from PE(1,2) memory, not use actualValue
-		// - actualValue is from PE(0,2) (always 1), so we ignore it and accumulate from PE(1,2)
-		oldValue := state.Memory[actualAddr]
-		newValue := oldValue + 1 // Accumulate: increment the old value from PE(1,2) memory
-		state.Memory[actualAddr] = newValue
+	if isHistogramFormat && addr < 100 {
+		// For histogram: accumulate (increment) the value at the address
+		// - value = $0 = current count + 1 (increment amount, typically 1)
+		// - addr = $1 = bin index (address to store to)
+		// - We accumulate: newValue = oldValue + value
+		oldValue := state.Memory[addr]
+		newValue := oldValue + value // Accumulate: add the increment to the old value
+		state.Memory[addr] = newValue
 		slog.Warn("Memory",
 			"Behavior", "StoreDirect",
 			"Type", "Histogram",
-			"ActualValue", actualValue,
+			"Increment", value,
 			"OldValue", oldValue,
 			"NewValue", newValue,
-			"ActualAddr", actualAddr,
+			"Addr", addr,
 			"X", state.TileX,
 			"Y", state.TileY,
 		)
@@ -947,6 +910,12 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) {
 			"Y", state.TileY,
 		)
 	}
+
+	// Check EOS flag in the value data - if set, terminate the program
+	// if valueStruct.EOS {
+	// 	slog.Info("Flow", "EOS detected in STORE", "X", state.TileX, "Y", state.TileY)
+	// 	os.Exit(0)
+	// }
 	// elect no next PC
 }
 
@@ -1046,6 +1015,8 @@ func (i instEmulator) parseAndCompareI(inst Operation, state *coreState) {
 	}
 
 	// Handle multiple destination operands (e.g., ICMP_EQ, [$0], [#20] -> [$0])
+	// ICMP outputs comparison result (0 or 1) which is always valid (predicate=true)
+	// This result is used by GPRED to control predicate, so it should always be predicate=true
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalar(dstVal), state)
 	}
@@ -1325,7 +1296,7 @@ func (i instEmulator) runBlt(inst Operation, state *coreState) {
 
 func (i instEmulator) runRet(inst Operation, state *coreState) {
 	// not exist
-	return
+	os.Exit(0)
 }
 
 /*
@@ -1554,20 +1525,24 @@ func (i instEmulator) runPhi(inst Operation, state *coreState) {
 	// 3. Else → no valid input this cycle: choose any value but set pred=false
 	var selectedVal uint32
 	var selectedPred bool
+	// var selectedEOS bool
 
 	if src0Struct.Pred {
 		// src0 (backedge) has priority
 		selectedVal = src0Struct.First()
 		selectedPred = src0Struct.Pred
+		// selectedEOS = src0Struct.EOS // EOS propagation: pass through EOS from selected source
 	} else if src1Struct.Pred {
 		// src1 (initial value) is valid
 		selectedVal = src1Struct.First()
 		selectedPred = src1Struct.Pred
+		// selectedEOS = src1Struct.EOS // EOS propagation: pass through EOS from selected source
 	} else {
 		// Both predicates are false: no valid input this cycle
 		// Use src0's value but set predicate to false
 		selectedVal = src0Struct.First()
 		selectedPred = false
+		// selectedEOS = false // No valid input, no EOS
 	}
 
 	// Optional: Log debug message if both predicates are true (src0 has priority)
@@ -1581,8 +1556,11 @@ func (i instEmulator) runPhi(inst Operation, state *coreState) {
 		)
 	}
 
-	// Write the selected (value, pred) to ALL destination operands
-	// PHI is pure selection - does NOT modify source register predicates
+	// Write the selected (value, pred, EOS) to ALL destination operands
+	// PHI is pure selection - passes through EOS from the selected source
+	// for _, dst := range inst.DstOperands.Operands {
+	// 	i.writeOperand(dst, cgra.NewScalarWithEOS(selectedVal, selectedPred, selectedEOS), state)
+	// }
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalarWithPred(selectedVal, selectedPred), state)
 	}
@@ -1627,10 +1605,6 @@ func (i instEmulator) runGrantPred(inst Operation, state *coreState) {
 	// First src is the data with predicate, second src is the condition to check the first src's predicate
 	// If condition is true (non-zero) AND first src's predicate is true, output the data with predicate=true
 	// Otherwise, output with predicate=false
-	//
-	// Special case for loop exit: When the loop counter reaches the upper bound (e.g., 20),
-	// we need to process that value before exiting. So if dataVal equals the loop bound and
-	// this is the last iteration, we should keep the predicate true to allow the data to be processed.
 	dataSrc := inst.SrcOperands.Operands[0]
 	condSrc := inst.SrcOperands.Operands[1]
 
@@ -1641,15 +1615,9 @@ func (i instEmulator) runGrantPred(inst Operation, state *coreState) {
 	dataPred := dataStruct.Pred
 
 	// Result predicate: true only if condition is non-zero AND data predicate is true
-	// Special handling for loop exit: If dataVal equals the loop bound (20) and condVal is 0 (exit signal),
-	// we need to keep predicate true for one more iteration to process the last value
+	// When condVal is 0 (exit signal), output predicate=false to stop the loop
 	resultPred := false
 	if condVal != 0 && dataPred {
-		resultPred = true
-	} else if condVal == 0 && dataPred && dataVal == 20 {
-		// Special case: Loop exit condition (condVal=0) but we're at the upper bound (dataVal=20)
-		// Keep predicate true to allow the last value to be processed
-		// This ensures the loop processes value=20 before exiting
 		resultPred = true
 	}
 
