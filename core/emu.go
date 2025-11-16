@@ -293,51 +293,64 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState, time float64)
 	flag := true
 
 	// Special handling for PHI instruction: first iteration only needs one source ready
-	if inst.OpCode == "PHI" && len(inst.SrcOperands.Operands) >= 2 {
-		phiStateKey := fmt.Sprintf("PHI_FirstExec_%d_%d_%d", state.TileX, state.TileY, state.PCInBlock)
-		isFirstExecution := state.States[phiStateKey] != true
+	phiStateKey := fmt.Sprintf("PHI_FirstExec_%d_%d_%d", state.TileX, state.TileY, state.PCInBlock)
+	isPhiFirstExecution := inst.OpCode == "PHI" && len(inst.SrcOperands.Operands) >= 2 && state.States[phiStateKey] != true
 
-		if isFirstExecution {
-			// First iteration: only need ONE source to be ready
-			// Check if at least one source is ready
-			hasReadySource := false
-			for _, src := range inst.SrcOperands.Operands {
-				if state.Directions[src.Impl] {
-					if state.RecvBufHeadReady[i.getColorIndex(src.Color)][i.getDirecIndex(src.Impl)] {
-						hasReadySource = true
-						break
-					}
-				} else {
-					// Non-direction operand (register or immediate) is always "ready"
+	if isPhiFirstExecution {
+		// First iteration: only need ONE source to be ready
+		// Check if at least one source is ready
+		hasReadySource := false
+		for _, src := range inst.SrcOperands.Operands {
+			if state.Directions[src.Impl] {
+				// Direction port: check RecvBufHeadReady
+				if state.RecvBufHeadReady[i.getColorIndex(src.Color)][i.getDirecIndex(src.Impl)] {
 					hasReadySource = true
 					break
 				}
-			}
-			flag = hasReadySource
-			// Mark PHI as having executed (for subsequent iterations)
-			if flag {
-				state.States[phiStateKey] = true
-			}
-		} else {
-			// Subsequent iterations: require ALL sources to be ready
-			for _, src := range inst.SrcOperands.Operands {
-				if state.Directions[src.Impl] {
-					if !state.RecvBufHeadReady[i.getColorIndex(src.Color)][i.getDirecIndex(src.Impl)] {
-						flag = false
+			} else if strings.HasPrefix(src.Impl, "$") {
+				// Register: check predicate (not just "always ready")
+				registerIndex, err := strconv.Atoi(strings.TrimPrefix(src.Impl, "$"))
+				if err == nil && registerIndex >= 0 && registerIndex < len(state.Registers) {
+					if state.Registers[registerIndex].Pred {
+						hasReadySource = true
 						break
 					}
 				}
+			} else {
+				// Immediate value: always ready
+				hasReadySource = true
+				break
 			}
 		}
+		flag = hasReadySource
+		// Mark PHI as having executed (for subsequent iterations)
+		if flag {
+			state.States[phiStateKey] = true
+		}
 	} else {
-		// Normal instructions: require ALL sources to be ready
+		// Normal instructions and PHI subsequent iterations: require ALL sources to be ready
 		for _, src := range inst.SrcOperands.Operands {
 			if state.Directions[src.Impl] {
+				// Direction port: check RecvBufHeadReady
 				if !state.RecvBufHeadReady[i.getColorIndex(src.Color)][i.getDirecIndex(src.Impl)] {
 					flag = false
 					break
 				}
+			} else if strings.HasPrefix(src.Impl, "$") {
+				// Register: check predicate (not just "always ready")
+				registerIndex, err := strconv.Atoi(strings.TrimPrefix(src.Impl, "$"))
+				if err == nil && registerIndex >= 0 && registerIndex < len(state.Registers) {
+					if !state.Registers[registerIndex].Pred {
+						flag = false
+						break
+					}
+				} else {
+					// Invalid register index
+					flag = false
+					break
+				}
 			}
+			// Immediate values are always ready, so no check needed
 		}
 	}
 
