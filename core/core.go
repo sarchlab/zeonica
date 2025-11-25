@@ -98,6 +98,8 @@ func (c *Core) doSend() bool {
 				continue
 			}
 
+			//fmt.Printf("\033[31m (%d, %d) Sending data %d to %s\033[0m\n", c.state.TileX, c.state.TileY, c.state.SendBufHead[color][i].First(), c.ports[cgra.Side(i)].remote)
+
 			msg := cgra.MoveMsgBuilder{}.
 				WithDst(c.ports[cgra.Side(i)].remote).
 				WithSrc(c.ports[cgra.Side(i)].local.AsRemote()).

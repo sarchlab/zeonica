@@ -203,20 +203,20 @@ func (d DeviceBuilder) connectTiles(dev *device) {
 				eastTile := dev.Tiles[y][x+1]
 				d.connectTilePorts(currentTile, cgra.East, eastTile, cgra.West)
 			}
-			// connect to the South tile
+			// connect to the North tile
 			if y < d.height-1 {
-				southTile := dev.Tiles[y+1][x]
-				d.connectTilePorts(currentTile, cgra.South, southTile, cgra.North)
+				northTile := dev.Tiles[y+1][x]
+				d.connectTilePorts(currentTile, cgra.North, northTile, cgra.South)
 			}
-			// connect to the south east tile
+			// connect to the North East tile
 			if y < d.height-1 && x < d.width-1 {
-				southEastTile := dev.Tiles[y+1][x+1]
-				d.connectTilePorts(currentTile, cgra.SouthEast, southEastTile, cgra.NorthWest)
+				northEastTile := dev.Tiles[y+1][x+1]
+				d.connectTilePorts(currentTile, cgra.NorthEast, northEastTile, cgra.SouthWest)
 			}
-			// connect to the south west tile
+			// connect to the North West tile
 			if y < d.height-1 && x > 0 {
-				southWestTile := dev.Tiles[y+1][x-1]
-				d.connectTilePorts(currentTile, cgra.SouthWest, southWestTile, cgra.NorthEast)
+				northWestTile := dev.Tiles[y+1][x-1]
+				d.connectTilePorts(currentTile, cgra.NorthWest, northWestTile, cgra.SouthEast)
 			}
 		}
 	}

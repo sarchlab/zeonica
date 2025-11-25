@@ -278,9 +278,9 @@ func (d *driverImpl) setTileRemotePort(
 	var tile cgra.Tile
 	switch side {
 	case cgra.North:
-		tile = d.device.GetTile(index, 0)
-	case cgra.South:
 		tile = d.device.GetTile(index, height-1)
+	case cgra.South:
+		tile = d.device.GetTile(index, 0)
 	case cgra.East:
 		tile = d.device.GetTile(width-1, index)
 	case cgra.West:

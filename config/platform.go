@@ -117,7 +117,7 @@ func (d *device) GetSidePorts(
 	switch side {
 	case cgra.North:
 		for x := portRange[0]; x < portRange[1]; x++ {
-			ports = append(ports, d.Tiles[0][x].GetPort(side))
+			ports = append(ports, d.Tiles[d.Height-1][x].GetPort(side))
 		}
 	case cgra.West:
 		for y := portRange[0]; y < portRange[1]; y++ {
@@ -125,7 +125,7 @@ func (d *device) GetSidePorts(
 		}
 	case cgra.South:
 		for x := portRange[0]; x < portRange[1]; x++ {
-			ports = append(ports, d.Tiles[d.Height-1][x].GetPort(side))
+			ports = append(ports, d.Tiles[0][x].GetPort(side))
 		}
 	case cgra.East:
 		for y := portRange[0]; y < portRange[1]; y++ {

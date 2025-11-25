@@ -151,8 +151,8 @@ func TestSubOperationWithRandomData(t *testing.T) {
 	}
 
 	// 设置数据流 - 从北边输入，南边输出
-	driver.FeedIn(src, cgra.North, [2]int{0, width}, width, "R")
-	driver.Collect(dst, cgra.South, [2]int{0, width}, width, "R")
+	driver.FeedIn(src, cgra.South, [2]int{0, width}, width, "R")
+	driver.Collect(dst, cgra.North, [2]int{0, width}, width, "R")
 
 	// 映射程序到所有core
 	for x := 0; x < width; x++ {
@@ -339,8 +339,8 @@ func TestDivOperationWithRandomData(t *testing.T) {
 	}
 
 	// 设置数据流 - 从南边输入，北边输出
-	driver.FeedIn(src, cgra.South, [2]int{0, width}, width, "R")
-	driver.Collect(dst, cgra.North, [2]int{0, width}, width, "R")
+	driver.FeedIn(src, cgra.North, [2]int{0, width}, width, "R")
+	driver.Collect(dst, cgra.South, [2]int{0, width}, width, "R")
 
 	// 映射程序到所有core
 	for x := 0; x < width; x++ {

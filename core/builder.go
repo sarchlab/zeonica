@@ -31,7 +31,11 @@ func (b Builder) Build(name string) *Core {
 	c.emu = instEmulator{
 		CareFlags: true,
 	}
+	var exit = false
+	var retVal = uint32(0)
 	c.state = coreState{
+		exit:          &exit,
+		retVal:        &retVal,
 		SelectedBlock: nil,
 		PCInBlock:     -1,
 		Directions: map[string]bool{

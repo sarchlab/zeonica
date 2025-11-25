@@ -78,6 +78,8 @@ func (r *ReservationState) SetReservationMap(ig InstructionGroup, state *coreSta
 }
 
 type coreState struct {
+	exit          *bool   // the signal is shared between cores
+	retVal        *uint32 // the value is shared between cores
 	SelectedBlock *EntryBlock
 	Directions    map[string]bool
 	PCInBlock     int32
@@ -155,6 +157,10 @@ func (i instEmulator) SetUpInstructionGroup(index int32, state *coreState) {
 }
 
 func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreState, time float64) bool {
+	// check the Return signal
+	if *state.exit {
+		return false
+	}
 	prevPC := state.PCInBlock
 	prevCount := state.CurrReservationState.OpToExec
 	progress_sync := false
@@ -325,9 +331,10 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"FMUL": i.runFMul,
 		"NOP":  i.runNOP,
 
-		"PHI":       i.runPhi,
-		"PHI_CONST": i.runPhiConst,
-		"GPRED":     i.runGrantPred,
+		"PHI":             i.runPhi,
+		"PHI_CONST":       i.runPhiConst,
+		"GRANT_PREDICATE": i.runGrantPred,
+		"GRANT_ONCE":      i.runGrantOnce,
 
 		"CMP_EXPORT": i.runCmpExport,
 
@@ -1031,8 +1038,19 @@ func (i instEmulator) runBlt(inst Operation, state *coreState) {
 }
 
 func (i instEmulator) runRet(inst Operation, state *coreState) {
-	// not exist
-	return
+	if len(inst.SrcOperands.Operands) > 0 {
+		src := inst.SrcOperands.Operands[0]
+		srcStruct := i.readOperand(src, state)
+		srcVal := srcStruct.First()
+		srcPred := srcStruct.Pred
+		if srcPred {
+			*state.retVal = srcVal
+			*state.exit = true
+		}
+	} else {
+		*state.exit = true
+		*state.retVal = 0
+	}
 }
 
 /*
@@ -1263,4 +1281,20 @@ func (i instEmulator) runGrantPred(inst Operation, state *coreState) {
 	}
 
 	// elect no next PC
+}
+
+func (i instEmulator) runGrantOnce(inst Operation, state *coreState) {
+	src := inst.SrcOperands.Operands[0]
+
+	srcStruct := i.readOperand(src, state)
+	if state.States["GrantOnce"] == false {
+		state.States["GrantOnce"] = true
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(srcStruct.First(), true), state)
+		}
+	} else {
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(srcStruct.First(), false), state)
+		}
+	}
 }

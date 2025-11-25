@@ -53,7 +53,7 @@ array_config:
                     - operand: "West"
                       color: "R"
                   dst_operands:
-                    - operand: "South"
+                    - operand: "North"
                       color: "R"
 
     - row: 1
@@ -68,7 +68,7 @@ array_config:
                   src_operands:
                     - operand: "2"
                       color: "R"
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"
                   dst_operands:
                     - operand: "West"

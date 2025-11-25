@@ -52,9 +52,9 @@ func TestPhiOperation(t *testing.T) {
 
 	// 设置数据流 - 从西边输入，东边输出
 	driver.FeedIn(cmpSrcData1, cgra.West, [2]int{0, 1}, 1, "R")
-	driver.FeedIn(cmpSrcData2, cgra.North, [2]int{0, 1}, 1, "R")
+	driver.FeedIn(cmpSrcData2, cgra.South, [2]int{0, 1}, 1, "R")
 	driver.FeedIn(SrcData1, cgra.West, [2]int{1, 2}, 1, "R")
-	driver.FeedIn(SrcData2, cgra.North, [2]int{1, 2}, 1, "R")
+	driver.FeedIn(SrcData2, cgra.South, [2]int{1, 2}, 1, "R")
 	driver.Collect(dst, cgra.East, [2]int{1, 2}, 1, "R")
 
 	// 映射程序到所有core

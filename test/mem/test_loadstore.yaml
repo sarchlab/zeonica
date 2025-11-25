@@ -75,7 +75,7 @@ array_config:
                     - operand: "0"
                       color: "R"
                   dst_operands:
-                    - operand: "South"
+                    - operand: "North"
                       color: "R"
 
     - row: 1
@@ -90,7 +90,7 @@ array_config:
                   src_operands:
                     - operand: "0"
                       color: "R"
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"
             - operations:
                 - opcode: "LDD"
