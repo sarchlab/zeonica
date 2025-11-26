@@ -283,6 +283,10 @@ func (c *Core) doRecv() bool {
 }
 
 func (c *Core) runProgram() bool {
+	if len(c.state.Code.EntryBlocks) == 0 {
+		return false
+	}
+
 	if c.state.PCInBlock == -1 {
 		c.state.PCInBlock = 0
 		c.state.SelectedBlock = &c.state.Code.EntryBlocks[0] // just temp, only one block\

@@ -266,12 +266,39 @@ func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, st
 	}
 }
 
+func (i instEmulator) normalizeDirection(s string) string {
+	u := strings.ToUpper(s)
+	switch u {
+	case "NORTH":
+		return "North"
+	case "SOUTH":
+		return "South"
+	case "EAST":
+		return "East"
+	case "WEST":
+		return "West"
+	case "NORTHEAST":
+		return "NorthEast"
+	case "NORTHWEST":
+		return "NorthWest"
+	case "SOUTHEAST":
+		return "SouthEast"
+	case "SOUTHWEST":
+		return "SouthWest"
+	case "ROUTER":
+		return "Router"
+	default:
+		return s
+	}
+}
+
 func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 	//PrintState(state)
 	flag := true
 	for _, src := range inst.SrcOperands.Operands {
-		if state.Directions[src.Impl] {
-			if !state.RecvBufHeadReady[i.getColorIndex(src.Color)][i.getDirecIndex(src.Impl)] {
+		srcImpl := i.normalizeDirection(src.Impl)
+		if state.Directions[srcImpl] {
+			if !state.RecvBufHeadReady[i.getColorIndex(src.Color)][i.getDirecIndex(srcImpl)] {
 				flag = false
 				break
 			}
@@ -279,8 +306,9 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 	}
 
 	for _, dst := range inst.DstOperands.Operands {
-		if state.Directions[dst.Impl] {
-			if state.SendBufHeadBusy[i.getColorIndex(dst.Color)][i.getDirecIndex(dst.Impl)] {
+		dstImpl := i.normalizeDirection(dst.Impl)
+		if state.Directions[dstImpl] {
+			if state.SendBufHeadBusy[i.getColorIndex(dst.Color)][i.getDirecIndex(dstImpl)] {
 				flag = false
 				break
 			}
@@ -336,6 +364,8 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"GRANT_PREDICATE": i.runGrantPred,
 		"GRANT_ONCE":      i.runGrantOnce,
 
+		"GEP": i.runMov,
+
 		"CMP_EXPORT": i.runCmpExport,
 
 		"LT_EX": i.runLTExport,
@@ -375,37 +405,40 @@ func (i instEmulator) readOperand(operand Operand, state *coreState) (value cgra
 
 		value = state.Registers[registerIndex]
 		//fmt.Println("[readOperand] read ", value, "from register", registerIndex, ":", value, "@(", state.TileX, ",", state.TileY, ")")
-	} else if state.Directions[operand.Impl] {
-		//fmt.Println("operand.Impl", operand.Impl)
-		// must first check it is ready
-		color, direction := i.getColorIndex(operand.Color), i.getDirecIndex(operand.Impl)
-		value = state.RecvBufHead[color][direction]
-		// set the ready flag to false
-		if state.Mode == SyncOp {
-			state.RecvBufHeadReady[color][direction] = false
-		} else {
-			if !state.CurrReservationState.DecrementRefCount(operand, state) {
-				state.RecvBufHeadReady[color][direction] = false // no longer used, closed
-				//fmt.Println("Reduce {", operand.Impl, "} to zero")
-			} else {
-				//fmt.Println("Reduce {", operand.Impl, "} to ", state.CurrReservationState.RefCountRuntime[operand.Impl], "@(", state.TileX, ",", state.TileY, ")")
-			}
-		}
-		//fmt.Println("state.RecvBufHead[", i.getColorIndex(operand.Color), "][", i.getDirecIndex(operand.Impl), "]:", value)
-		//fmt.Println("[ReadOperand] read", value, "from port", operand.Impl, ":", value, "@(", state.TileX, ",", state.TileY, ")")
 	} else {
-		// try to convert into int
-		if strings.HasPrefix(operand.Impl, "#") {
-			operand.Impl = strings.TrimPrefix(operand.Impl, "#")
-		}
-		num, err := strconv.Atoi(operand.Impl)
-		if err == nil {
-			value = cgra.NewScalar(uint32(num))
-		} else {
-			if immediate, err := strconv.ParseUint(operand.Impl, 0, 32); err == nil {
-				value = cgra.NewScalar(uint32(immediate))
+		normalizedImpl := i.normalizeDirection(operand.Impl)
+		if state.Directions[normalizedImpl] {
+			//fmt.Println("operand.Impl", operand.Impl)
+			// must first check it is ready
+			color, direction := i.getColorIndex(operand.Color), i.getDirecIndex(normalizedImpl)
+			value = state.RecvBufHead[color][direction]
+			// set the ready flag to false
+			if state.Mode == SyncOp {
+				state.RecvBufHeadReady[color][direction] = false
 			} else {
-				panic(fmt.Sprintf("Invalid operand %v in readOperand; expected register", operand))
+				if !state.CurrReservationState.DecrementRefCount(operand, state) {
+					state.RecvBufHeadReady[color][direction] = false // no longer used, closed
+					//fmt.Println("Reduce {", operand.Impl, "} to zero")
+				} else {
+					//fmt.Println("Reduce {", operand.Impl, "} to ", state.CurrReservationState.RefCountRuntime[operand.Impl], "@(", state.TileX, ",", state.TileY, ")")
+				}
+			}
+			//fmt.Println("state.RecvBufHead[", i.getColorIndex(operand.Color), "][", i.getDirecIndex(operand.Impl), "]:", value)
+			//fmt.Println("[ReadOperand] read", value, "from port", operand.Impl, ":", value, "@(", state.TileX, ",", state.TileY, ")")
+		} else {
+			// try to convert into int
+			if strings.HasPrefix(operand.Impl, "#") {
+				operand.Impl = strings.TrimPrefix(operand.Impl, "#")
+			}
+			num, err := strconv.Atoi(operand.Impl)
+			if err == nil {
+				value = cgra.NewScalar(uint32(num))
+			} else {
+				if immediate, err := strconv.ParseUint(operand.Impl, 0, 32); err == nil {
+					value = cgra.NewScalar(uint32(immediate))
+				} else {
+					panic(fmt.Sprintf("Invalid operand %v in readOperand; expected register", operand))
+				}
 			}
 		}
 	}
@@ -433,15 +466,18 @@ func (i instEmulator) writeOperand(operand Operand, value cgra.Data, state *core
 
 		state.Registers[registerIndex] = value
 		//fmt.Printf("Updated register $%d to value %d at PC %d\n", registerIndex, value, state.PC)
-	} else if state.Directions[operand.Impl] {
-		if state.SendBufHeadBusy[i.getColorIndex(operand.Color)][i.getDirecIndex(operand.Impl)] {
-			//fmt.Printf("sendbufhead busy\n")
-			return
-		}
-		state.SendBufHeadBusy[i.getColorIndex(operand.Color)][i.getDirecIndex(operand.Impl)] = true
-		state.SendBufHead[i.getColorIndex(operand.Color)][i.getDirecIndex(operand.Impl)] = value
 	} else {
-		panic(fmt.Sprintf("Invalid operand %v in writeOperand; expected register", operand))
+		normalizedImpl := i.normalizeDirection(operand.Impl)
+		if state.Directions[normalizedImpl] {
+			if state.SendBufHeadBusy[i.getColorIndex(operand.Color)][i.getDirecIndex(normalizedImpl)] {
+				//fmt.Printf("sendbufhead busy\n")
+				return
+			}
+			state.SendBufHeadBusy[i.getColorIndex(operand.Color)][i.getDirecIndex(normalizedImpl)] = true
+			state.SendBufHead[i.getColorIndex(operand.Color)][i.getDirecIndex(normalizedImpl)] = value
+		} else {
+			panic(fmt.Sprintf("Invalid operand %v in writeOperand; expected register", operand))
+		}
 	}
 }
 
@@ -514,12 +550,12 @@ func (i instEmulator) RouterSrcMustBeDirection(src string) {
 }
 
 func (i instEmulator) getColorIndex(color string) int {
-	switch color {
-	case "R":
+	switch strings.ToUpper(color) {
+	case "R", "RED":
 		return 0
-	case "Y":
+	case "Y", "YELLOW":
 		return 1
-	case "B":
+	case "B", "BLUE":
 		return 2
 	default:
 		panic("Wrong Color: [" + color + "]")
