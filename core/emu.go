@@ -1044,10 +1044,19 @@ func (i instEmulator) runRet(inst Operation, state *coreState) {
 		srcVal := srcStruct.First()
 		srcPred := srcStruct.Pred
 		if srcPred {
+			slog.Info("Control: Cond",
+				"X", state.TileX,
+				"Y", state.TileY,
+				"SrcVal", srcVal,
+			)
 			*state.retVal = srcVal
 			*state.exit = true
 		}
 	} else {
+		slog.Info("Control: Un-cond",
+			"X", state.TileX,
+			"Y", state.TileY,
+		)
 		*state.exit = true
 		*state.retVal = 0
 	}

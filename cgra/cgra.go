@@ -65,6 +65,7 @@ type Tile interface {
 	WriteSharedMemory(x int, y int, data []byte, baseAddr uint32)
 	GetTileX() int
 	GetTileY() int
+	GetRetVal() uint32
 }
 
 // A Device is a CGRA device.

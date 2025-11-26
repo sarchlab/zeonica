@@ -23,6 +23,10 @@ type Core struct {
 	emu   instEmulator
 }
 
+func (c *Core) GetRetVal() uint32 {
+	return *c.state.retVal
+}
+
 func (c *Core) GetTileX() int {
 	return int(c.state.TileX)
 }

@@ -16,6 +16,7 @@ type tileCore interface {
 	WriteMemory(x int, y int, data uint32, baseAddr uint32)
 	GetTileX() int
 	GetTileY() int
+	GetRetVal() uint32
 }
 
 type tile struct {
@@ -86,6 +87,10 @@ func (t tile) SetRemotePort(side cgra.Side, port sim.RemotePort) {
 // MapProgram sets the program that the tile needs to run.
 func (t tile) MapProgram(program interface{}, x int, y int) {
 	t.Core.MapProgram(program, x, y)
+}
+
+func (t tile) GetRetVal() uint32 {
+	return t.Core.GetRetVal()
 }
 
 // A Device is a CGRA device that includes a large number of tiles. Tiles can be
