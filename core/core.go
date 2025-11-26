@@ -35,6 +35,10 @@ func (c *Core) GetTileY() int {
 	return int(c.state.TileY)
 }
 
+func (c *Core) GetTickingComponent() sim.Component {
+	return c.TickingComponent
+}
+
 // get memory
 func (c *Core) GetMemory(x int, y int, addr uint32) uint32 {
 	if x == int(c.state.TileX) && y == int(c.state.TileY) {

@@ -173,6 +173,8 @@ func (d DeviceBuilder) createTiles(
 	dev *device,
 	name string,
 ) {
+	var exit = false
+	var retVal = uint32(0)
 	for y := 0; y < d.height; y++ {
 		dev.Tiles[y] = make([]*tile, d.width)
 		for x := 0; x < d.width; x++ {
@@ -181,6 +183,8 @@ func (d DeviceBuilder) createTiles(
 			tile.Core = core.Builder{}.
 				WithEngine(d.engine).
 				WithFreq(d.freq).
+				WithExitAddr(&exit).
+				WithRetValAddr(&retVal).
 				Build(coreName)
 
 			if d.monitor != nil {

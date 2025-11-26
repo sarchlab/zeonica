@@ -17,11 +17,16 @@ type tileCore interface {
 	GetTileX() int
 	GetTileY() int
 	GetRetVal() uint32
+	GetTickingComponent() sim.Component
 }
 
 type tile struct {
 	Core                   tileCore
 	SharedMemoryController *idealmemcontroller.Comp
+}
+
+func (t tile) GetTickingComponent() sim.Component {
+	return t.Core.GetTickingComponent()
 }
 
 // GetPort returns the of the tile by the side.

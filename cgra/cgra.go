@@ -66,6 +66,7 @@ type Tile interface {
 	GetTileX() int
 	GetTileY() int
 	GetRetVal() uint32
+	GetTickingComponent() sim.Component
 }
 
 // A Device is a CGRA device.

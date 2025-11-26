@@ -395,6 +395,9 @@ func (i instEmulator) readOperand(operand Operand, state *coreState) (value cgra
 		//fmt.Println("[ReadOperand] read", value, "from port", operand.Impl, ":", value, "@(", state.TileX, ",", state.TileY, ")")
 	} else {
 		// try to convert into int
+		if strings.HasPrefix(operand.Impl, "#") {
+			operand.Impl = strings.TrimPrefix(operand.Impl, "#")
+		}
 		num, err := strconv.Atoi(operand.Impl)
 		if err == nil {
 			value = cgra.NewScalar(uint32(num))
