@@ -3,22 +3,30 @@ package config
 import (
 	"fmt"
 
+	"github.com/sarchlab/akita/v4/mem/idealmemcontroller"
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
 )
 
 type tileCore interface {
 	sim.Component
-	MapProgram(program []string, x int, y int)
+	MapProgram(program interface{}, x int, y int)
 	SetRemotePort(side cgra.Side, port sim.RemotePort)
 	GetMemory(x int, y int, addr uint32) uint32
 	WriteMemory(x int, y int, data uint32, baseAddr uint32)
 	GetTileX() int
 	GetTileY() int
+	GetRetVal() uint32
+	GetTickingComponent() sim.Component
 }
 
 type tile struct {
-	Core tileCore
+	Core                   tileCore
+	SharedMemoryController *idealmemcontroller.Comp
+}
+
+func (t tile) GetTickingComponent() sim.Component {
+	return t.Core.GetTickingComponent()
 }
 
 // GetPort returns the of the tile by the side.
@@ -32,6 +40,16 @@ func (t tile) GetPort(side cgra.Side) sim.Port {
 		return t.Core.GetPortByName("South")
 	case cgra.East:
 		return t.Core.GetPortByName("East")
+	case cgra.NorthEast:
+		return t.Core.GetPortByName("NorthEast")
+	case cgra.SouthEast:
+		return t.Core.GetPortByName("SouthEast")
+	case cgra.SouthWest:
+		return t.Core.GetPortByName("SouthWest")
+	case cgra.NorthWest:
+		return t.Core.GetPortByName("NorthWest")
+	case cgra.Router:
+		return t.Core.GetPortByName("Router")
 	default:
 		panic("invalid side")
 	}
@@ -58,22 +76,35 @@ func (t tile) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
 	t.Core.WriteMemory(x, y, data, baseAddr)
 }
 
+func (t tile) WriteSharedMemory(x int, y int, data []byte, baseAddr uint32) { // x, y is useless here
+	fmt.Println("WriteSharedMemory(", x, ",", y, ") ", baseAddr, " <- ", data)
+	err := t.SharedMemoryController.Storage.Write(uint64(baseAddr), data)
+	if err != nil {
+		panic(err)
+	}
+}
+
 // SetRemotePort sets the port that the core can send data to.
 func (t tile) SetRemotePort(side cgra.Side, port sim.RemotePort) {
 	t.Core.SetRemotePort(side, port)
 }
 
 // MapProgram sets the program that the tile needs to run.
-func (t tile) MapProgram(program []string, x int, y int) {
+func (t tile) MapProgram(program interface{}, x int, y int) {
 	t.Core.MapProgram(program, x, y)
+}
+
+func (t tile) GetRetVal() uint32 {
+	return t.Core.GetRetVal()
 }
 
 // A Device is a CGRA device that includes a large number of tiles. Tiles can be
 // retrieved using d.Tiles[y][x].
 type device struct {
-	Name          string
-	Width, Height int
-	Tiles         [][]*tile
+	Name                    string
+	Width, Height           int
+	Tiles                   [][]*tile
+	SharedMemoryControllers []*idealmemcontroller.Comp
 }
 
 // GetSize returns the width and height of the device.
@@ -96,7 +127,7 @@ func (d *device) GetSidePorts(
 	switch side {
 	case cgra.North:
 		for x := portRange[0]; x < portRange[1]; x++ {
-			ports = append(ports, d.Tiles[0][x].GetPort(side))
+			ports = append(ports, d.Tiles[d.Height-1][x].GetPort(side))
 		}
 	case cgra.West:
 		for y := portRange[0]; y < portRange[1]; y++ {
@@ -104,7 +135,7 @@ func (d *device) GetSidePorts(
 		}
 	case cgra.South:
 		for x := portRange[0]; x < portRange[1]; x++ {
-			ports = append(ports, d.Tiles[d.Height-1][x].GetPort(side))
+			ports = append(ports, d.Tiles[0][x].GetPort(side))
 		}
 	case cgra.East:
 		for y := portRange[0]; y < portRange[1]; y++ {

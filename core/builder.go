@@ -7,8 +7,10 @@ import (
 
 // Builder can create new cores.
 type Builder struct {
-	engine sim.Engine
-	freq   sim.Freq
+	engine     sim.Engine
+	freq       sim.Freq
+	exitAddr   *bool
+	retValAddr *uint32
 }
 
 // WithEngine sets the engine.
@@ -23,26 +25,65 @@ func (b Builder) WithFreq(freq sim.Freq) Builder {
 	return b
 }
 
+func (b Builder) WithExitAddr(exitAddr *bool) Builder {
+	b.exitAddr = exitAddr
+	return b
+}
+
+func (b Builder) WithRetValAddr(retValAddr *uint32) Builder {
+	b.retValAddr = retValAddr
+	return b
+}
+
 // Build creates a core.
 func (b Builder) Build(name string) *Core {
 	c := &Core{}
 
 	c.TickingComponent = sim.NewTickingComponent(name, b.engine, b.freq, c)
+	c.emu = instEmulator{
+		CareFlags: true,
+	}
 	c.state = coreState{
-		Registers:        make([]uint32, 64),
+		exit:          b.exitAddr,
+		retVal:        b.retValAddr,
+		SelectedBlock: nil,
+		PCInBlock:     -1,
+		Directions: map[string]bool{
+			"North":     true,
+			"East":      true,
+			"South":     true,
+			"West":      true,
+			"NorthEast": true,
+			"SouthEast": true,
+			"SouthWest": true,
+			"NorthWest": true,
+			"Router":    true,
+		},
+		Registers:        make([]cgra.Data, 64),
 		Memory:           make([]uint32, 1024),
-		RecvBufHead:      make([][]uint32, 4),
+		RecvBufHead:      make([][]cgra.Data, 4),
 		RecvBufHeadReady: make([][]bool, 4),
-		SendBufHead:      make([][]uint32, 4),
+		SendBufHead:      make([][]cgra.Data, 4),
 		SendBufHeadBusy:  make([][]bool, 4),
+		AddrBuf:          0,
+		IsToWriteMemory:  false,
+		States:           make(map[string]interface{}),
+		Mode:             SyncOp,
+		CurrReservationState: ReservationState{
+			ReservationMap:  make(map[int]bool),
+			OpToExec:        0,
+			RefCountRuntime: make(map[string]int),
+		},
 	}
 
 	for i := 0; i < 4; i++ {
-		c.state.RecvBufHead[i] = make([]uint32, 4)
-		c.state.RecvBufHeadReady[i] = make([]bool, 4)
-		c.state.SendBufHead[i] = make([]uint32, 4)
-		c.state.SendBufHeadBusy[i] = make([]bool, 4)
+		c.state.RecvBufHead[i] = make([]cgra.Data, 12)
+		c.state.RecvBufHeadReady[i] = make([]bool, 12)
+		c.state.SendBufHead[i] = make([]cgra.Data, 12)
+		c.state.SendBufHeadBusy[i] = make([]bool, 12)
 	}
+
+	c.state.States["Phiconst"] = false
 
 	c.ports = make(map[cgra.Side]*portPair)
 
@@ -50,6 +91,14 @@ func (b Builder) Build(name string) *Core {
 	b.makePort(c, cgra.West)
 	b.makePort(c, cgra.South)
 	b.makePort(c, cgra.East)
+	b.makePort(c, cgra.NorthEast)
+	b.makePort(c, cgra.SouthEast)
+	b.makePort(c, cgra.SouthWest)
+	b.makePort(c, cgra.NorthWest)
+	b.makePort(c, cgra.Router)
+	b.makePort(c, cgra.Dummy1)
+	b.makePort(c, cgra.Dummy2)
+	b.makePort(c, cgra.Dummy3)
 
 	return c
 }

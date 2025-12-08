@@ -3,11 +3,12 @@ package api
 
 import (
 	"fmt"
-	"strings"
+	"log/slog"
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/akita/v4/sim/directconnection"
 	"github.com/sarchlab/zeonica/cgra"
+	"github.com/sarchlab/zeonica/core"
 )
 
 // Driver provides the interface to control an accelerator.
@@ -30,13 +31,15 @@ type Driver interface {
 	Collect(data []uint32, side cgra.Side, portRange [2]int, stride int, color string)
 
 	// MapProgram maps to the provided program to a core at the given coordinate.
-	MapProgram(program string, core [2]int)
+	MapProgram(program interface{}, core [2]int)
 
 	//SetPerPRKernels manually maps a list of kernels to different PEs.
 	SetPerPEKernels(kernels PerPEKernels) error
 
 	//
 	PreloadMemory(x int, y int, data uint32, baseAddr uint32)
+
+	PreloadSharedMemory(x int, y int, data []byte, baseAddr uint32)
 
 	//
 	ReadMemory(x int, y int, addr uint32) uint32
@@ -64,11 +67,12 @@ type PerPEKernels map[[2]int]string
 
 func (d *driverImpl) PreloadMemory(x int, y int, data uint32, baseAddr uint32) {
 	tile := d.device.GetTile(x, y)
-	// fmt.Printf(
-	//     "[DEBUG] PreloadMemory(x=%d, y=%d) -> Tile: %v\n",
-	//     x, y, tile,
-	// )
 	tile.WriteMemory(x, y, data, baseAddr)
+}
+
+func (d *driverImpl) PreloadSharedMemory(x int, y int, data []byte, baseAddr uint32) {
+	tile := d.device.GetTile(x, y)
+	tile.WriteSharedMemory(x, y, data, baseAddr)
 }
 
 func (d *driverImpl) ReadMemory(x int, y int, addr uint32) uint32 {
@@ -127,7 +131,7 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 		msg := cgra.MoveMsgBuilder{}.
 			WithSrc(port.AsRemote()).
 			WithDst(task.remotePorts[i]).
-			WithData(task.data[task.round*task.stride+i]).
+			WithData(cgra.NewScalar(task.data[task.round*task.stride+i])).
 			WithColor(task.color).
 			WithSendTime(d.Engine.CurrentTime()). // Set the current engine time here
 			Build()
@@ -137,11 +141,15 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 		if err != nil {
 			panic("CGRA cannot handle the data rate")
 		}
-		fmt.Printf("%10f, Feed in %d to %s\n",
-			d.Engine.CurrentTime()*1e9,
-			task.data[task.round*task.stride+i],
-			task.remotePorts[i])
 
+		core.Trace("DataFlow",
+			"Behavior", "FeedIn",
+			slog.Float64("Time", float64(d.Engine.CurrentTime()*1e9)),
+			"Data", task.data[task.round*task.stride+i],
+			"Color", task.color,
+			"From", port.Name(),
+			"To", task.remotePorts[i],
+		)
 		madeProgress = true
 	}
 
@@ -167,9 +175,22 @@ func (d *driverImpl) doOneCollectTask(task *collectTask) bool {
 		return false
 	}
 
+	//fmt.Printf("\033[31mCollect Task: %v\033[0m\n", task)
+
 	for i, port := range task.ports {
 		msg := port.RetrieveIncoming().(*cgra.MoveMsg)
-		task.data[task.round*task.stride+i] = msg.Data
+		task.data[task.round*task.stride+i] = msg.Data.First()
+		// in red
+
+		core.Trace("DataFlow",
+			"Behavior", "Collect",
+			slog.Float64("Time", float64(d.Engine.CurrentTime()*1e9)),
+			"Data", task.data[task.round*task.stride+i],
+			"Pred", msg.Data.Pred,
+			"Color", task.color,
+			"From", task.ports[i].Name(),
+			"To", "None",
+		)
 	}
 
 	task.round++
@@ -257,9 +278,9 @@ func (d *driverImpl) setTileRemotePort(
 	var tile cgra.Tile
 	switch side {
 	case cgra.North:
-		tile = d.device.GetTile(index, 0)
-	case cgra.South:
 		tile = d.device.GetTile(index, height-1)
+	case cgra.South:
+		tile = d.device.GetTile(index, 0)
 	case cgra.East:
 		tile = d.device.GetTile(width-1, index)
 	case cgra.West:
@@ -366,9 +387,10 @@ func (d *driverImpl) Collect(
 }
 
 // MapProgram dispatches a program to a core.
-func (d *driverImpl) MapProgram(program string, core [2]int) {
+func (d *driverImpl) MapProgram(program interface{}, core [2]int) {
+	// check if it is a Program.
 	tile := d.device.GetTile(core[0], core[1])
-	tile.MapProgram(strings.Split(program, "\n"), core[0], core[1])
+	tile.MapProgram(program, core[0], core[1])
 }
 
 func (d *driverImpl) SetPerPEKernels(kernels PerPEKernels) error {

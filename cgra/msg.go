@@ -1,12 +1,14 @@
 package cgra
 
-import "github.com/sarchlab/akita/v4/sim"
+import (
+	"github.com/sarchlab/akita/v4/sim"
+)
 
 // MoveMsg moves data from one tile to another in a CGRA.
 type MoveMsg struct {
 	sim.MsgMeta
 
-	Data  uint32
+	Data  Data
 	Color int
 	//create a new branch predicate data
 	//Predicate int
@@ -29,7 +31,7 @@ func (m *MoveMsg) Clone() sim.Msg {
 type MoveMsgBuilder struct {
 	src, dst sim.RemotePort
 	sendTime sim.VTimeInSec
-	data     uint32
+	data     Data
 	color    int
 	// predicate value
 	//predicate int
@@ -54,7 +56,7 @@ func (m MoveMsgBuilder) WithSendTime(sendTime sim.VTimeInSec) MoveMsgBuilder {
 }
 
 // WithData sets the data of the msg.
-func (m MoveMsgBuilder) WithData(data uint32) MoveMsgBuilder {
+func (m MoveMsgBuilder) WithData(data Data) MoveMsgBuilder {
 	m.data = data
 	return m
 }

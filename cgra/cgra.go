@@ -13,6 +13,14 @@ const (
 	East
 	South
 	West
+	NorthEast
+	NorthWest
+	SouthEast
+	SouthWest
+	Router
+	Dummy1
+	Dummy2
+	Dummy3
 )
 
 // Name returns the name of the side.
@@ -26,6 +34,22 @@ func (s Side) Name() string {
 		return "South"
 	case East:
 		return "East"
+	case NorthEast:
+		return "NorthEast"
+	case NorthWest:
+		return "NorthWest"
+	case SouthEast:
+		return "SouthEast"
+	case SouthWest:
+		return "SouthWest"
+	case Router:
+		return "Router"
+	case Dummy1:
+		return "Dummy1"
+	case Dummy2:
+		return "Dummy2"
+	case Dummy3:
+		return "Dummy3"
 	default:
 		panic("invalid side")
 	}
@@ -35,11 +59,14 @@ func (s Side) Name() string {
 type Tile interface {
 	GetPort(side Side) sim.Port
 	SetRemotePort(side Side, port sim.RemotePort)
-	MapProgram(program []string, x int, y int)
+	MapProgram(program interface{}, x int, y int)
 	GetMemory(x int, y int, addr uint32) uint32
 	WriteMemory(x int, y int, data uint32, baseAddr uint32)
+	WriteSharedMemory(x int, y int, data []byte, baseAddr uint32)
 	GetTileX() int
 	GetTileY() int
+	GetRetVal() uint32
+	GetTickingComponent() sim.Component
 }
 
 // A Device is a CGRA device.
