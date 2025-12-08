@@ -8,7 +8,7 @@ import (
 
 func TestLoadProgramFileFromYAML(t *testing.T) {
 	// Check if file exists
-	filePath := "../samples/fir/instructions.yaml"
+	filePath := "../test/testbench/fir/fir4x4.yaml"
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		t.Fatalf("File does not exist: %s", filePath)
 	}
