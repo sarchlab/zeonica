@@ -12,24 +12,24 @@ import (
 )
 
 func TestRetOperation(t *testing.T) {
-	// 设置测试参数
+	// Set test parameters
 	width := 2
 	height := 2
 
-	// 生成随机测试数据
+	// Generate random test data
 	src := make([]uint32, 1)
 	src[0] = 114514
 
-	// 创建模拟引擎
+	// Create simulation engine
 	engine := sim.NewSerialEngine()
 
-	// 创建driver
+	// Create driver
 	driver := api.DriverBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		Build("Driver")
 
-	// 创建设备
+	// Create device
 	device := config.DeviceBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
@@ -39,16 +39,16 @@ func TestRetOperation(t *testing.T) {
 
 	driver.RegisterDevice(device)
 
-	// 加载程序
+	// Load program
 	program := core.LoadProgramFileFromYAML("./test_ret.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
 
-	// 设置数据流 - 从西边输入，东边输出
+	// Set data flow - input from west, output to east
 	driver.FeedIn(src, cgra.West, [2]int{0, 1}, 1, "R")
 
-	// 映射程序到所有core
+	// Map program to all cores
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			coord := fmt.Sprintf("(%d,%d)", x, y)
@@ -58,7 +58,7 @@ func TestRetOperation(t *testing.T) {
 		}
 	}
 
-	// 运行模拟
+	// Run simulation
 	driver.Run()
 
 	retVal := device.GetTile(0, 0).GetRetVal()
@@ -73,20 +73,20 @@ func TestRetOperation(t *testing.T) {
 }
 
 func TestFireOperation(t *testing.T) {
-	// 设置测试参数
+	// Set test parameters
 	width := 2
 	height := 2
 
-	// 创建模拟引擎
+	// Create simulation engine
 	engine := sim.NewSerialEngine()
 
-	// 创建driver
+	// Create driver
 	driver := api.DriverBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		Build("Driver")
 
-	// 创建设备
+	// Create device
 	device := config.DeviceBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
@@ -96,7 +96,7 @@ func TestFireOperation(t *testing.T) {
 
 	driver.RegisterDevice(device)
 
-	// 加载程序
+	// Load program
 	program := core.LoadProgramFileFromYAML("./test_fire.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
@@ -112,7 +112,7 @@ func TestFireOperation(t *testing.T) {
 		}
 	}
 
-	// 映射程序到所有core
+	// Map program to all cores
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			coord := fmt.Sprintf("(%d,%d)", x, y)
@@ -122,7 +122,7 @@ func TestFireOperation(t *testing.T) {
 		}
 	}
 
-	// 运行模拟
+	// Run simulation
 	driver.Run()
 
 	retVal := device.GetTile(0, 0).GetRetVal()

@@ -19,7 +19,7 @@ array_config:
                 dst_operands:
                   - operand: "East"
                     color: "R"
-                  - operand: "South"
+                  - operand: "North"
                     color: "R"
                   - operand: "$0"
                     color: "R"
@@ -39,7 +39,7 @@ array_config:
                   - operand: "$1"
                     color: "R"
                 dst_operands:
-                  - operand: "South"
+                  - operand: "North"
                     color: "R"
 
     - row: 0
@@ -52,7 +52,7 @@ array_config:
             - operations:
               - opcode: "TRIGGER"
                 src_operands:
-                  - operand: "North"
+                  - operand: "South"
                     color: "R"
             - operations:
               - opcode: "MOV"
@@ -70,7 +70,7 @@ array_config:
                   - operand: "West"
                     color: "R"
                 dst_operands:
-                  - operand: "South"
+                  - operand: "North"
                     color: "R"
                   - operand: "$0"
                     color: "R"
@@ -79,7 +79,7 @@ array_config:
                 src_operands:
                   - operand: "$0"
                     color: "R"
-                  - operand: "South"
+                  - operand: "North"
                     color: "R"
                 dst_operands:
                   - operand: "West"
@@ -102,7 +102,7 @@ array_config:
                 src_operands:
                   - operand: "2"
                     color: "R"
-                  - operand: "North"
+                  - operand: "South"
                     color: "R"
                 dst_operands:
                   - operand: "$0"
@@ -120,10 +120,10 @@ array_config:
                 src_operands:
                   - operand: "$1"
                     color: "R"
-                  - operand: "North"
+                  - operand: "South"
                     color: "R"
                 dst_operands:
-                  - operand: "South"
+                  - operand: "North"
                     color: "R"
 
     - row: 1
@@ -136,12 +136,12 @@ array_config:
             - operations:
               - opcode: "LT_EX"
                 src_operands:
-                  - operand: "North"
+                  - operand: "South"
                     color: "R"
                   - operand: "2"
                     color: "R"
                 dst_operands:
-                  - operand: "North"
+                  - operand: "South"
                     color: "R"
 
     - row: 2
@@ -169,7 +169,7 @@ array_config:
                 src_operands:
                   - operand: "East"
                     color: "R"
-                  - operand: "North"
+                  - operand: "South"
                     color: "R"
                 dst_operands:
                   - operand: "$0"

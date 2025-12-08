@@ -13,28 +13,28 @@ import (
 )
 
 func TestCmpExOperation(t *testing.T) {
-	// 设置测试参数
+	// Set test parameters
 	width := 2
 	height := 2
 	length := 5
 
-	// 创建测试数据
+	// Create test data
 	src := make([]uint32, length)
 	dst := make([]uint32, length)
 
-	// 生成随机测试数据
+	// Generate random test data
 	src = []uint32{1, 2, 9, 9, 0, 0, 3, 5, 6, 7}
 
-	// 创建模拟引擎
+	// Create simulation engine
 	engine := sim.NewSerialEngine()
 
-	// 创建driver
+	// Create driver
 	driver := api.DriverBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		Build("Driver")
 
-	// 创建设备
+	// Create device
 	device := config.DeviceBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
@@ -44,17 +44,17 @@ func TestCmpExOperation(t *testing.T) {
 
 	driver.RegisterDevice(device)
 
-	// 加载程序
+	// Load program
 	program := core.LoadProgramFileFromYAML("./test_cmpex.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
 
-	// 设置数据流 - 从西边输入，东边输出
+	// Set data flow - input from west, output to east
 	driver.FeedIn(src, cgra.West, [2]int{0, height}, height, "R")
 	driver.Collect(dst, cgra.East, [2]int{0, 1}, 1, "R")
 
-	// 映射程序到所有core
+	// Map program to all cores
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			coord := fmt.Sprintf("(%d,%d)", x, y)
@@ -64,10 +64,10 @@ func TestCmpExOperation(t *testing.T) {
 		}
 	}
 
-	// 运行模拟
+	// Run simulation
 	driver.Run()
 
-	// 转换结果并验证
+	// Convert results and verify
 	srcI := make([]int32, length*2)
 	dstI := make([]int32, length*2)
 	for i := 0; i < length; i++ {
@@ -76,7 +76,7 @@ func TestCmpExOperation(t *testing.T) {
 	}
 
 	expected := []int32{0, 1, 1, 0, 0}
-	// 验证结果：输出应该是输入+2
+	// Verify results: output should be input+2
 	t.Log("=== CmpEx Test Results ===")
 	allPassed := true
 	for i := 0; i < length; i++ {
@@ -214,25 +214,25 @@ func TestGpredOperation(t *testing.T) {
 */
 
 func TestPhiOperation(t *testing.T) {
-	// 设置测试参数
+	// Set test parameters
 	width := 2
 	height := 2
 	length := 5
 
-	// 生成随机测试数据
+	// Generate random test data
 	srcData := []uint32{5, 5, 5, 5, 5}
 	dst := make([]uint32, length)
 
-	// 创建模拟引擎
+	// Create simulation engine
 	engine := sim.NewSerialEngine()
 
-	// 创建driver
+	// Create driver
 	driver := api.DriverBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		Build("Driver")
 
-	// 创建设备
+	// Create device
 	device := config.DeviceBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
@@ -242,17 +242,17 @@ func TestPhiOperation(t *testing.T) {
 
 	driver.RegisterDevice(device)
 
-	// 加载程序
+	// Load program
 	program := core.LoadProgramFileFromYAML("./test_phiconst.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
 
-	// 设置数据流 - 从西边输入，东边输出
+	// Set data flow - input from west, output to east
 	driver.FeedIn(srcData, cgra.West, [2]int{0, 1}, 1, "R")
 	driver.Collect(dst, cgra.West, [2]int{1, 2}, 1, "R")
 
-	// 映射程序到所有core
+	// Map program to all cores
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			coord := fmt.Sprintf("(%d,%d)", x, y)
@@ -262,10 +262,10 @@ func TestPhiOperation(t *testing.T) {
 		}
 	}
 
-	// 运行模拟
+	// Run simulation
 	driver.Run()
 
-	// 转换结果并验证
+	// Convert results and verify
 	srcIData := make([]int32, length)
 	dstI := make([]int32, length)
 

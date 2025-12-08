@@ -20,3 +20,6 @@ samples/passthrough/passthrough
 
 # output files
 output/
+
+# logs
+*.log

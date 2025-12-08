@@ -7,26 +7,21 @@ import (
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/api"
-	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/config"
 	"github.com/sarchlab/zeonica/core"
 )
 
-func Fir() {
-	// Set test parameters
-	width := 3
-	height := 3
+func Gemm() {
+	width := 4
+	height := 4
 
-	// Create simulation engine
 	engine := sim.NewSerialEngine()
 
-	// Create driver
 	driver := api.DriverBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		Build("Driver")
 
-	// Create device
 	device := config.DeviceBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
@@ -36,13 +31,11 @@ func Fir() {
 
 	driver.RegisterDevice(device)
 
-	// Load program
-	program := core.LoadProgramFileFromYAML("./fir.yaml")
+	program := core.LoadProgramFileFromYAML("test/testbench/gemm/gemm_int.yaml")
 	if len(program) == 0 {
 		panic("Failed to load program")
 	}
 
-	// Map program to all cores
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			coord := fmt.Sprintf("(%d,%d)", x, y)
@@ -52,23 +45,36 @@ func Fir() {
 		}
 	}
 
-	driver.PreloadMemory(0, 0, 3, 0)
-	driver.PreloadMemory(0, 0, 1, 1)
-	driver.PreloadMemory(0, 1, 2, 2)
-	driver.PreloadMemory(0, 1, 4, 3) // addr has ERRORS !!!!!!
+	// fire all the cores in the beginning
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			tile := device.GetTile(x, y)
+			// convert to tileCore
+			tickingComponent := tile.GetTickingComponent()
+			engine.Schedule(sim.MakeTickEvent(tickingComponent, 0))
+		}
+	}
 
-	triggerDataPacket0 := []uint32{1}
-	triggerDataPacket1 := []uint32{1}
-
-	driver.FeedIn(triggerDataPacket0, cgra.South, [2]int{1, 2}, 1, "R")
-	driver.FeedIn(triggerDataPacket1, cgra.West, [2]int{2, 3}, 1, "R")
+	driver.PreloadMemory(3, 3, 3, 0)
+	driver.PreloadMemory(3, 3, 1, 1)
+	driver.PreloadMemory(2, 1, 2, 0)
+	driver.PreloadMemory(2, 1, 4, 1) // addr has ERRORS !!!!!!
 
 	driver.Run()
 
 	fmt.Println("========================")
 	fmt.Println("========================")
 	fmt.Println("========================")
-	fmt.Println(driver.ReadMemory(0, 2, 0))
+
+	// get the returned value
+	retVal := device.GetTile(0, 0).GetRetVal()
+	fmt.Println("retVal:", retVal)
+
+	if retVal == 12 {
+		fmt.Println("✅ Fire tests passed!")
+	} else {
+		fmt.Println("❌ Fire tests failed!")
+	}
 }
 
 func main() {
@@ -77,8 +83,5 @@ func main() {
 	})
 
 	slog.SetDefault(slog.New(handler))
-
-	slog.Debug("This Debug message will not be displayed")
-	slog.Info("This is an Info message")
-	Fir()
+	Gemm()
 }

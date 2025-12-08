@@ -110,39 +110,6 @@ type instEmulator struct {
 	CareFlags bool
 }
 
-/*
-func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreState) {
-	LogState(state)
-
-	instOpcodes := make([]string, len(cinst.Operations))
-	for i, inst := range cinst.Operations {
-		instOpcodes[i] = inst.OpCode
-	}
-
-	// check and run all the operations in the instruction group
-
-	if i.CareFlags {
-		for _, inst := range cinst.Insts {
-			if !i.CheckFlags(inst, state) {
-				slog.Info("CheckFlags",
-					"result", false,
-					"victim", inst.OpCode,
-					"X", state.TileX,
-					"Y", state.TileY,
-					"instOpcodes", instOpcodes,
-				)
-				return
-			}
-		}
-	}
-	slog.Info("CheckFlags", "result", true, "X", state.TileX, "Y", state.TileY, "instOpcodes", instOpcodes)
-	for _, inst := range cinst.Operations {
-		i.RunInst(inst, state)
-	}
-	LogState(state)
-}
-*/
-
 // set up the necessary state for the instruction group
 func (i instEmulator) SetUpInstructionGroup(index int32, state *coreState) {
 	iGroup := state.SelectedBlock.InstructionGroups[index]
@@ -345,8 +312,6 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"OR":  i.runOR,
 		"XOR": i.runXOR, // XOR XORI
 		"AND": i.runAND,
-		//"LD":  i.runLoad,  // LDI, STI // need some adaption for more complex memory
-		//"ST":  i.runStore, //able to load store imm as well
 		"MOV": i.runMov,
 		"JMP": i.runJmp,
 		"BNE": i.runBne,
@@ -387,7 +352,6 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 	if instFunc, ok := instFuncs[instName]; ok {
 		instFunc(inst, state)
 	} else {
-		//panic("unknown instruction " + inst)
 		panic(fmt.Sprintf("unknown instruction '%s' at PC %d", instName, state.PCInBlock))
 	}
 }
@@ -480,30 +444,6 @@ func (i instEmulator) writeOperand(operand Operand, value cgra.Data, state *core
 		}
 	}
 }
-
-/*
-func (i instEmulator) findPCPlus4(state *coreState) {
-	if state.SelectedBlock == nil {
-		return // Just for test make the unit test to run normally
-	}
-	//fmt.Println("PC+4 ", state.PCInBlock)
-	if state.Mode == SyncOp {
-		state.PCInBlock++
-		if state.PCInBlock >= int32(len(state.SelectedBlock.InstructionGroups)) {
-			state.PCInBlock = -1
-			state.SelectedBlock = nil
-			slog.Info("Flow", "PCInBlock", "-1", "X", state.TileX, "Y", state.TileY)
-		}
-	} else if state.Mode == AsyncOp {
-		if state.CurrReservationState.OpToExec == 0 {
-		} else {
-			state.PCInBlock = state.NextPCInBlock
-		}
-	} else {
-		panic("invalid mode")
-	}
-}
-*/
 
 func (i instEmulator) getDirecIndex(side string) int {
 	var srcIndex int
@@ -607,33 +547,6 @@ func (i instEmulator) runNot(inst Operation, state *coreState) {
 	}
 }
 
-/*
-	func (i instEmulator) parseAddress(addrStr string, state *coreState) uint32 {
-		// imm addr
-		if immediate, err := strconv.ParseUint(addrStr, 0, 32); err == nil {
-			return uint32(immediate)
-		}
-
-		// addr in reg
-		if strings.Contains(addrStr, "$") {
-			parts := strings.Split(addrStr, "+")
-			baseReg := strings.TrimSpace(parts[0])
-			baseAddr := i.readOperand(baseReg, state)
-
-			offset := uint32(0)
-			if len(parts) > 1 {
-				offsetVal, err := strconv.ParseUint(parts[1], 0, 32)
-				if err != nil {
-					panic("invalid offset")
-				}
-				offset = uint32(offsetVal)
-			}
-			return baseAddr + offset
-		}
-
-		panic("invalid address format")
-	}
-*/
 func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
 	addrStruct := i.readOperand(src1, state)
@@ -752,25 +665,6 @@ func (i instEmulator) runTrigger(inst Operation, state *coreState) {
 	// just consume a operand and do nothing
 	// elect no next PC
 }
-
-/**
- * @description:
- * @prototype:F32_CMP_[], Cmp_Res, Cmp_Src, imme
- */
-
-/*
-func (i instEmulator) runCmp(inst []string, state *coreState) {
-	Itype := inst[0]
-	//Float or Integer
-	switch {
-	case strings.Contains(Itype, "I"):
-		i.parseAndCompareI(inst, state)
-	case strings.Contains(Itype, "F32"):
-		i.parseAndCompareF32(inst, state)
-	default:
-		panic("invalid cmp")
-	}
-}*/
 
 func (i instEmulator) parseAndCompareI(inst Operation, state *coreState) {
 	instruction := inst.OpCode
@@ -1100,45 +994,6 @@ func (i instEmulator) runRet(inst Operation, state *coreState) {
 		*state.retVal = 0
 	}
 }
-
-/*
-func (i instEmulator) runMul_Const(inst []string, state *coreState) {
-	dst := inst[1]
-	src := inst[2]
-	immeStr := inst[3]
-
-	srcVal := i.readOperand(src, state)
-	imme, err := strconv.ParseUint(immeStr, 10, 32)
-	if err != nil {
-		panic(fmt.Sprintf("invalid immediate value for MUL_CONST: %s", immeStr))
-	}
-	immeVal := uint32(imme)
-
-	result := srcVal * immeVal
-	i.writeOperand(dst, result, state)
-
-	//fmt.Printf("MUL_CONST: %s = %s * %d => Result: %d\n", dst, src, immeVal, result)
-	state.PC++
-}
-
-func (i instEmulator) runMul_Const_Add(inst []string, state *coreState) {
-	dst := inst[1]
-	src := inst[2]
-	immeStr := inst[3]
-
-	srcVal := i.readOperand(src, state)
-	imme, _ := strconv.ParseUint(immeStr, 10, 32)
-	immeVal := uint32(imme)
-
-	// dst = dst + (src * immediate)
-	dstVal := i.readOperand(dst, state)
-	dstVal += srcVal * immeVal
-	i.writeOperand(dst, dstVal, state)
-
-	//fmt.Printf("MUL_CONST_ADD: %s += %s * %d => Result: %d\n", dst, src, immeVal, dstVal)
-	state.PC++
-}
-*/
 
 func (i instEmulator) runFAdd(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
