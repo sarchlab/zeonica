@@ -142,7 +142,7 @@ array_config:
                     - operand: "$0"
                       color: "R"
                   dst_operands:
-                    - operand: "South" 
+                    - operand: "North" 
                       color: "R"
     - row: 1
       column: 1
@@ -154,7 +154,7 @@ array_config:
             - operations:
                 - opcode: "MOV"
                   src_operands:
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"
                   dst_operands:
                     - operand: "$0"

@@ -128,6 +128,34 @@ func (mr *MockTileMockRecorder) GetPort(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPort", reflect.TypeOf((*MockTile)(nil).GetPort), arg0)
 }
 
+// GetRetVal mocks base method.
+func (m *MockTile) GetRetVal() uint32 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRetVal")
+	ret0, _ := ret[0].(uint32)
+	return ret0
+}
+
+// GetRetVal indicates an expected call of GetRetVal.
+func (mr *MockTileMockRecorder) GetRetVal() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRetVal", reflect.TypeOf((*MockTile)(nil).GetRetVal))
+}
+
+// GetTickingComponent mocks base method.
+func (m *MockTile) GetTickingComponent() sim.Component {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTickingComponent")
+	ret0, _ := ret[0].(sim.Component)
+	return ret0
+}
+
+// GetTickingComponent indicates an expected call of GetTickingComponent.
+func (mr *MockTileMockRecorder) GetTickingComponent() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTickingComponent", reflect.TypeOf((*MockTile)(nil).GetTickingComponent))
+}
+
 // GetTileX mocks base method.
 func (m *MockTile) GetTileX() int {
 	m.ctrl.T.Helper()

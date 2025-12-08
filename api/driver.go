@@ -8,7 +8,6 @@ import (
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/akita/v4/sim/directconnection"
 	"github.com/sarchlab/zeonica/cgra"
-	"github.com/sarchlab/zeonica/config"
 	"github.com/sarchlab/zeonica/core"
 )
 
@@ -44,8 +43,6 @@ type Driver interface {
 
 	//
 	ReadMemory(x int, y int, addr uint32) uint32
-
-	hasInput() bool
 
 	// Run will run all the tasks that have been added to the driver.
 	Run()
@@ -88,24 +85,6 @@ func (d *driverImpl) Tick() (madeProgress bool) {
 	madeProgress = d.doFeedIn() || madeProgress
 	madeProgress = d.doCollect() || madeProgress
 
-	// Debug: Log if we have feedIn tasks but no progress
-	feedInProgress := madeProgress // Check if feedIn made progress (approximate)
-	if !feedInProgress {
-		totalTasks := 0
-		for i := 0; i < 4; i++ {
-			totalTasks += len(d.feedInTasks[i])
-		}
-		if totalTasks > 0 {
-			// Note: We can't distinguish feedIn vs collect progress here anymore
-			// but this is just for debugging, so approximate is fine
-			core.Trace("DriverTick",
-				"Time", float64(d.Engine.CurrentTime()*1e9),
-				"TotalFeedInTasks", totalTasks,
-				"MadeProgress", madeProgress,
-			)
-		}
-	}
-
 	return madeProgress
 }
 
@@ -137,24 +116,14 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 	madeProgress := false
 
 	canSendAll := true
-	blockedPorts := []string{}
-	for i, port := range task.localPorts {
+	for _, port := range task.localPorts {
 		if !port.CanSend() {
 			canSendAll = false
-			blockedPorts = append(blockedPorts, fmt.Sprintf("%s[%d]", port.Name(), i))
+			break
 		}
 	}
 
 	if !canSendAll {
-		// Debug: Log why we can't send
-		if len(blockedPorts) > 0 {
-			core.Trace("FeedInBlocked",
-				"Time", float64(d.Engine.CurrentTime()*1e9),
-				"BlockedPorts", blockedPorts,
-				"TaskRound", task.round,
-				"TaskDataLen", len(task.data),
-			)
-		}
 		return false
 	}
 
@@ -309,16 +278,12 @@ func (d *driverImpl) setTileRemotePort(
 	var tile cgra.Tile
 	switch side {
 	case cgra.North:
-		// North is at the top (y = height-1 in user coordinates)
 		tile = d.device.GetTile(index, height-1)
 	case cgra.South:
-		// South is at the bottom (y = 0 in user coordinates)
 		tile = d.device.GetTile(index, 0)
 	case cgra.East:
-		// East is at the right (x = width-1)
 		tile = d.device.GetTile(width-1, index)
 	case cgra.West:
-		// West is at the left (x = 0)
 		tile = d.device.GetTile(0, index)
 	}
 
@@ -446,32 +411,9 @@ func (d *driverImpl) SetPerPEKernels(kernels PerPEKernels) error {
 	return nil
 }
 
-func (d *driverImpl) hasInput() bool {
-	for i := 0; i < 4; i++ {
-		if len(d.feedInTasks[i]) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // Run runs all the tasks in the driver.
 func (d *driverImpl) Run() {
 	d.TickNow()
-	if !d.hasInput() {
-		// Get all cores from the device and tick those that need explicit startup
-		cores := config.GetAllCores(d.device)
-		tickedCount := 0
-		for _, c := range cores {
-			if c.NeedsExplicitTick() {
-				c.TickNow()
-				tickedCount++
-			}
-		}
-		fmt.Printf("[Driver] No external input, ticked %d cores that need explicit startup (total cores: %d)\n", tickedCount, len(cores))
-	}
-	//if there is an input from outside, just use engine run
-	//else, tick all cores in the device
 	err := d.Engine.Run()
 	if err != nil {
 		panic(err)

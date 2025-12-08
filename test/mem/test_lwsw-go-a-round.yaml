@@ -163,7 +163,7 @@ array_config:
                     - operand: "Router"
                       color: "R"
                   dst_operands:
-                    - operand: "South"
+                    - operand: "North"
                       color: "R"
             - operations:
                 - opcode: "ADD"
@@ -186,7 +186,7 @@ array_config:
             - operations:
                 - opcode: "MOV"
                   src_operands:
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"
                   dst_operands:
                     - operand: "$0"

@@ -7,8 +7,10 @@ import (
 
 // Builder can create new cores.
 type Builder struct {
-	engine sim.Engine
-	freq   sim.Freq
+	engine     sim.Engine
+	freq       sim.Freq
+	exitAddr   *bool
+	retValAddr *uint32
 }
 
 // WithEngine sets the engine.
@@ -23,6 +25,16 @@ func (b Builder) WithFreq(freq sim.Freq) Builder {
 	return b
 }
 
+func (b Builder) WithExitAddr(exitAddr *bool) Builder {
+	b.exitAddr = exitAddr
+	return b
+}
+
+func (b Builder) WithRetValAddr(retValAddr *uint32) Builder {
+	b.retValAddr = retValAddr
+	return b
+}
+
 // Build creates a core.
 func (b Builder) Build(name string) *Core {
 	c := &Core{}
@@ -32,6 +44,8 @@ func (b Builder) Build(name string) *Core {
 		CareFlags: true,
 	}
 	c.state = coreState{
+		exit:          b.exitAddr,
+		retVal:        b.retValAddr,
 		SelectedBlock: nil,
 		PCInBlock:     -1,
 		Directions: map[string]bool{

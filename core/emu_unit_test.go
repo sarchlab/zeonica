@@ -16,11 +16,13 @@ var _ = Describe("InstEmulator", func() {
 		ie = instEmulator{
 			CareFlags: true,
 		}
+		exit := false
+		retVal := uint32(0)
 		s = coreState{
-			PCInBlock: 0,
-			SelectedBlock: &EntryBlock{
-				InstructionGroups: []InstructionGroup{},
-			},
+			exit:          &exit,
+			retVal:        &retVal,
+			PCInBlock:     0,
+			SelectedBlock: nil,
 			Directions: map[string]bool{
 				"North": true,
 				"East":  true,
@@ -36,12 +38,6 @@ var _ = Describe("InstEmulator", func() {
 			RecvBufHeadReady: make([][]bool, 4),
 			SendBufHead:      make([][]cgra.Data, 4),
 			SendBufHeadBusy:  make([][]bool, 4),
-			Mode:             AsyncOp,
-			CurrReservationState: ReservationState{
-				ReservationMap:  make(map[int]bool),
-				RefCountRuntime: make(map[string]int),
-				OpToExec:        0,
-			},
 		}
 	})
 
@@ -68,13 +64,10 @@ var _ = Describe("InstEmulator", func() {
 		Describe("MUL_CONST", func() {
 			It("should multiply register by immediate", func() {
 				s.Registers[0] = cgra.NewScalar(5)
-				// Initialize ReservationMap for the instruction group
-				s.CurrReservationState.ReservationMap[0] = true
-				s.CurrReservationState.OpToExec = 1
 				ie.RunInstructionGroup(mul_const_inst, &s, 0)
-				Expect(s.Registers[1].First()).To(Equal(uint32(15)))
-				// PCInBlock should be set to -1 after instruction group is finished
-				Expect(s.PCInBlock).To(Equal(int32(-1)))
+				Expect(s.Registers[1]).To(Equal(cgra.NewScalar(15)))
+				Expect(s.PCInBlock).To(Equal(int32(0)))
+				// in the test, there is no SelectedBlock, so emu will not increase the PCInBlock
 			})
 
 			// It("should handle negative values", func() {

@@ -18,5 +18,8 @@
 *.debug
 samples/passthrough/passthrough
 
-# OpenSpec files (internal development)
-openspec/
+# output files
+output/
+
+# logs
+*.log

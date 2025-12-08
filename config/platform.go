@@ -17,11 +17,17 @@ type tileCore interface {
 	WriteMemory(x int, y int, data uint32, baseAddr uint32)
 	GetTileX() int
 	GetTileY() int
+	GetRetVal() uint32
+	GetTickingComponent() sim.Component
 }
 
 type tile struct {
 	Core                   tileCore
 	SharedMemoryController *idealmemcontroller.Comp
+}
+
+func (t tile) GetTickingComponent() sim.Component {
+	return t.Core.GetTickingComponent()
 }
 
 // GetPort returns the of the tile by the side.
@@ -89,6 +95,10 @@ func (t tile) MapProgram(program interface{}, x int, y int) {
 	t.Core.MapProgram(program, x, y)
 }
 
+func (t tile) GetRetVal() uint32 {
+	return t.Core.GetRetVal()
+}
+
 // A Device is a CGRA device that includes a large number of tiles. Tiles can be
 // retrieved using d.Tiles[y][x].
 type device struct {
@@ -124,7 +134,7 @@ func (d *device) GetSidePorts(
 	case cgra.North:
 		// North side: top row in user coordinates (y=height-1), which is array index 0
 		for x := portRange[0]; x < portRange[1]; x++ {
-			ports = append(ports, d.Tiles[0][x].GetPort(side))
+			ports = append(ports, d.Tiles[d.Height-1][x].GetPort(side))
 		}
 	case cgra.West:
 		// West side: y-coordinate based, need to convert from user coord to array index
@@ -135,7 +145,7 @@ func (d *device) GetSidePorts(
 	case cgra.South:
 		// South side: bottom row in user coordinates (y=0), which is array index height-1
 		for x := portRange[0]; x < portRange[1]; x++ {
-			ports = append(ports, d.Tiles[d.Height-1][x].GetPort(side))
+			ports = append(ports, d.Tiles[0][x].GetPort(side))
 		}
 	case cgra.East:
 		// East side: y-coordinate based, need to convert from user coord to array index

@@ -15,16 +15,16 @@ import (
 )
 
 func TestAddOperationWithRandomData(t *testing.T) {
-	// 设置测试参数
+	// Set test parameters
 	width := 2
 	height := 2
 	length := 16
 
-	// 创建测试数据
+	// Create test data
 	src := make([]uint32, length)
 	dst := make([]uint32, length)
 
-	// 生成随机测试数据
+	// Generate random test data
 	rand.Seed(time.Now().UnixNano())
 	minI := int32(-10)
 	maxI := int32(10)
@@ -33,16 +33,16 @@ func TestAddOperationWithRandomData(t *testing.T) {
 		src[i] = *(*uint32)(unsafe.Pointer(&INum))
 	}
 
-	// 创建模拟引擎
+	// Create simulation engine
 	engine := sim.NewSerialEngine()
 
-	// 创建driver
+	// Create driver
 	driver := api.DriverBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		Build("Driver")
 
-	// 创建设备
+	// Create device
 	device := config.DeviceBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
@@ -52,17 +52,17 @@ func TestAddOperationWithRandomData(t *testing.T) {
 
 	driver.RegisterDevice(device)
 
-	// 加载程序
+	// Load program
 	program := core.LoadProgramFileFromYAML("./test_add.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
 
-	// 设置数据流 - 从西边输入，东边输出
+	// Set data flow - input from west, output to east
 	driver.FeedIn(src, cgra.West, [2]int{0, height}, height, "R")
 	driver.Collect(dst, cgra.East, [2]int{0, height}, height, "R")
 
-	// 映射程序到所有core
+	// Map program to all cores
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			coord := fmt.Sprintf("(%d,%d)", x, y)
@@ -72,10 +72,10 @@ func TestAddOperationWithRandomData(t *testing.T) {
 		}
 	}
 
-	// 运行模拟
+	// Run simulation
 	driver.Run()
 
-	// 转换结果并验证
+	// Convert results and verify
 	srcI := make([]int32, length)
 	dstI := make([]int32, length)
 	for i := 0; i < length; i++ {
@@ -83,7 +83,7 @@ func TestAddOperationWithRandomData(t *testing.T) {
 		dstI[i] = *(*int32)(unsafe.Pointer(&dst[i]))
 	}
 
-	// 验证结果：输出应该是输入+2
+	// Verify results: output should be input+2
 	t.Log("=== ADD Test Results ===")
 	allPassed := true
 	for i := 0; i < length; i++ {
@@ -107,16 +107,16 @@ func TestAddOperationWithRandomData(t *testing.T) {
 }
 
 func TestSubOperationWithRandomData(t *testing.T) {
-	// 设置测试参数
+	// Set test parameters
 	width := 2
 	height := 2
 	length := 16
 
-	// 创建测试数据
+	// Create test data
 	src := make([]uint32, length)
 	dst := make([]uint32, length)
 
-	// 生成随机测试数据
+	// Generate random test data
 	rand.Seed(time.Now().UnixNano())
 	minI := int32(-10)
 	maxI := int32(10)
@@ -125,16 +125,16 @@ func TestSubOperationWithRandomData(t *testing.T) {
 		src[i] = *(*uint32)(unsafe.Pointer(&INum))
 	}
 
-	// 创建模拟引擎
+	// Create simulation engine
 	engine := sim.NewSerialEngine()
 
-	// 创建driver
+	// Create driver
 	driver := api.DriverBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		Build("Driver")
 
-	// 创建设备
+	// Create device
 	device := config.DeviceBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
@@ -144,17 +144,17 @@ func TestSubOperationWithRandomData(t *testing.T) {
 
 	driver.RegisterDevice(device)
 
-	// 加载程序
+	// Load program
 	program := core.LoadProgramFileFromYAML("./test_sub.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
 
-	// 设置数据流 - 从北边输入，南边输出
-	driver.FeedIn(src, cgra.North, [2]int{0, width}, width, "R")
-	driver.Collect(dst, cgra.South, [2]int{0, width}, width, "R")
+	// Set data flow - input from north, output to south
+	driver.FeedIn(src, cgra.South, [2]int{0, width}, width, "R")
+	driver.Collect(dst, cgra.North, [2]int{0, width}, width, "R")
 
-	// 映射程序到所有core
+	// Map program to all cores
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			coord := fmt.Sprintf("(%d,%d)", x, y)
@@ -164,10 +164,10 @@ func TestSubOperationWithRandomData(t *testing.T) {
 		}
 	}
 
-	// 运行模拟
+	// Run simulation
 	driver.Run()
 
-	// 转换结果并验证
+	// Convert results and verify
 	srcI := make([]int32, length)
 	dstI := make([]int32, length)
 	for i := 0; i < length; i++ {
@@ -175,7 +175,7 @@ func TestSubOperationWithRandomData(t *testing.T) {
 		dstI[i] = *(*int32)(unsafe.Pointer(&dst[i]))
 	}
 
-	// 验证结果：输出应该是输入-2
+	// Verify results: output should be input-2
 	t.Log("=== SUB Test Results ===")
 	allPassed := true
 	for i := 0; i < length; i++ {
@@ -199,16 +199,16 @@ func TestSubOperationWithRandomData(t *testing.T) {
 }
 
 func TestMulOperationWithRandomData(t *testing.T) {
-	// 设置测试参数
+	// Set test parameters
 	width := 2
 	height := 2
 	length := 16
 
-	// 创建测试数据
+	// Create test data
 	src := make([]uint32, length)
 	dst := make([]uint32, length)
 
-	// 生成随机测试数据
+	// Generate random test data
 	rand.Seed(time.Now().UnixNano())
 	minI := int32(-10)
 	maxI := int32(10)
@@ -217,16 +217,16 @@ func TestMulOperationWithRandomData(t *testing.T) {
 		src[i] = *(*uint32)(unsafe.Pointer(&INum))
 	}
 
-	// 创建模拟引擎
+	// Create simulation engine
 	engine := sim.NewSerialEngine()
 
-	// 创建driver
+	// Create driver
 	driver := api.DriverBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		Build("Driver")
 
-	// 创建设备
+	// Create device
 	device := config.DeviceBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
@@ -236,17 +236,17 @@ func TestMulOperationWithRandomData(t *testing.T) {
 
 	driver.RegisterDevice(device)
 
-	// 加载程序
+	// Load program
 	program := core.LoadProgramFileFromYAML("./test_mul.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
 
-	// 设置数据流 - 从东边输入，西边输出
+	// Set data flow - input from east, output to west
 	driver.FeedIn(src, cgra.East, [2]int{0, height}, height, "R")
 	driver.Collect(dst, cgra.West, [2]int{0, height}, height, "R")
 
-	// 映射程序到所有core
+	// Map program to all cores
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			coord := fmt.Sprintf("(%d,%d)", x, y)
@@ -256,10 +256,10 @@ func TestMulOperationWithRandomData(t *testing.T) {
 		}
 	}
 
-	// 运行模拟
+	// Run simulation
 	driver.Run()
 
-	// 转换结果并验证
+	// Convert results and verify
 	srcI := make([]int32, length)
 	dstI := make([]int32, length)
 	for i := 0; i < length; i++ {
@@ -267,7 +267,7 @@ func TestMulOperationWithRandomData(t *testing.T) {
 		dstI[i] = *(*int32)(unsafe.Pointer(&dst[i]))
 	}
 
-	// 验证结果：输出应该是输入*2
+	// Verify results: output should be input*2
 	t.Log("=== MUL Test Results ===")
 	allPassed := true
 	for i := 0; i < length; i++ {
@@ -291,38 +291,38 @@ func TestMulOperationWithRandomData(t *testing.T) {
 }
 
 func TestDivOperationWithRandomData(t *testing.T) {
-	// 设置测试参数
+	// Set test parameters
 	width := 2
 	height := 2
 	length := 16
 
-	// 创建测试数据
+	// Create test data
 	src := make([]uint32, length)
 	dst := make([]uint32, length)
 
-	// 生成随机测试数据（避免除零）
+	// Generate random test data (avoid division by zero)
 	rand.Seed(time.Now().UnixNano())
 	minI := int32(-20)
 	maxI := int32(20)
 	for i := 0; i < length; i++ {
 		INum := minI + rand.Int31n(maxI-minI+1)
-		// 确保数据是4的倍数，避免除法精度问题
+		// Ensure data is a multiple of 4 to avoid division precision issues
 		if INum%4 != 0 {
 			INum = INum - INum%4 + 4
 		}
 		src[i] = *(*uint32)(unsafe.Pointer(&INum))
 	}
 
-	// 创建模拟引擎
+	// Create simulation engine
 	engine := sim.NewSerialEngine()
 
-	// 创建driver
+	// Create driver
 	driver := api.DriverBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		Build("Driver")
 
-	// 创建设备
+	// Create device
 	device := config.DeviceBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
@@ -332,17 +332,17 @@ func TestDivOperationWithRandomData(t *testing.T) {
 
 	driver.RegisterDevice(device)
 
-	// 加载程序
+	// Load program
 	program := core.LoadProgramFileFromYAML("./test_div.yaml")
 	if len(program) == 0 {
 		t.Fatal("Failed to load program")
 	}
 
-	// 设置数据流 - 从南边输入，北边输出
-	driver.FeedIn(src, cgra.South, [2]int{0, width}, width, "R")
-	driver.Collect(dst, cgra.North, [2]int{0, width}, width, "R")
+	// Set data flow - input from south, output to north
+	driver.FeedIn(src, cgra.North, [2]int{0, width}, width, "R")
+	driver.Collect(dst, cgra.South, [2]int{0, width}, width, "R")
 
-	// 映射程序到所有core
+	// Map program to all cores
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			coord := fmt.Sprintf("(%d,%d)", x, y)
@@ -352,10 +352,10 @@ func TestDivOperationWithRandomData(t *testing.T) {
 		}
 	}
 
-	// 运行模拟
+	// Run simulation
 	driver.Run()
 
-	// 转换结果并验证
+	// Convert results and verify
 	srcI := make([]int32, length)
 	dstI := make([]int32, length)
 	for i := 0; i < length; i++ {
@@ -363,7 +363,7 @@ func TestDivOperationWithRandomData(t *testing.T) {
 		dstI[i] = *(*int32)(unsafe.Pointer(&dst[i]))
 	}
 
-	// 验证结果：输出应该是输入/2
+	// Verify results: output should be input/2
 	t.Log("=== DIV Test Results ===")
 	allPassed := true
 	for i := 0; i < length; i++ {

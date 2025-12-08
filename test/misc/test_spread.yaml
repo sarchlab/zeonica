@@ -19,7 +19,7 @@ array_config:
                       color: "R"
                     - operand: "East"
                       color: "R"
-                    - operand: "South"
+                    - operand: "North"
                       color: "R"
             - operations:
                 - opcode: "MOV"
@@ -40,7 +40,7 @@ array_config:
             - operations:
                 - opcode: "MOV"
                   src_operands:
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"
                   dst_operands:
                     - operand: "East"

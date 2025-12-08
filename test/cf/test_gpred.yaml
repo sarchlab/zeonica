@@ -14,7 +14,7 @@ array_config:
                   src_operands:
                     - operand: "West"
                       color: "R"
-                    - operand: "South"
+                    - operand: "North"
                       color: "R"
                   dst_operands:
                     - operand: "East"
@@ -33,7 +33,7 @@ array_config:
                     - operand: "West"
                       color: "R"
                   dst_operands:
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"
             - operations:
                 - opcode: "MOV"
@@ -49,7 +49,7 @@ array_config:
                     - operand: "West"
                       color: "R"
                   dst_operands:
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"
             - operations:
                 - opcode: "MOV"
@@ -57,7 +57,7 @@ array_config:
                     - operand: "West"
                       color: "R"
                   dst_operands:
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"
             - operations:
                 - opcode: "MOV"
@@ -80,7 +80,7 @@ array_config:
                   src_operands:
                     - operand: "West"
                       color: "R"
-                    - operand: "South"
+                    - operand: "North"
                       color: "R"
                   dst_operands:
                     - operand: "East"
@@ -99,5 +99,5 @@ array_config:
                     - operand: "West"
                       color: "R"
                   dst_operands:
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"

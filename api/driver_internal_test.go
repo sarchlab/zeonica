@@ -257,7 +257,7 @@ func expectPortsToSend(
 					Expect(string(msg.Src)).NotTo(BeEmpty())
 					// msg.Dst is a RemotePort (string), not a MockPort
 					Expect(string(msg.Dst)).NotTo(BeEmpty())
-					Expect(msg.Data.First()).To(Equal(data))
+					Expect(msg.Data).To(Equal(cgra.NewScalar(data)))
 				})
 		}(port, data[i], i)
 	}

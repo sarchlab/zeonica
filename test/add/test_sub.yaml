@@ -12,12 +12,12 @@ array_config:
             - operations:
                 - opcode: "SUB"
                   src_operands:
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"
                     - operand: "1"
                       color: "R"
                   dst_operands:
-                    - operand: "South"
+                    - operand: "North"
                       color: "R"
 
     - row: 0
@@ -30,12 +30,12 @@ array_config:
             - operations:
                 - opcode: "SUB"
                   src_operands:
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"
                     - operand: "1"
                       color: "R"
                   dst_operands:
-                    - operand: "South"
+                    - operand: "North"
                       color: "R"
 
     - row: 1
@@ -48,12 +48,12 @@ array_config:
             - operations:
                 - opcode: "SUB"
                   src_operands:
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"
                     - operand: "1"
                       color: "R"
                   dst_operands:
-                    - operand: "South"
+                    - operand: "North"
                       color: "R"
 
     - row: 1
@@ -66,10 +66,10 @@ array_config:
             - operations:
                 - opcode: "SUB"
                   src_operands:
-                    - operand: "North"
+                    - operand: "South"
                       color: "R"
                     - operand: "1"
                       color: "R"
                   dst_operands:
-                    - operand: "South"
+                    - operand: "North"
                       color: "R" 

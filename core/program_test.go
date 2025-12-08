@@ -7,10 +7,10 @@ import (
 )
 
 func TestLoadProgramFileFromYAML(t *testing.T) {
-	// Use histogram.yaml from Zeonica_Testbench as test file
-	filePath := "../test/Zeonica_Testbench/kernel/histogram/histogram.yaml"
+	// Check if file exists
+	filePath := "../test/testbench/fir/fir4x4.yaml"
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		t.Skipf("Test file does not exist: %s (skipping test)", filePath)
+		t.Fatalf("File does not exist: %s", filePath)
 	}
 
 	// Read and print first few lines of the file for debugging
