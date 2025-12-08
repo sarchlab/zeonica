@@ -16,7 +16,11 @@ var _ = Describe("InstEmulator", func() {
 		ie = instEmulator{
 			CareFlags: true,
 		}
+		exit := false
+		retVal := uint32(0)
 		s = coreState{
+			exit:          &exit,
+			retVal:        &retVal,
 			PCInBlock:     0,
 			SelectedBlock: nil,
 			Directions: map[string]bool{
@@ -61,7 +65,7 @@ var _ = Describe("InstEmulator", func() {
 			It("should multiply register by immediate", func() {
 				s.Registers[0] = cgra.NewScalar(5)
 				ie.RunInstructionGroup(mul_const_inst, &s, 0)
-				Expect(s.Registers[1]).To(Equal(uint32(15)))
+				Expect(s.Registers[1]).To(Equal(cgra.NewScalar(15)))
 				Expect(s.PCInBlock).To(Equal(int32(0)))
 				// in the test, there is no SelectedBlock, so emu will not increase the PCInBlock
 			})

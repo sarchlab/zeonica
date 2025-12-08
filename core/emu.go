@@ -204,7 +204,7 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 				state.PCInBlock = state.NextPCInBlock
 			}
 		}
-		if state.PCInBlock >= int32(len(state.SelectedBlock.InstructionGroups)) {
+		if state.SelectedBlock != nil && state.PCInBlock >= int32(len(state.SelectedBlock.InstructionGroups)) {
 			state.PCInBlock = -1
 			state.SelectedBlock = nil
 			print("PCInBlock = -1\n")
