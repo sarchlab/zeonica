@@ -44,7 +44,6 @@ go run ./verify/cmd/verify-histogram     # outputs histogram_verification_report
 - `config/` — device builder, mesh wiring, and memory modes (simple/shared/local).
 - `verify/` — lint + functional simulator + report generator; CLI under `verify/cmd/`.
 - `test/` — regression tests and sample kernels; `test/Zeonica_Testbench` is a submodule with YAML kernels.
-- `openspec/` — specs and project notes.
 
 ## Architecture (How it fits together)
 - **Tile/Core** (`core/`): Instruction emulator + cycle-accurate send/recv paths on Akita ports; traces dataflow/memory events. Opcodes implemented in `core/emu.go`, state in `core/core.go`.
