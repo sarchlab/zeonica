@@ -5,42 +5,42 @@ import argparse
 
 def draw_dfg_with_counts(id_to_count: Dict[int, int], yaml_path: str = "debugger/fir-dfg-new.yaml", output_path: str = "dfg_output", highlight: Optional[List[int]] = None):
     """
-    读取 YAML 文件并生成带颜色节点的 dot 图
+    Read YAML file and generate dot graph with colored nodes
     
     Args:
-        id_to_count: 节点 id 到 count 次数的映射
-        yaml_path: YAML 文件路径
-        output_path: 输出文件路径（不含扩展名）
-        highlight: 需要高亮的节点 id 列表，这些节点会用加粗红色边框显示
+        id_to_count: Mapping from node id to count
+        yaml_path: Path to YAML file
+        output_path: Output file path (without extension)
+        highlight: List of node ids to highlight, these nodes will be displayed with bold red border
     """
     if highlight is None:
         highlight = []
-    # 读取 YAML 文件
+    # Read YAML file
     with open(yaml_path, 'r') as f:
         data = yaml.safe_load(f)
     
     if data is None:
         print(f"Error: Failed to load YAML file from {yaml_path}")
         return
-    # 创建有向图
+    # Create directed graph
     dot = graphviz.Digraph(comment='DFG Graph')
-    dot.attr(rankdir='LR')  # 从左到右布局
+    dot.attr(rankdir='LR')  # Left to right layout
     dot.attr('node', shape='box', style='rounded,filled')
     
-    # 获取所有节点
+    # Get all nodes
     nodes = data.get('nodes', [])
     edges = data.get('edges', [])
     
     print(id_to_count)
-    # 计算 count 的范围，用于颜色映射
+    # Calculate count range for color mapping
     counts = [id_to_count.get(node['id'], 0) for node in nodes]
     max_count = max(counts) if counts else 1
     min_count = min(counts) if counts else 0
     
     def get_color(count: int) -> str:
-        """根据 count 值返回颜色 (Blue <-> Orange/Yellow cycle per 50)"""
+        """Return color based on count value (Blue <-> Orange/Yellow cycle per 50)"""
         if count == 0:
-            return '#E8E8E8'  # 浅灰色（默认）
+            return '#E8E8E8'  # Light gray (default)
         
         # 1-10: Blue -> Orange
         # 11-20: Orange -> Blue
@@ -70,7 +70,7 @@ def draw_dfg_with_counts(id_to_count: Dict[int, int], yaml_path: str = "debugger
         
         return f'#{r:02X}{g:02X}{b:02X}'
     
-    # 添加节点
+    # Add nodes
     for node in nodes:
         node_id = node['id']
         opcode = node.get('opcode', '')
@@ -82,38 +82,38 @@ def draw_dfg_with_counts(id_to_count: Dict[int, int], yaml_path: str = "debugger
         color = get_color(count)
         print(node_id, count, color)
         
-        # 节点标签：显示 id, opcode 和 count
+        # Node label: display id, opcode and count
         label = f"{node_id}\\n{opcode}\\ncount: {count}"
         if tile_x is not None and tile_y is not None:
             label += f"\\n({tile_x},{tile_y})"
         
-        # 设置节点属性
+        # Set node attributes
         node_attrs = {'fillcolor': color}
         
-        # 如果节点在 highlight 列表中，添加加粗红色边框
+        # If node is in highlight list, add bold red border
         if node_id in highlight:
-            node_attrs['penwidth'] = '3'  # 加粗边框
-            node_attrs['color'] = 'red'    # 红色边框
+            node_attrs['penwidth'] = '3'  # Bold border
+            node_attrs['color'] = 'red'    # Red border
         
         dot.node(str(node_id), label, **node_attrs)
     
-    # 添加边
+    # Add edges
     for edge in edges:
         from_id = edge['from']
         to_id = edge['to']
         dot.edge(str(from_id), str(to_id))
     
-    # 添加图例
+    # Add legend
     with dot.subgraph(name='cluster_legend') as legend:
         legend.attr(label='Count Color Legend')
         legend.attr(style='filled')
         legend.attr(color='lightgray')
-        legend.attr(rankdir='LR')  # 图例从左到右排列
+        legend.attr(rankdir='LR')  # Legend arranged left to right
         
-        # 创建图例节点，展示不同 count 值对应的颜色
+        # Create legend nodes to show colors for different count values
         legend_items = []
         
-        # count = 0 (灰色)
+        # count = 0 (gray)
         legend_items.append((0, '#E8E8E8'))
         
         # Add keyframes for the cycle
@@ -123,29 +123,29 @@ def draw_dfg_with_counts(id_to_count: Dict[int, int], yaml_path: str = "debugger
         for k in keyframes:
             legend_items.append((k, get_color(k)))
         
-        # 添加图例节点，水平排列
+        # Add legend nodes, arranged horizontally
         prev_legend_id = None
         for idx, (count_val, color) in enumerate(legend_items):
             legend_id = f"legend_{idx}"
             label = f"count: {count_val}"
             legend.node(legend_id, label, fillcolor=color, style='filled,rounded')
             
-            # 连接图例节点，使其水平排列
+            # Connect legend nodes to arrange them horizontally
             if prev_legend_id is not None:
-                legend.edge(prev_legend_id, legend_id, style='invis')  # 不可见边，用于布局
+                legend.edge(prev_legend_id, legend_id, style='invis')  # Invisible edge for layout
             
             prev_legend_id = legend_id
     
-    # 渲染并保存
+    # Render and save
     dot.render(output_path, format='png', cleanup=True)
     print(f"Graph saved to {output_path}.png")
     
     return dot
 
 
-# 示例使用
+# Example usage
 if __name__ == "__main__":
-    # 示例：创建一个 id -> count 的映射
+    # Example: create a mapping from id to count
     example_counts = {
         0: 1,
         1: 2,
@@ -159,16 +159,16 @@ if __name__ == "__main__":
         21: 1,
         26: 3,
         27: 2,
-        31: 10,  # 高 count，会显示为红色
+        31: 10,  # High count, will be displayed in red
         32: 1,
         36: 1,
         37: 1,
         40: 1,
     }
     
-    # 示例：高亮某些节点
-    highlight_nodes = [6, 31, 32]  # 这些节点会用加粗红色边框显示
-    # add cli param
+    # Example: highlight certain nodes
+    highlight_nodes = [6, 31, 32]  # These nodes will be displayed with bold red border
+    # Add CLI parameters
     parser = argparse.ArgumentParser()
     parser.add_argument("--yaml_path", type=str, default="debugger/fir-dfg-new.yaml")
     parser.add_argument("--output_path", type=str, default="dfg_output")
