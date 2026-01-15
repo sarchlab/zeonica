@@ -28,12 +28,16 @@ type YAMLEntry struct {
 // Instruction represents a single instruction in the YAML
 type YAMLInstructionGroup struct {
 	Operations []YAMLOperation `yaml:"operations"`
+	IndexPerII int             `yaml:"index_per_ii"`
 }
 
 type YAMLOperation struct {
-	OpCode      string        `yaml:"opcode"`
-	SrcOperands []YAMLOperand `yaml:"src_operands"`
-	DstOperands []YAMLOperand `yaml:"dst_operands"`
+	OpCode            string        `yaml:"opcode"`
+	SrcOperands       []YAMLOperand `yaml:"src_operands"`
+	DstOperands       []YAMLOperand `yaml:"dst_operands"`
+	ID                int           `yaml:"id"`
+	InvalidIterations int           `yaml:"invalid_iterations"`
+	TimeStep          int           `yaml:"time_step"`
 }
 
 // YAMLOperand represents an operand in the YAML
@@ -86,9 +90,11 @@ func (ig *InstructionGroup) String() string {
 
 type Operation struct {
 	// The raw text of the instruction.
-	OpCode      string
-	DstOperands OperandList
-	SrcOperands OperandList
+	OpCode            string
+	DstOperands       OperandList
+	SrcOperands       OperandList
+	ID                int // ID from YAML file
+	InvalidIterations int // Invalid iterations from YAML file
 }
 
 type OperandList struct {
@@ -169,9 +175,11 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 
 					// Create operation
 					operation := Operation{
-						OpCode:      yamlOp.OpCode,
-						SrcOperands: OperandList{Operands: srcOperands},
-						DstOperands: OperandList{Operands: dstOperands},
+						OpCode:            yamlOp.OpCode,
+						SrcOperands:       OperandList{Operands: srcOperands},
+						DstOperands:       OperandList{Operands: dstOperands},
+						ID:                yamlOp.ID,
+						InvalidIterations: yamlOp.InvalidIterations,
 					}
 
 					operations = append(operations, operation)

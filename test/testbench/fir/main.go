@@ -32,6 +32,9 @@ func Fir() {
 	driver.RegisterDevice(device)
 
 	program := core.LoadProgramFileFromYAML("test/testbench/fir/fir4x4.yaml")
+
+	fmt.Println("program:", program)
+
 	if len(program) == 0 {
 		panic("Failed to load program")
 	}
@@ -57,8 +60,8 @@ func Fir() {
 
 	driver.PreloadMemory(3, 3, 3, 0)
 	driver.PreloadMemory(3, 3, 1, 1)
-	driver.PreloadMemory(2, 1, 2, 0)
-	driver.PreloadMemory(2, 1, 4, 1) // addr has ERRORS !!!!!!
+	driver.PreloadMemory(2, 2, 2, 0)
+	driver.PreloadMemory(2, 2, 4, 1) // addr has ERRORS !!!!!!
 
 	driver.Run()
 
@@ -71,14 +74,20 @@ func Fir() {
 	fmt.Println("retVal:", retVal)
 
 	if retVal == 12 {
-		fmt.Println("✅ Fire tests passed!")
+		fmt.Println("✅ Fir tests passed!")
 	} else {
-		fmt.Println("❌ Fire tests failed!")
+		fmt.Println("❌ Fir tests failed!")
 	}
 }
 
 func main() {
-	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	f, err := os.Create("fir.json.log")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	handler := slog.NewJSONHandler(f, &slog.HandlerOptions{
 		Level: core.LevelTrace,
 	})
 

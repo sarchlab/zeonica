@@ -2,74 +2,75 @@ array_config:
   rows: 2
   columns: 2
   cores:
-    - row: 0
-      column: 0
-      core_id: "core_0_0"
-      entries:
-        - entry_id: "entry0"
-          type: "loop"
-          instructions:
-            - operations:
-                - opcode: "ADD"
-                  src_operands:
-                    - operand: "West"
-                      color: "R"
-                    - operand: "1"
-                      color: "R"
-                  dst_operands:
-                    - operand: "East"
-                      color: "R"
-
-    - row: 0
-      column: 1
-      core_id: "core_0_1"
-      entries:
-        - entry_id: "entry0"
-          type: "loop"
-          instructions:
-            - operations:
-                - opcode: "ADD"
-                  src_operands:
-                    - operand: "West"
-                      color: "R"
-                    - operand: "1"
-                      color: "R"
-                  dst_operands:
-                    - operand: "East"
-                      color: "R"
-
-    - row: 1
-      column: 0
-      core_id: "core_1_0"
-      entries:
-        - entry_id: "entry0"
-          type: "loop"
-          instructions:
-            - operations:
-                - opcode: "ADD"
-                  src_operands:
-                    - operand: "West"
-                      color: "R"
-                    - operand: "1"
-                      color: "R"
-                  dst_operands:
-                    - operand: "East"
-                      color: "R"
-
-    - row: 1
-      column: 1
-      core_id: "core_1_1"
-      entries:
-        - entry_id: "entry0"
-          type: "loop"
-          instructions:
-            - operations:
-                - opcode: "ADD"
-                  src_operands:
-                    - operand: "West"
-                      color: "R"
-                    - operand: "1"
-                      color: "R"
-                  dst_operands:
-                    - operand: "East"
-                      color: "R" 
+  - row: 0
+    column: 0
+    core_id: core_0_0
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: ADD
+          src_operands:
+          - operand: West
+            color: R
+          - operand: '1'
+            color: R
+          dst_operands:
+          - operand: East
+            color: R
+          id: 0
+  - row: 0
+    column: 1
+    core_id: core_0_1
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: ADD
+          src_operands:
+          - operand: West
+            color: R
+          - operand: '1'
+            color: R
+          dst_operands:
+          - operand: East
+            color: R
+          id: 1
+  - row: 1
+    column: 0
+    core_id: core_1_0
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: ADD
+          src_operands:
+          - operand: West
+            color: R
+          - operand: '1'
+            color: R
+          dst_operands:
+          - operand: East
+            color: R
+          id: 2
+  - row: 1
+    column: 1
+    core_id: core_1_1
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: ADD
+          src_operands:
+          - operand: West
+            color: R
+          - operand: '1'
+            color: R
+          dst_operands:
+          - operand: East
+            color: R
+          id: 3

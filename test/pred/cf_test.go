@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 	"testing"
 	"unsafe"
 
@@ -12,7 +14,22 @@ import (
 	"github.com/sarchlab/zeonica/core"
 )
 
-func TestPhiOperation(t *testing.T) {
+func TestPhiGpredOperation(t *testing.T) {
+
+	// log to file
+
+	f, err := os.Create("phi_gpred.json.log")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	handler := slog.NewJSONHandler(f, &slog.HandlerOptions{
+		Level: core.LevelTrace,
+	})
+
+	slog.SetDefault(slog.New(handler))
+
 	// Set test parameters
 	width := 2
 	height := 2
@@ -89,7 +106,7 @@ func TestPhiOperation(t *testing.T) {
 		dstI[i] = *(*int32)(unsafe.Pointer(&dst[i]))
 	}
 
-	t.Log("=== Gpred Test Results ===")
+	t.Log("=== PhiGpred Test Results ===")
 	allPassed := true
 	for i := 0; i < 5; i++ {
 		actual := dstI[i]
@@ -101,8 +118,8 @@ func TestPhiOperation(t *testing.T) {
 	}
 
 	if allPassed {
-		t.Log("✅ Gpred tests passed!")
+		t.Log("✅ PhiGpred tests passed!")
 	} else {
-		t.Fatal("❌ Gpred tests failed!")
+		t.Fatal("❌ PhiGpred tests failed!")
 	}
 }

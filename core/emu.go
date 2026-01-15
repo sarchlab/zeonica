@@ -104,6 +104,7 @@ type coreState struct {
 
 	routingRules []*routingRule
 	triggers     []*Trigger
+	CurrentTime  float64 // current simulation time for logging
 }
 
 type instEmulator struct {
@@ -164,7 +165,8 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 	} else if state.Mode == SyncOp {
 		if progress_sync {
 			if state.NextPCInBlock == -1 {
-				print("PC+4 X:", state.TileX, " Y:", state.TileY, "\n")
+				print("PC+4 for PC=", state.PCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
+				print("Instruction at PC=", state.PCInBlock, " is ", state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[0].OpCode, "\n")
 				state.PCInBlock++
 			} else {
 				print("PC+Jump to ", state.NextPCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
@@ -174,7 +176,7 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 		if state.SelectedBlock != nil && state.PCInBlock >= int32(len(state.SelectedBlock.InstructionGroups)) {
 			state.PCInBlock = -1
 			state.SelectedBlock = nil
-			print("PCInBlock = -1\n")
+			print("PCInBlock = -1 at (", state.TileX, ",", state.TileY, ")\n")
 			slog.Info("Flow", "PCInBlock", "-1", "X", state.TileX, "Y", state.TileY)
 		}
 		state.NextPCInBlock = -1
@@ -200,7 +202,7 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, state *coreState, time float64) bool {
 	run := true
 	for _, operation := range cinst.Operations {
-		if (!i.CareFlags) || i.CheckFlags(operation, state) {
+		if (!i.CareFlags) || operation.InvalidIterations > 0 || i.CheckFlags(operation, state) {
 			continue
 		} else {
 			run = false
@@ -208,8 +210,16 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 		}
 	}
 	if run {
-		for _, operation := range cinst.Operations {
-			i.RunOperation(operation, state, time)
+		for index := range cinst.Operations {
+			// Get reference to the original operation in state.SelectedBlock
+			operation := &state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[index]
+			// Decrement InvalidIterations before running if needed
+			if operation.InvalidIterations > 0 {
+				print("Invalid iteration for ", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")\n")
+				operation.InvalidIterations--
+				continue
+			}
+			i.RunOperation(*operation, state, time)
 			//print("RunOperation", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")", time, ":", "YES", "\n")
 		}
 	}
@@ -217,15 +227,23 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 }
 
 func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, state *coreState, time float64) {
-	for index, operation := range cinst.Operations {
+	for index := range cinst.Operations {
 		// check all the operations in the instruction group and if any is ready, then run
 		if !state.CurrReservationState.ReservationMap[index] {
 			continue
 		}
-		if (!i.CareFlags) || i.CheckFlags(operation, state) { // can also only choose one (another pattern)
+		// Get reference to the original operation in state.SelectedBlock
+		operation := &state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[index]
+		if (!i.CareFlags) || operation.InvalidIterations > 0 || i.CheckFlags(*operation, state) { // can also only choose one (another pattern)
 			state.CurrReservationState.ReservationMap[index] = false
 			state.CurrReservationState.OpToExec--
-			i.RunOperation(operation, state, time)
+			// Decrement InvalidIterations before running if needed
+			if operation.InvalidIterations > 0 {
+				print("Invalid iteration for ", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")\n")
+				operation.InvalidIterations--
+				continue
+			}
+			i.RunOperation(*operation, state, time)
 			//print("RunOperation", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")", time, ":", "YES", "\n")
 		} else {
 			//print("CheckFlags (", state.TileX, ",", state.TileY, ")", time, ":", "NO", "\n")
@@ -262,7 +280,18 @@ func (i instEmulator) normalizeDirection(s string) string {
 func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 	//PrintState(state)
 	flag := true
-	for _, src := range inst.SrcOperands.Operands {
+	for index, src := range inst.SrcOperands.Operands {
+		if index == 1 {
+			if inst.OpCode == "PHI_CONST" || inst.OpCode == "PHI_START" {
+				if state.States["Phiconst"] == false { // first execution
+					if len(inst.SrcOperands.Operands) > 1 {
+						continue
+					} else {
+						panic("PHI_CONST or PHI_START must have two sources")
+					}
+				}
+			}
+		}
 		srcImpl := i.normalizeDirection(src.Impl)
 		if state.Directions[srcImpl] {
 			if !state.RecvBufHeadReady[i.getColorIndex(src.Color)][i.getDirecIndex(srcImpl)] {
@@ -287,6 +316,10 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 }
 
 func (i instEmulator) RunOperation(inst Operation, state *coreState, time float64) {
+	state.CurrentTime = time
+
+	// Note: InvalidIterations is now handled in RunInstructionGroupWithSyncOps
+	// before calling RunOperation, so we don't need to check it here
 
 	instName := inst.OpCode
 	/*
@@ -300,24 +333,27 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 	// 	i.runAlwaysSendRec(tokens, state)
 	// }
 
-	Trace("Inst", "Time", time, "OpCode", inst.OpCode, "X", state.TileX, "Y", state.TileY)
-
 	instFuncs := map[string]func(Operation, *coreState){
-		"ADD": i.runAdd, // ADD, ADDI, INC, SUB, DEC
-		"SUB": i.runSub,
-		"LLS": i.runLLS,
-		"LRS": i.runLRS,
-		"MUL": i.runMul, // MULI
-		"DIV": i.runDiv,
-		"OR":  i.runOR,
-		"XOR": i.runXOR, // XOR XORI
-		"AND": i.runAND,
-		"MOV": i.runMov,
-		"JMP": i.runJmp,
-		"BNE": i.runBne,
-		"BEQ": i.runBeq, // BEQI
-		"BLT": i.runBlt,
-		"RET": i.runRet,
+		"ADD":          i.runAdd, // ADD, ADDI, INC, SUB, DEC
+		"SUB":          i.runSub,
+		"LLS":          i.runLLS,
+		"LRS":          i.runLRS,
+		"MUL":          i.runMul, // MULI
+		"DIV":          i.runDiv,
+		"OR":           i.runOR,
+		"XOR":          i.runXOR, // XOR XORI
+		"AND":          i.runAND,
+		"MOV":          i.runMov,
+		"JMP":          i.runJmp,
+		"BNE":          i.runBne,
+		"BEQ":          i.runBeq, // BEQI
+		"BLT":          i.runBlt,
+		"RETURN_VALUE": i.runRet,
+		"RETURN_VOID":  i.runRet,
+		"RET":          i.runRet,      // backward compatibility
+		"PHI_CONST":    i.runPhiConst, // backward compatibility
+		"SEXT":         i.runMov,      // identity operation by now
+		"ZEXT":         i.runMov,      // identity operation by now
 
 		"FADD": i.runFAdd, // FADDI
 		"FSUB": i.runFSub,
@@ -325,9 +361,16 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"NOP":  i.runNOP,
 
 		"PHI":             i.runPhi,
-		"PHI_CONST":       i.runPhiConst,
+		"PHI_START":       i.runPhiConst,
 		"GRANT_PREDICATE": i.runGrantPred,
 		"GRANT_ONCE":      i.runGrantOnce,
+
+		// comparisons
+		"ICMP_EQ": i.runCmpExport,
+
+		// do not distinguish between data_mov and control mov
+		"DATA_MOV": i.runMov,
+		"CTRL_MOV": i.runMov,
 
 		"GEP": i.runMov,
 
@@ -335,8 +378,10 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 
 		"LT_EX": i.runLTExport,
 
-		"LDD": i.runLoadDirect,
-		"STD": i.runStoreDirect,
+		"LOAD":  i.runLoadDirect,
+		"STORE": i.runStoreDirect,
+		"LDD":   i.runLoadDirect,  // backward compatibility
+		"STD":   i.runStoreDirect, // backward compatibility
 
 		"LD":  i.runLoadDRAM,
 		"LDW": i.runLoadWaitDRAM,
@@ -401,7 +446,7 @@ func (i instEmulator) readOperand(operand Operand, state *coreState) (value cgra
 				if immediate, err := strconv.ParseUint(operand.Impl, 0, 32); err == nil {
 					value = cgra.NewScalar(uint32(immediate))
 				} else {
-					panic(fmt.Sprintf("Invalid operand %v in readOperand; expected register", operand))
+					panic(fmt.Sprintf("Invalid operand %v in readOperand; at PC %d, (%d, %d)", operand, state.PCInBlock, state.TileX, state.TileY))
 				}
 			}
 		}
@@ -519,15 +564,19 @@ func (i instEmulator) runMov(inst Operation, state *coreState) {
 	src := inst.SrcOperands.Operands[0]
 	oprStruct := i.readOperand(src, state)
 	opr := oprStruct.First()
+	finalPred := oprStruct.Pred
 
 	// Write the value into the destination register
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(opr, oprStruct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(opr, finalPred), state)
 	}
+
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 }
 
 func (i instEmulator) runNOP(inst Operation, state *coreState) {
 	// do nothing
+	Trace("Inst", "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", false)
 }
 
 func (i instEmulator) runNot(inst Operation, state *coreState) {
@@ -542,9 +591,11 @@ func (i instEmulator) runNot(inst Operation, state *coreState) {
 	} else {
 		result = 0
 	}
+	finalPred := srcPred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(result, srcPred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(result, finalPred), state)
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 }
 
 func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
@@ -564,9 +615,11 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 		"X", state.TileX,
 		"Y", state.TileY,
 	)
+	finalPred := addrStruct.Pred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(value, addrStruct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(value, finalPred), state)
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -585,9 +638,11 @@ func (i instEmulator) runLoadDRAM(inst Operation, state *coreState) {
 		"X", state.TileX,
 		"Y", state.TileY,
 	)
+	finalPred := addrStruct.Pred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(addr, addrStruct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(addr, finalPred), state)
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	state.AddrBuf = addr
 	state.IsToWriteMemory = false // not for write memory
 }
@@ -599,9 +654,11 @@ func (i instEmulator) runLoadWaitDRAM(inst Operation, state *coreState) {
 	}
 	valueStruct := i.readOperand(src, state)
 	value := valueStruct.First()
+	finalPred := valueStruct.Pred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(value, valueStruct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(value, finalPred), state)
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 }
 
 func (i instEmulator) runStoreDirect(inst Operation, state *coreState) {
@@ -622,6 +679,8 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) {
 		"Y", state.TileY,
 	)
 	state.Memory[addr] = value
+	finalPred := addrStruct.Pred && valueStruct.Pred
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -644,9 +703,11 @@ func (i instEmulator) runStoreDRAM(inst Operation, state *coreState) {
 		"X", state.TileX,
 		"Y", state.TileY,
 	)
+	finalPred := addrStruct.Pred && valueStruct.Pred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(value, addrStruct.Pred && valueStruct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(value, finalPred), state)
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	state.AddrBuf = addr
 	state.IsToWriteMemory = true // for write memory
 }
@@ -656,13 +717,15 @@ func (i instEmulator) runStoreWaitDRAM(inst Operation, state *coreState) {
 	if src.Impl != "Router" {
 		panic("the source of a STORE_WAIT_DRAM instruction must be Router")
 	}
-	i.readOperand(src, state) // do nothing, only get the write done
+	srcStruct := i.readOperand(src, state) // do nothing, only get the write done
+	Trace("Inst", "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", srcStruct.Pred)
 }
 
 func (i instEmulator) runTrigger(inst Operation, state *coreState) {
 	src := inst.SrcOperands.Operands[0]
-	i.readOperand(src, state)
+	srcStruct := i.readOperand(src, state)
 	// just consume a operand and do nothing
+	Trace("Inst", "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", srcStruct.Pred)
 	// elect no next PC
 }
 
@@ -743,11 +806,13 @@ func (i instEmulator) runAdd(inst Operation, state *coreState) {
 	src2Signed := int32(src2Val)
 	dstValSigned := src1Signed + src2Signed
 	dstVal := uint32(dstValSigned)
+	finalPred := src1Struct.Pred && src2Struct.Pred
 
 	//fmt.Printf("IADD: Adding %d (src1) + %d (src2) = %d\n", src1Signed, src2Signed, dstValSigned)
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, src1Struct.Pred && src2Struct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, finalPred), state)
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -765,10 +830,12 @@ func (i instEmulator) runSub(inst Operation, state *coreState) {
 	dstVal := uint32(dstValSigned)
 
 	fmt.Printf("ISUB: Subtracting %d (src1) - %d (src2) = %d\n", src1Signed, src2Signed, dstValSigned)
+	finalPred := src1Struct.Pred && src2Struct.Pred
 
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, src1Struct.Pred && src2Struct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, finalPred), state)
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -786,10 +853,12 @@ func (i instEmulator) runMul(inst Operation, state *coreState) {
 	src2Signed := int32(src2Val)
 	dstValSigned := src1Signed * src2Signed
 	dstVal := uint32(dstValSigned)
+	finalPred := src1Struct.Pred && src2Struct.Pred
 
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, src1Struct.Pred && src2Struct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, finalPred), state)
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -813,11 +882,12 @@ func (i instEmulator) runDiv(inst Operation, state *coreState) {
 
 	dstValSigned := src1Signed / src2Signed
 	dstVal := uint32(dstValSigned)
+	finalPred := src1Struct.Pred && src2Struct.Pred
 
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, src1Struct.Pred && src2Struct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, finalPred), state)
 	}
-
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// fmt.Printf("DIV Instruction, Data are %d and %d, Res is %d\n", src1Signed, src2Signed, dstValSigned)
 	// elect no next PC
 }
@@ -832,9 +902,11 @@ func (i instEmulator) runLLS(inst Operation, state *coreState) {
 	shiftStrVal := shiftStrStruct.First()
 
 	result := srcVal << shiftStrVal
+	finalPred := srcStruct.Pred && shiftStrStruct.Pred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(result, srcStruct.Pred && shiftStrStruct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(result, finalPred), state)
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	//fmt.Printf("LLS: %s = %s << %d => Result: %d\n", dst, src, shift, result)
 	// elect no next PC
 }
@@ -849,10 +921,11 @@ func (i instEmulator) runLRS(inst Operation, state *coreState) {
 	shiftStrVal := shiftStrStruct.First()
 
 	result := srcVal >> shiftStrVal
+	finalPred := srcStruct.Pred && shiftStrStruct.Pred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(result, srcStruct.Pred && shiftStrStruct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(result, finalPred), state)
 	}
-
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	//fmt.Printf("LRS: %s = %s >> %d => Result: %d\n", dst, src, shift, result)
 	// elect no next PC
 }
@@ -866,10 +939,11 @@ func (i instEmulator) runOR(inst Operation, state *coreState) {
 	src2Struct := i.readOperand(src2, state)
 	srcVal2 := src2Struct.First()
 	result := srcVal1 | srcVal2
+	finalPred := src1Struct.Pred && src2Struct.Pred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(result, src1Struct.Pred && src2Struct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(result, finalPred), state)
 	}
-
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	//fmt.Printf("OR: %s = %s | %s => Result: %d\n", dst, src1, src2, result)
 	// elect no next PC
 }
@@ -883,10 +957,11 @@ func (i instEmulator) runXOR(inst Operation, state *coreState) {
 	src2Struct := i.readOperand(src2, state)
 	srcVal2 := src2Struct.First()
 	result := srcVal1 ^ srcVal2
+	finalPred := src1Struct.Pred && src2Struct.Pred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(result, src1Struct.Pred && src2Struct.Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(result, finalPred), state)
 	}
-
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	//fmt.Printf("XOR: %s = %s ^ %s => Result: %d\n", dst, src1, src2, result)
 	// elect no next PC
 }
@@ -900,10 +975,11 @@ func (i instEmulator) runAND(inst Operation, state *coreState) {
 	src2Struct := i.readOperand(src2, state)
 	srcVal2 := src2Struct.First()
 	result := srcVal1 & srcVal2
+	finalPred := src1Struct.Pred && src2Struct.Pred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalar(result), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(result, finalPred), state)
 	}
-
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	//fmt.Printf("AND: %s = %s & %s => Result: %d\n", dst, src1, src2, result)
 	// elect no next PC
 }
@@ -917,6 +993,7 @@ func (i instEmulator) runJmp(inst Operation, state *coreState) {
 	srcStruct := i.readOperand(src, state)
 	srcVal := srcStruct.First()
 	i.Jump(srcVal, state)
+	Trace("Inst", "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", srcStruct.Pred)
 }
 
 func (i instEmulator) runBeq(inst Operation, state *coreState) {
@@ -928,12 +1005,12 @@ func (i instEmulator) runBeq(inst Operation, state *coreState) {
 	srcVal := srcStruct.First()
 	immeStruct := i.readOperand(imme, state)
 	immeVal := immeStruct.First()
+	finalPred := srcStruct.Pred && immeStruct.Pred
 
 	if srcVal == immeVal {
 		i.Jump(srcVal, state)
-	} else {
-		// elect no next PC
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 }
 
 func (i instEmulator) runBne(inst Operation, state *coreState) {
@@ -945,12 +1022,12 @@ func (i instEmulator) runBne(inst Operation, state *coreState) {
 	srcVal := srcStruct.First()
 	immeStruct := i.readOperand(imme, state)
 	immeVal := immeStruct.First()
+	finalPred := srcStruct.Pred && immeStruct.Pred
 
 	if srcVal != immeVal {
 		i.Jump(srcVal, state)
-	} else {
-		// elect no next PC
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 }
 
 func (i instEmulator) runBlt(inst Operation, state *coreState) {
@@ -962,20 +1039,22 @@ func (i instEmulator) runBlt(inst Operation, state *coreState) {
 	srcVal := srcStruct.First()
 	immeStruct := i.readOperand(imme, state)
 	immeVal := immeStruct.First()
+	finalPred := srcStruct.Pred && immeStruct.Pred
 
 	if srcVal < immeVal {
 		i.Jump(srcVal, state)
-	} else {
-		// elect no next PC
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 }
 
 func (i instEmulator) runRet(inst Operation, state *coreState) {
+	var finalPred bool
 	if len(inst.SrcOperands.Operands) > 0 {
 		src := inst.SrcOperands.Operands[0]
 		srcStruct := i.readOperand(src, state)
 		srcVal := srcStruct.First()
 		srcPred := srcStruct.Pred
+		finalPred = srcPred
 		if srcPred {
 			slog.Info("Control: Cond",
 				"X", state.TileX,
@@ -986,6 +1065,7 @@ func (i instEmulator) runRet(inst Operation, state *coreState) {
 			*state.exit = true
 		}
 	} else {
+		finalPred = false
 		slog.Info("Control: Un-cond",
 			"X", state.TileX,
 			"Y", state.TileY,
@@ -993,6 +1073,7 @@ func (i instEmulator) runRet(inst Operation, state *coreState) {
 		*state.exit = true
 		*state.retVal = 0
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 }
 
 func (i instEmulator) runFAdd(inst Operation, state *coreState) {
@@ -1012,10 +1093,11 @@ func (i instEmulator) runFAdd(inst Operation, state *coreState) {
 	resultFloat := src1Float + src2Float
 
 	resultUint := float2Uint(resultFloat)
+	finalPred := src1Pred && src2Pred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(resultUint, src1Pred && src2Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(resultUint, finalPred), state)
 	}
-
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -1036,10 +1118,11 @@ func (i instEmulator) runFSub(inst Operation, state *coreState) {
 	resultFloat := src1Float - src2Float
 
 	resultUint := float2Uint(resultFloat)
+	finalPred := src1Pred && src2Pred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(resultUint, src1Pred && src2Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(resultUint, finalPred), state)
 	}
-
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -1060,10 +1143,11 @@ func (i instEmulator) runFMul(inst Operation, state *coreState) {
 	resultFloat := src1Float * src2Float
 
 	resultUint := float2Uint(resultFloat)
+	finalPred := src1Pred && src2Pred
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(resultUint, src1Pred && src2Pred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(resultUint, finalPred), state)
 	}
-
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -1074,15 +1158,19 @@ func (i instEmulator) runCmpExport(inst Operation, state *coreState) {
 	src1Val := i.readOperand(src1, state)
 	src2Val := i.readOperand(src2, state)
 
+	var finalPred bool
 	if src1Val.First() == src2Val.First() && src1Val.Pred == src2Val.Pred {
+		finalPred = src1Val.Pred
 		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, cgra.NewScalarWithPred(1, src1Val.Pred), state)
+			i.writeOperand(dst, cgra.NewScalarWithPred(1, finalPred), state)
 		}
 	} else {
+		finalPred = src1Val.Pred
 		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, cgra.NewScalarWithPred(0, src1Val.Pred), state)
+			i.writeOperand(dst, cgra.NewScalarWithPred(0, finalPred), state)
 		}
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -1098,16 +1186,17 @@ func (i instEmulator) runLTExport(inst Operation, state *coreState) {
 	src2Pred := src2Struct.Pred
 	resultPred := src1Pred && src2Pred
 
+	finalPred := resultPred
 	if src1Val < src2Val {
 		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, cgra.NewScalarWithPred(1, resultPred), state)
+			i.writeOperand(dst, cgra.NewScalarWithPred(1, finalPred), state)
 		}
 	} else {
 		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, cgra.NewScalarWithPred(0, resultPred), state)
+			i.writeOperand(dst, cgra.NewScalarWithPred(0, finalPred), state)
 		}
 	}
-
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -1118,18 +1207,21 @@ func (i instEmulator) runPhi(inst Operation, state *coreState) {
 	src1Struct := i.readOperand(src1, state)
 	src2Struct := i.readOperand(src2, state)
 
+	var finalPred bool
 	if src1Struct.Pred && !src2Struct.Pred {
+		finalPred = src1Struct.Pred
 		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, cgra.NewScalarWithPred(src1Struct.First(), src1Struct.Pred), state)
+			i.writeOperand(dst, cgra.NewScalarWithPred(src1Struct.First(), finalPred), state)
 		}
 	} else if !src1Struct.Pred && src2Struct.Pred {
+		finalPred = src2Struct.Pred
 		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, cgra.NewScalarWithPred(src2Struct.First(), src2Struct.Pred), state)
+			i.writeOperand(dst, cgra.NewScalarWithPred(src2Struct.First(), finalPred), state)
 		}
 	} else {
 		panic("Phi operation: both sources have the same predicate")
 	}
-
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -1145,18 +1237,22 @@ func (i instEmulator) runPhiConst(inst Operation, state *coreState) {
 	src2Pred := src2Struct.Pred
 
 	var result uint32
+	var finalPred bool
 	if state.States["Phiconst"] == false {
 		result = src1Val
+		finalPred = src1Pred
 		state.States["Phiconst"] = true
 		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, cgra.NewScalarWithPred(result, src1Pred), state)
+			i.writeOperand(dst, cgra.NewScalarWithPred(result, finalPred), state)
 		}
 	} else {
 		result = src2Val
+		finalPred = src2Pred
 		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, cgra.NewScalarWithPred(result, src2Pred), state)
+			i.writeOperand(dst, cgra.NewScalarWithPred(result, finalPred), state)
 		}
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -1178,11 +1274,12 @@ func (i instEmulator) runGrantPred(inst Operation, state *coreState) {
 	}
 
 	//fmt.Printf("GRANTPRED: srcVal = %d, predVal = %t at (%d, %d)\n", srcVal, predVal, state.TileX, state.TileY)
+	finalPred := resultPred
 
 	for _, dst := range inst.DstOperands.Operands {
-		i.writeOperand(dst, cgra.NewScalarWithPred(srcVal, resultPred), state)
+		i.writeOperand(dst, cgra.NewScalarWithPred(srcVal, finalPred), state)
 	}
-
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -1190,14 +1287,18 @@ func (i instEmulator) runGrantOnce(inst Operation, state *coreState) {
 	src := inst.SrcOperands.Operands[0]
 
 	srcStruct := i.readOperand(src, state)
+	var finalPred bool
 	if state.States["GrantOnce"] == false {
 		state.States["GrantOnce"] = true
+		finalPred = true
 		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, cgra.NewScalarWithPred(srcStruct.First(), true), state)
+			i.writeOperand(dst, cgra.NewScalarWithPred(srcStruct.First(), finalPred), state)
 		}
 	} else {
+		finalPred = false
 		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, cgra.NewScalarWithPred(srcStruct.First(), false), state)
+			i.writeOperand(dst, cgra.NewScalarWithPred(srcStruct.First(), finalPred), state)
 		}
 	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 }
