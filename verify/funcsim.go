@@ -117,6 +117,9 @@ func (fs *FunctionalSimulator) executeOp(x, y int, op *core.Operation) {
 	switch strings.ToUpper(op.OpCode) {
 	case "MOV":
 		fs.runMov(x, y, op)
+	case "DATA_MOV":
+		// Newer kernels use DATA_MOV as an alias of MOV.
+		fs.runMov(x, y, op)
 	case "ADD":
 		fs.runAdd(x, y, op)
 	case "SUB":
@@ -136,6 +139,9 @@ func (fs *FunctionalSimulator) executeOp(x, y int, op *core.Operation) {
 	case "PHI":
 		fs.runPhi(x, y, op)
 	case "GPRED":
+		fs.runGpred(x, y, op)
+	case "GRANT_PREDICATE":
+		// Alias used by newer kernels (e.g., FIR): same semantics as GPRED.
 		fs.runGpred(x, y, op)
 	case "LOAD":
 		fs.runLoad(x, y, op)
@@ -173,6 +179,10 @@ func (fs *FunctionalSimulator) executeOp(x, y int, op *core.Operation) {
 		fs.runGrantOnce(x, y, op)
 	case "CONSTANT":
 		fs.runConstant(x, y, op)
+	case "RET", "RETURN":
+		// Control-flow termination in cycle-accurate sim; functional sim treats it as a no-op.
+		// (Most kernels are acyclic and verification focuses on dataflow semantics.)
+		return
 	case "NOP":
 		// No-op: do nothing
 	default:

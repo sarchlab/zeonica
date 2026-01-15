@@ -23,7 +23,7 @@ func TestHistogramLint(t *testing.T) {
 	}
 
 	// Load histogram program from YAML
-	programs := core.LoadProgramFileFromYAML("../test/Zeonica_Testbench/kernel/histogram/histogram.yaml")
+	programs := core.LoadProgramFileFromYAML("../test/Zeonica_Testbench/kernel/histogram/histogram4x4.yaml")
 
 	if len(programs) == 0 {
 		t.Skip("Histogram YAML not found; skipping integration test")
@@ -66,7 +66,7 @@ func TestHistogramFunctionalSim(t *testing.T) {
 	}
 
 	// Load histogram program
-	programs := core.LoadProgramFileFromYAML("../test/Zeonica_Testbench/kernel/histogram/histogram.yaml")
+	programs := core.LoadProgramFileFromYAML("../test/Zeonica_Testbench/kernel/histogram/histogram4x4.yaml")
 
 	if len(programs) == 0 {
 		t.Skip("Histogram YAML not found; skipping integration test")
@@ -121,7 +121,7 @@ func TestHistogramBothModesComparison(t *testing.T) {
 		CtrlMemItems: 20,
 	}
 
-	programs := core.LoadProgramFileFromYAML("../test/Zeonica_Testbench/kernel/histogram/histogram.yaml")
+	programs := core.LoadProgramFileFromYAML("../test/Zeonica_Testbench/kernel/histogram/histogram4x4.yaml")
 
 	if len(programs) == 0 {
 		t.Skip("Histogram YAML not found; skipping integration test")

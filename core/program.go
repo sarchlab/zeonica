@@ -27,6 +27,7 @@ type YAMLEntry struct {
 
 // Instruction represents a single instruction in the YAML
 type YAMLInstructionGroup struct {
+	Timestep   *int           `yaml:"timestep"`
 	Operations []YAMLOperation `yaml:"operations"`
 }
 
@@ -44,9 +45,10 @@ type YAMLOperand struct {
 
 // ArrayConfig represents the top-level YAML structure
 type ArrayConfig struct {
-	Rows  int               `yaml:"rows"`
-	Cols  int               `yaml:"columns"`
-	Cores []YAMLCoreProgram `yaml:"cores"`
+	Rows       int               `yaml:"rows"`
+	Cols       int               `yaml:"columns"`
+	CompiledII int               `yaml:"compiled_ii"`
+	Cores      []YAMLCoreProgram `yaml:"cores"`
 }
 
 // YAMLRoot represents the root structure of the YAML file
@@ -56,6 +58,9 @@ type YAMLRoot struct {
 
 type Program struct {
 	EntryBlocks []EntryBlock
+	// CompiledII is the initiation interval for modulo-scheduled kernels.
+	// 0 means not modulo scheduled / unknown.
+	CompiledII int
 }
 
 type EntryBlock struct {
@@ -136,15 +141,63 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 				Label: make(map[string]int),
 			}
 
-			// Convert instruction groups
+			// Convert instruction groups.
+			//
+			// Newer kernels (e.g., Zeonica_Testbench FIR) provide explicit `timestep` for each
+			// instruction group. The core executes InstructionGroups by PCInBlock index, so we
+			// materialize a dense slice where index == timestep; missing timesteps become empty
+			// groups (NOPs).
 			var instructionGroups []InstructionGroup
-			for _, instGroup := range entry.InstructionGroups {
-				instructionGroup := InstructionGroup{
-					RefCount: make(map[string]int),
+
+			hasExplicitTimestep := false
+			maxT := 0
+			for _, ig := range entry.InstructionGroups {
+				if ig.Timestep != nil {
+					hasExplicitTimestep = true
+					if *ig.Timestep > maxT {
+						maxT = *ig.Timestep
+					}
+				}
+			}
+
+			if hasExplicitTimestep {
+				instructionGroups = make([]InstructionGroup, maxT+1)
+				for i := range instructionGroups {
+					instructionGroups[i].RefCount = make(map[string]int)
+				}
+			}
+
+			// Helper to ensure instructionGroups has length >= t+1
+			ensureLen := func(t int) {
+				if t < 0 {
+					return
+				}
+				if t < len(instructionGroups) {
+					return
+				}
+				old := instructionGroups
+				instructionGroups = make([]InstructionGroup, t+1)
+				copy(instructionGroups, old)
+				for i := len(old); i < len(instructionGroups); i++ {
+					instructionGroups[i].RefCount = make(map[string]int)
+				}
+			}
+
+			for idx, instGroup := range entry.InstructionGroups {
+				t := idx
+				if instGroup.Timestep != nil {
+					t = *instGroup.Timestep
+				} else if hasExplicitTimestep {
+					// If some groups have explicit timesteps and some don't, fall back to sequential
+					// placement for the missing ones.
+					t = idx
+				}
+				ensureLen(t)
+				if instructionGroups[t].RefCount == nil {
+					instructionGroups[t].RefCount = make(map[string]int)
 				}
 
-				// Convert operations
-				var operations []Operation
+				// Convert operations and append into the target timestep group.
 				for _, yamlOp := range instGroup.Operations {
 					// Convert source operands
 					var srcOperands []Operand
@@ -154,7 +207,7 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 							Color: src.Color,
 							Impl:  src.Operand,
 						})
-						instructionGroup.RefCount[src.Operand+src.Color]++
+						instructionGroups[t].RefCount[src.Operand+src.Color]++
 					}
 
 					// Convert destination operands
@@ -174,11 +227,8 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 						DstOperands: OperandList{Operands: dstOperands},
 					}
 
-					operations = append(operations, operation)
+					instructionGroups[t].Operations = append(instructionGroups[t].Operations, operation)
 				}
-
-				instructionGroup.Operations = operations
-				instructionGroups = append(instructionGroups, instructionGroup)
 			}
 
 			entryBlock.InstructionGroups = instructionGroups
@@ -187,6 +237,7 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 
 		program := Program{
 			EntryBlocks: entryBlocks,
+			CompiledII:  config.CompiledII,
 		}
 
 		programMap[coordKey] = program
