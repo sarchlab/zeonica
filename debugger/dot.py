@@ -1,7 +1,7 @@
 import yaml
 import graphviz
 from typing import Dict, List, Optional
-
+import argparse
 
 def draw_dfg_with_counts(id_to_count: Dict[int, int], yaml_path: str = "debugger/fir-dfg-new.yaml", output_path: str = "dfg_output", highlight: Optional[List[int]] = None):
     """
@@ -19,6 +19,9 @@ def draw_dfg_with_counts(id_to_count: Dict[int, int], yaml_path: str = "debugger
     with open(yaml_path, 'r') as f:
         data = yaml.safe_load(f)
     
+    if data is None:
+        print(f"Error: Failed to load YAML file from {yaml_path}")
+        return
     # 创建有向图
     dot = graphviz.Digraph(comment='DFG Graph')
     dot.attr(rankdir='LR')  # 从左到右布局
@@ -28,47 +31,42 @@ def draw_dfg_with_counts(id_to_count: Dict[int, int], yaml_path: str = "debugger
     nodes = data.get('nodes', [])
     edges = data.get('edges', [])
     
+    print(id_to_count)
     # 计算 count 的范围，用于颜色映射
     counts = [id_to_count.get(node['id'], 0) for node in nodes]
     max_count = max(counts) if counts else 1
     min_count = min(counts) if counts else 0
     
     def get_color(count: int) -> str:
-        """根据 count 值返回颜色"""
-        if count == 0 or count not in id_to_count:
+        """根据 count 值返回颜色 (Blue <-> Orange/Yellow cycle per 50)"""
+        if count == 0:
             return '#E8E8E8'  # 浅灰色（默认）
         
-        # 归一化 count 到 0-1 范围
-        if max_count == min_count:
-            normalized = 0.5
-        else:
-            normalized = (count - min_count) / (max_count - min_count)
+        # 1-10: Blue -> Orange
+        # 11-20: Orange -> Blue
+        cycle_len = 20
+        cycle_pos = count % cycle_len
         
-        # 使用颜色渐变：浅蓝 -> 蓝色 -> 深蓝 -> 红色
-        if normalized < 0.25:
-            # 浅蓝色系
-            intensity = normalized / 0.25
-            r = int(173 + (255 - 173) * intensity)
-            g = int(216 + (255 - 216) * intensity)
-            b = 255
-        elif normalized < 0.5:
-            # 蓝色系
-            intensity = (normalized - 0.25) / 0.25
-            r = int(100 + (173 - 100) * (1 - intensity))
-            g = int(149 + (216 - 149) * (1 - intensity))
-            b = int(237 + (255 - 237) * (1 - intensity))
-        elif normalized < 0.75:
-            # 深蓝色系
-            intensity = (normalized - 0.5) / 0.25
-            r = int(50 + (100 - 50) * (1 - intensity))
-            g = int(50 + (149 - 50) * (1 - intensity))
-            b = int(200 + (237 - 200) * (1 - intensity))
+        # Define Colors (RGB)
+        # Blue: #6495ED (100, 149, 237)
+        # Orange/Yellow: #FFA500 (255, 165, 0)
+        c1 = (100, 149, 237)
+        c2 = (255, 165, 0)
+        
+        if cycle_pos <= 10:
+            # Blue -> Orange
+            progress = cycle_pos / 10.0
+            start_c = c1
+            end_c = c2
         else:
-            # 红色系（高 count）
-            intensity = (normalized - 0.75) / 0.25
-            r = 255
-            g = int(200 + (50 - 200) * intensity)
-            b = int(200 + (50 - 200) * intensity)
+            # Orange -> Blue
+            progress = (cycle_pos - 10) / 10.0
+            start_c = c2
+            end_c = c1
+            
+        r = int(start_c[0] + (end_c[0] - start_c[0]) * progress)
+        g = int(start_c[1] + (end_c[1] - start_c[1]) * progress)
+        b = int(start_c[2] + (end_c[2] - start_c[2]) * progress)
         
         return f'#{r:02X}{g:02X}{b:02X}'
     
@@ -80,8 +78,9 @@ def draw_dfg_with_counts(id_to_count: Dict[int, int], yaml_path: str = "debugger
         tile_y = node.get('tile_y', '')
         time_step = node.get('time_step', '')
         
-        count = id_to_count.get(node_id, 0)
+        count = id_to_count.get(int(node_id), 0)
         color = get_color(count)
+        print(node_id, count, color)
         
         # 节点标签：显示 id, opcode 和 count
         label = f"{node_id}\\n{opcode}\\ncount: {count}"
@@ -103,6 +102,39 @@ def draw_dfg_with_counts(id_to_count: Dict[int, int], yaml_path: str = "debugger
         from_id = edge['from']
         to_id = edge['to']
         dot.edge(str(from_id), str(to_id))
+    
+    # 添加图例
+    with dot.subgraph(name='cluster_legend') as legend:
+        legend.attr(label='Count Color Legend')
+        legend.attr(style='filled')
+        legend.attr(color='lightgray')
+        legend.attr(rankdir='LR')  # 图例从左到右排列
+        
+        # 创建图例节点，展示不同 count 值对应的颜色
+        legend_items = []
+        
+        # count = 0 (灰色)
+        legend_items.append((0, '#E8E8E8'))
+        
+        # Add keyframes for the cycle
+        # 1 (Blue), 13 (Mid), 25 (Orange), 38 (Mid), 50 (Blue)
+        keyframes = [1, 5, 10]
+        
+        for k in keyframes:
+            legend_items.append((k, get_color(k)))
+        
+        # 添加图例节点，水平排列
+        prev_legend_id = None
+        for idx, (count_val, color) in enumerate(legend_items):
+            legend_id = f"legend_{idx}"
+            label = f"count: {count_val}"
+            legend.node(legend_id, label, fillcolor=color, style='filled,rounded')
+            
+            # 连接图例节点，使其水平排列
+            if prev_legend_id is not None:
+                legend.edge(prev_legend_id, legend_id, style='invis')  # 不可见边，用于布局
+            
+            prev_legend_id = legend_id
     
     # 渲染并保存
     dot.render(output_path, format='png', cleanup=True)
@@ -136,6 +168,12 @@ if __name__ == "__main__":
     
     # 示例：高亮某些节点
     highlight_nodes = [6, 31, 32]  # 这些节点会用加粗红色边框显示
+    # add cli param
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--yaml_path", type=str, default="debugger/fir-dfg-new.yaml")
+    parser.add_argument("--output_path", type=str, default="dfg_output")
+    parser.add_argument("--highlight", type=list, default=[6, 31, 32])
+    args = parser.parse_args()
     
-    draw_dfg_with_counts(example_counts, highlight=highlight_nodes)
+    draw_dfg_with_counts(example_counts, yaml_path=args.yaml_path, output_path=args.output_path, highlight=args.highlight)
 
