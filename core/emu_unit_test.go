@@ -47,13 +47,13 @@ var _ = Describe("InstEmulator", func() {
 				OpCode: "MUL",
 				SrcOperands: OperandList{
 					Operands: []Operand{
-						{Color: "NULL", Impl: "$0"},
-						{Color: "NULL", Impl: "3"},
+						{Color: "RED", Impl: "$0"},
+						{Color: "RED", Impl: "3"},
 					},
 				},
 				DstOperands: OperandList{
 					Operands: []Operand{
-						{Color: "NULL", Impl: "$1"},
+						{Color: "RED", Impl: "$1"},
 					},
 				},
 			},
@@ -64,6 +64,11 @@ var _ = Describe("InstEmulator", func() {
 		Describe("MUL_CONST", func() {
 			It("should multiply register by immediate", func() {
 				s.Registers[0] = cgra.NewScalar(5)
+				s.SelectedBlock = &EntryBlock{
+					InstructionGroups: []InstructionGroup{
+						mul_const_inst,
+					},
+				}
 				ie.RunInstructionGroup(mul_const_inst, &s, 0)
 				Expect(s.Registers[1]).To(Equal(cgra.NewScalar(15)))
 				Expect(s.PCInBlock).To(Equal(int32(0)))
