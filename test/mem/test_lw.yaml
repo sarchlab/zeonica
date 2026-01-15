@@ -2,100 +2,103 @@ array_config:
   rows: 2
   columns: 2
   cores:
-    - row: 0
-      column: 0
-      core_id: "core_0_0"
-      entries:
-        - entry_id: "entry0"
-          type: "loop"
-          instructions:
-            - operations:
-                - opcode: "MOV"
-                  src_operands:
-                    - operand: "West"
-                      color: "R"
-                  dst_operands:
-                    - operand: "$0"
-                      color: "R"
-            - operations:
-                - opcode: "LD"
-                  src_operands:
-                    - operand: "0"
-                      color: "R"
-                  dst_operands: # just for flag check
-                    - operand: "Router"
-                      color: "R"
-            - operations:
-                - opcode: "LDW"
-                  src_operands:
-                    - operand: "Router"
-                      color: "R"
-                  dst_operands:
-                    - operand: "East"
-                      color: "R"
-
-    - row: 1 
-      column: 0
-      core_id: "core_1_0"
-      entries:
-        - entry_id: "entry0"
-          type: "loop"
-          instructions:
-            - operations:
-                - opcode: "MOV"
-                  src_operands:
-                    - operand: "West"
-                      color: "R"
-                  dst_operands:
-                    - operand: "$0"
-                      color: "R"
-            - operations:
-                - opcode: "LD"
-                  src_operands:
-                    - operand: "0"
-                      color: "R"
-                  dst_operands: # just for flag check
-                    - operand: "Router"
-                      color: "R"
-            - operations:
-                - opcode: "LDW"
-                  src_operands:
-                    - operand: "Router"
-                      color: "R"
-                  dst_operands:
-                    - operand: "East"
-                      color: "R"
-            
-                      
-    
-    - row: 0
-      column: 1
-      core_id: "core_0_1"
-      entries:
-        - entry_id: "entry0"
-          type: "loop"
-          instructions:
-            - operations:
-                - opcode: "MOV"
-                  src_operands:
-                    - operand: "West"
-                      color: "R"
-                  dst_operands: 
-                    - operand: "East"
-                      color: "R"
-
-    - row: 1
-      column: 1
-      core_id: "core_1_1"
-      entries:
-        - entry_id: "entry0"
-          type: "loop"
-          instructions:
-            - operations:
-                - opcode: "MOV"
-                  src_operands:
-                    - operand: "West"
-                      color: "R"
-                  dst_operands:
-                    - operand: "East"
-                      color: "R"
+  - row: 0
+    column: 0
+    core_id: core_0_0
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: MOV
+          src_operands:
+          - operand: West
+            color: R
+          dst_operands:
+          - operand: $0
+            color: R
+          id: 0
+      - operations:
+        - opcode: LD
+          src_operands:
+          - operand: '0'
+            color: R
+          dst_operands:
+          - operand: Router
+            color: R
+          id: 1
+      - operations:
+        - opcode: LDW
+          src_operands:
+          - operand: Router
+            color: R
+          dst_operands:
+          - operand: East
+            color: R
+          id: 2
+  - row: 1
+    column: 0
+    core_id: core_1_0
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: MOV
+          src_operands:
+          - operand: West
+            color: R
+          dst_operands:
+          - operand: $0
+            color: R
+          id: 3
+      - operations:
+        - opcode: LD
+          src_operands:
+          - operand: '0'
+            color: R
+          dst_operands:
+          - operand: Router
+            color: R
+          id: 4
+      - operations:
+        - opcode: LDW
+          src_operands:
+          - operand: Router
+            color: R
+          dst_operands:
+          - operand: East
+            color: R
+          id: 5
+  - row: 0
+    column: 1
+    core_id: core_0_1
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: MOV
+          src_operands:
+          - operand: West
+            color: R
+          dst_operands:
+          - operand: East
+            color: R
+          id: 6
+  - row: 1
+    column: 1
+    core_id: core_1_1
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: MOV
+          src_operands:
+          - operand: West
+            color: R
+          dst_operands:
+          - operand: East
+            color: R
+          id: 7

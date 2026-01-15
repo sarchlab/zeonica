@@ -349,8 +349,11 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"BEQ":          i.runBeq, // BEQI
 		"BLT":          i.runBlt,
 		"RETURN_VALUE": i.runRet,
+		"RETURN_VOID":  i.runRet,
 		"RET":          i.runRet,      // backward compatibility
 		"PHI_CONST":    i.runPhiConst, // backward compatibility
+		"SEXT":         i.runMov,      // identity operation by now
+		"ZEXT":         i.runMov,      // identity operation by now
 
 		"FADD": i.runFAdd, // FADDI
 		"FSUB": i.runFSub,
