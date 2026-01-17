@@ -31,7 +31,11 @@ func Fir() {
 
 	driver.RegisterDevice(device)
 
-	program := core.LoadProgramFileFromYAML("test/testbench/fir/fir4x4.yaml")
+	programPath := os.Getenv("ZEONICA_PROGRAM_YAML")
+	if programPath == "" {
+		programPath = "test/testbench/fir/fir4x4.yaml"
+	}
+	program := core.LoadProgramFileFromYAML(programPath)
 	if len(program) == 0 {
 		panic("Failed to load program")
 	}
