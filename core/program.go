@@ -48,9 +48,10 @@ type YAMLOperand struct {
 
 // ArrayConfig represents the top-level YAML structure
 type ArrayConfig struct {
-	Rows  int               `yaml:"rows"`
-	Cols  int               `yaml:"columns"`
-	Cores []YAMLCoreProgram `yaml:"cores"`
+	Rows       int               `yaml:"rows"`
+	Cols       int               `yaml:"columns"`
+	CompiledII int               `yaml:"compiled_ii"`
+	Cores      []YAMLCoreProgram `yaml:"cores"`
 }
 
 // YAMLRoot represents the root structure of the YAML file
@@ -60,6 +61,7 @@ type YAMLRoot struct {
 
 type Program struct {
 	EntryBlocks []EntryBlock
+	CompiledII  int
 }
 
 type EntryBlock struct {
@@ -71,6 +73,7 @@ type EntryBlock struct {
 type InstructionGroup struct {
 	Operations []Operation
 	RefCount   map[string]int
+	IndexPerII int
 }
 
 func (ig *InstructionGroup) String() string {
@@ -146,7 +149,8 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 			var instructionGroups []InstructionGroup
 			for _, instGroup := range entry.InstructionGroups {
 				instructionGroup := InstructionGroup{
-					RefCount: make(map[string]int),
+					RefCount:   make(map[string]int),
+					IndexPerII: instGroup.IndexPerII,
 				}
 
 				// Convert operations
@@ -195,6 +199,7 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 
 		program := Program{
 			EntryBlocks: entryBlocks,
+			CompiledII:  config.CompiledII,
 		}
 
 		programMap[coordKey] = program

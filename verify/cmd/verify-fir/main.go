@@ -9,18 +9,16 @@ import (
 )
 
 func main() {
-	// Load AXPY kernel from YAML
+	// Load FIR kernel from YAML
 	programPath := os.Getenv("ZEONICA_PROGRAM_YAML")
 	if programPath == "" {
-		programPath = "test/Zeonica_Testbench/kernel/axpy/axpy-instructions.yaml"
+		programPath = "test/Zeonica_Testbench/kernel/fir/fir-instructions.yaml"
 	}
 	programs := core.LoadProgramFileFromYAML(programPath)
-
 	if len(programs) == 0 {
-		log.Fatalf("Failed to load AXPY program from %s", programPath)
+		log.Fatalf("Failed to load FIR program from %s", programPath)
 	}
 
-	// Create architecture info (AXPY uses 4x4 CGRA)
 	arch := &verify.ArchInfo{
 		Rows:         4,
 		Columns:      4,
@@ -33,9 +31,9 @@ func main() {
 	report := verify.GenerateReport(programs, arch, 1000)
 	report.WriteReport(os.Stdout)
 	if len(report.LintIssues) > 0 {
-		log.Fatalf("AXPY verification failed with %d lint issues", len(report.LintIssues))
+		log.Fatalf("FIR verification failed with %d lint issues", len(report.LintIssues))
 	}
 	if !report.SimulationOK {
-		log.Fatalf("AXPY simulation failed: %v", report.SimulationErr)
+		log.Fatalf("FIR simulation failed: %v", report.SimulationErr)
 	}
 }

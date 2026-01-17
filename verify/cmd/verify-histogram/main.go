@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -11,7 +10,11 @@ import (
 
 // main runs lint and functional simulation on histogram kernel
 func main() {
-	programs := core.LoadProgramFileFromYAML("test/Zeonica_Testbench/kernel/histogram/histogram.yaml")
+	programPath := os.Getenv("ZEONICA_PROGRAM_YAML")
+	if programPath == "" {
+		programPath = "test/Zeonica_Testbench/kernel/histogram/histogram-instructions.yaml"
+	}
+	programs := core.LoadProgramFileFromYAML(programPath)
 	if len(programs) == 0 {
 		log.Fatal("Failed to load histogram.yaml")
 	}
@@ -26,17 +29,12 @@ func main() {
 		CtrlMemItems: 20,
 	}
 
-	// Generate report
 	report := verify.GenerateReport(programs, arch, 100)
-
-	// Write to stdout
 	report.WriteReport(os.Stdout)
-
-	// Save to file
-	err := report.SaveReportToFile("histogram_verification_report.txt")
-	if err != nil {
-		log.Fatalf("Failed to save report: %v", err)
+	if len(report.LintIssues) > 0 {
+		log.Fatalf("Histogram verification failed with %d lint issues", len(report.LintIssues))
 	}
-
-	fmt.Println("✓ Report saved to: histogram_verification_report.txt")
+	if !report.SimulationOK {
+		log.Fatalf("Histogram simulation failed: %v", report.SimulationErr)
+	}
 }

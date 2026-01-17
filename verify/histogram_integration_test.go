@@ -1,6 +1,7 @@
 package verify
 
 import (
+	"os"
 	"testing"
 
 	"github.com/sarchlab/zeonica/core"
@@ -8,6 +9,11 @@ import (
 
 // TestHistogramLint tests lint checking on the actual histogram kernel
 func TestHistogramLint(t *testing.T) {
+	const programPath = "../test/Zeonica_Testbench/kernel/histogram/histogram.yaml"
+	if !fileExists(programPath) {
+		t.Skip("Histogram YAML not found; skipping integration test")
+	}
+
 	// Create ArchInfo matching histogram arch_spec.yaml:
 	// - main CGRA: 4x4 mesh
 	// - 128 registers per PE
@@ -23,11 +29,7 @@ func TestHistogramLint(t *testing.T) {
 	}
 
 	// Load histogram program from YAML
-	programs := core.LoadProgramFileFromYAML("../test/Zeonica_Testbench/kernel/histogram/histogram.yaml")
-
-	if len(programs) == 0 {
-		t.Skip("Histogram YAML not found; skipping integration test")
-	}
+	programs := core.LoadProgramFileFromYAML(programPath)
 
 	// Run lint checks
 	issues := RunLint(programs, arch)
@@ -56,6 +58,11 @@ func TestHistogramLint(t *testing.T) {
 
 // TestHistogramFunctionalSim tests functional simulation on histogram kernel
 func TestHistogramFunctionalSim(t *testing.T) {
+	const programPath = "../test/Zeonica_Testbench/kernel/histogram/histogram.yaml"
+	if !fileExists(programPath) {
+		t.Skip("Histogram YAML not found; skipping integration test")
+	}
+
 	arch := &ArchInfo{
 		Rows:         4,
 		Columns:      4,
@@ -66,11 +73,7 @@ func TestHistogramFunctionalSim(t *testing.T) {
 	}
 
 	// Load histogram program
-	programs := core.LoadProgramFileFromYAML("../test/Zeonica_Testbench/kernel/histogram/histogram.yaml")
-
-	if len(programs) == 0 {
-		t.Skip("Histogram YAML not found; skipping integration test")
-	}
+	programs := core.LoadProgramFileFromYAML(programPath)
 
 	// Create functional simulator
 	fs := NewFunctionalSimulator(programs, arch)
@@ -112,6 +115,11 @@ func TestHistogramFunctionalSim(t *testing.T) {
 
 // TestHistogramBothModesComparison runs both lint and sim for comprehensive check
 func TestHistogramBothModesComparison(t *testing.T) {
+	const programPath = "../test/Zeonica_Testbench/kernel/histogram/histogram.yaml"
+	if !fileExists(programPath) {
+		t.Skip("Histogram YAML not found; skipping integration test")
+	}
+
 	arch := &ArchInfo{
 		Rows:         4,
 		Columns:      4,
@@ -121,11 +129,7 @@ func TestHistogramBothModesComparison(t *testing.T) {
 		CtrlMemItems: 20,
 	}
 
-	programs := core.LoadProgramFileFromYAML("../test/Zeonica_Testbench/kernel/histogram/histogram.yaml")
-
-	if len(programs) == 0 {
-		t.Skip("Histogram YAML not found; skipping integration test")
-	}
+	programs := core.LoadProgramFileFromYAML(programPath)
 
 	// Stage 1: Lint
 	t.Log("Stage 1: Running lint checks...")
@@ -170,4 +174,11 @@ func TestHistogramBothModesComparison(t *testing.T) {
 		}
 		return "SUCCESS"
 	}())
+}
+
+func fileExists(path string) bool {
+	if _, err := os.Stat(path); err == nil {
+		return true
+	}
+	return false
 }
