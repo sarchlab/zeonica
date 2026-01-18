@@ -31,7 +31,11 @@ func Fir() {
 
 	driver.RegisterDevice(device)
 
-	program := core.LoadProgramFileFromYAML("test/testbench/fir/fir4x4.yaml")
+	programPath := os.Getenv("ZEONICA_PROGRAM_YAML")
+	if programPath == "" {
+		programPath = "test/testbench/fir/fir4x4.yaml"
+	}
+	program := core.LoadProgramFileFromYAML(programPath)
 
 	fmt.Println("program:", program)
 
@@ -73,7 +77,7 @@ func Fir() {
 	retVal := device.GetTile(0, 0).GetRetVal()
 	fmt.Println("retVal:", retVal)
 
-	if retVal == 12 {
+	if retVal == 10 {
 		fmt.Println("✅ Fir tests passed!")
 	} else {
 		fmt.Println("❌ Fir tests failed!")

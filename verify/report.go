@@ -55,7 +55,7 @@ func (r *VerificationReport) WriteReport(w io.Writer) {
 	dash := strings.Repeat("-", 60)
 
 	fmt.Fprintln(w, separator)
-	fmt.Fprintln(w, "HISTOGRAM KERNEL VERIFICATION REPORT")
+	fmt.Fprintln(w, "KERNEL VERIFICATION REPORT")
 	fmt.Fprintln(w, separator)
 
 	fmt.Fprintf(w, "\n✓ Loaded programs for %d PEs\n", r.ProgramCount)
@@ -139,14 +139,14 @@ func (r *VerificationReport) WriteReport(w io.Writer) {
 
 	if len(r.TimingIssues) > 0 {
 		fmt.Fprintln(w, "⚠ TIMING VIOLATIONS DETECTED")
-		fmt.Fprintln(w, "The histogram kernel has cross-PE communication constraints")
+		fmt.Fprintln(w, "This kernel has cross-PE communication constraints")
 		fmt.Fprintln(w, "that are not satisfied. Consider:")
 		fmt.Fprintln(w, "  1. Adjusting operation timesteps to allow latency")
 		fmt.Fprintln(w, "  2. Modifying the scheduling to respect network delays")
 		fmt.Fprintln(w, "  3. Using buffering or pipelining strategies")
 	} else {
 		fmt.Fprintln(w, "✓ KERNEL PASSED ALL CHECKS")
-		fmt.Fprintln(w, "The histogram kernel is ready for simulation.")
+		fmt.Fprintln(w, "The kernel is ready for simulation.")
 	}
 
 	fmt.Fprintln(w)
