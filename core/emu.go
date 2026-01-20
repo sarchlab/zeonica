@@ -565,7 +565,6 @@ func (i instEmulator) runMov(inst Operation, state *coreState) {
 	oprStruct := i.readOperand(src, state)
 	opr := oprStruct.First()
 	finalPred := oprStruct.Pred
-
 	// Write the value into the destination register
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalarWithPred(opr, finalPred), state)
@@ -607,7 +606,6 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 		panic("memory address out of bounds")
 	}
 	value := state.Memory[addr]
-
 	slog.Warn("Memory",
 		"Behavior", "LoadDirect",
 		"Value", value,
@@ -663,11 +661,11 @@ func (i instEmulator) runLoadWaitDRAM(inst Operation, state *coreState) {
 
 func (i instEmulator) runStoreDirect(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
-	addrStruct := i.readOperand(src1, state)
-	addr := addrStruct.First()
-	src2 := inst.SrcOperands.Operands[1]
-	valueStruct := i.readOperand(src2, state)
+	valueStruct := i.readOperand(src1, state)
 	value := valueStruct.First()
+	src2 := inst.SrcOperands.Operands[1]
+	addrStruct := i.readOperand(src2, state)
+	addr := addrStruct.First()
 	if addr >= uint32(len(state.Memory)) {
 		panic("memory address out of bounds")
 	}
@@ -807,7 +805,6 @@ func (i instEmulator) runAdd(inst Operation, state *coreState) {
 	dstValSigned := src1Signed + src2Signed
 	dstVal := uint32(dstValSigned)
 	finalPred := src1Struct.Pred && src2Struct.Pred
-
 	//fmt.Printf("IADD: Adding %d (src1) + %d (src2) = %d\n", src1Signed, src2Signed, dstValSigned)
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, finalPred), state)
@@ -1275,7 +1272,6 @@ func (i instEmulator) runGrantPred(inst Operation, state *coreState) {
 
 	//fmt.Printf("GRANTPRED: srcVal = %d, predVal = %t at (%d, %d)\n", srcVal, predVal, state.TileX, state.TileY)
 	finalPred := resultPred
-
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalarWithPred(srcVal, finalPred), state)
 	}
