@@ -1,0 +1,169 @@
+nodes:
+  - id: 0
+    opcode: "GRANT_ONCE"
+    tile_x: 3
+    tile_y: 2
+    time_step: 0
+  - id: 4
+    opcode: "PHI_START"
+    tile_x: 2
+    tile_y: 2
+    time_step: 1
+  - id: 7
+    opcode: "ADD"
+    tile_x: 2
+    tile_y: 2
+    time_step: 2
+  - id: 8
+    opcode: "GEP"
+    tile_x: 3
+    tile_y: 2
+    time_step: 2
+  - id: 12
+    opcode: "ICMP_EQ"
+    tile_x: 2
+    tile_y: 2
+    time_step: 3
+  - id: 13
+    opcode: "LOAD"
+    tile_x: 3
+    tile_y: 2
+    time_step: 3
+  - id: 14
+    opcode: "DATA_MOV"
+    tile_x: 1
+    tile_y: 2
+    time_step: 9
+  - id: 15
+    opcode: "DATA_MOV"
+    tile_x: 1
+    tile_y: 2
+    time_step: 9
+  - id: 18
+    opcode: "GRANT_PREDICATE"
+    tile_x: 1
+    tile_y: 2
+    time_step: 10
+  - id: 19
+    opcode: "NOT"
+    tile_x: 2
+    tile_y: 2
+    time_step: 4
+  - id: 20
+    opcode: "MUL"
+    tile_x: 3
+    tile_y: 2
+    time_step: 4
+  - id: 24
+    opcode: "RETURN_VOID"
+    tile_x: 1
+    tile_y: 2
+    time_step: 11
+  - id: 25
+    opcode: "GRANT_PREDICATE"
+    tile_x: 2
+    tile_y: 2
+    time_step: 5
+  - id: 26
+    opcode: "ADD"
+    tile_x: 3
+    tile_y: 1
+    time_step: 5
+  - id: 29
+    opcode: "DIV"
+    tile_x: 3
+    tile_y: 1
+    time_step: 6
+  - id: 31
+    opcode: "SEXT"
+    tile_x: 3
+    tile_y: 1
+    time_step: 7
+  - id: 33
+    opcode: "GEP"
+    tile_x: 3
+    tile_y: 1
+    time_step: 8
+  - id: 34
+    opcode: "DATA_MOV"
+    tile_x: 2
+    tile_y: 1
+    time_step: 10
+  - id: 36
+    opcode: "LOAD"
+    tile_x: 2
+    tile_y: 1
+    time_step: 9
+  - id: 38
+    opcode: "ADD"
+    tile_x: 2
+    tile_y: 1
+    time_step: 10
+  - id: 40
+    opcode: "STORE"
+    tile_x: 2
+    tile_y: 1
+    time_step: 11
+  - id: 150000
+    opcode: "DATA_MOV"
+    tile_x: 2
+    tile_y: 2
+    time_step: 4
+  - id: 340000
+    opcode: "DATA_MOV"
+    tile_x: 3
+    tile_y: 1
+    time_step: 9
+edges:
+  - from: 12
+    to: 14
+  - from: 14
+    to: 18
+  - from: 33
+    to: 340000
+  - from: 340000
+    to: 34
+  - from: 34
+    to: 40
+  - from: 12
+    to: 150000
+  - from: 150000
+    to: 15
+  - from: 15
+    to: 18
+  - from: 36
+    to: 38
+  - from: 29
+    to: 31
+  - from: 31
+    to: 33
+  - from: 0
+    to: 4
+  - from: 12
+    to: 19
+  - from: 4
+    to: 7
+  - from: 33
+    to: 36
+  - from: 4
+    to: 8
+  - from: 7
+    to: 25
+  - from: 19
+    to: 25
+  - from: 38
+    to: 40
+  - from: 7
+    to: 12
+  - from: 20
+    to: 26
+  - from: 8
+    to: 13
+  - from: 13
+    to: 20
+  - from: 18
+    to: 24
+  - from: 25
+    to: 4
+  - from: 26
+    to: 29
