@@ -368,7 +368,8 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"GRANT_ONCE":      i.runGrantOnce,
 
 		// comparisons
-		"ICMP_EQ": i.runCmpExport,
+		"ICMP_EQ":  i.runCmpExport,
+		"ICMP_SGT": i.runSgtExport,
 
 		// do not distinguish between data_mov and control mov
 		"DATA_MOV": i.runMov,
@@ -678,8 +679,9 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) {
 	src2 := inst.SrcOperands.Operands[1]
 	valueStruct := i.readOperand(src2, state)
 	value := valueStruct.First()
+	fmt.Println("value: ", value)
 	if addr >= uint32(len(state.Memory)) {
-		panic("memory address out of bounds")
+		panic("memory address out of bounds, addr: " + strconv.Itoa(int(addr)) + ", len(state.Memory): " + strconv.Itoa(len(state.Memory)))
 	}
 	slog.Warn("Memory",
 		"Behavior", "StoreDirect",
@@ -1178,6 +1180,33 @@ func (i instEmulator) runCmpExport(inst Operation, state *coreState) {
 		}
 	} else {
 		finalPred = src1Val.Pred
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(0, finalPred), state)
+		}
+	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+	// elect no next PC
+}
+
+func (i instEmulator) runSgtExport(inst Operation, state *coreState) {
+	src1 := inst.SrcOperands.Operands[0]
+	src2 := inst.SrcOperands.Operands[1]
+
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
+
+	src1Pred := src1Struct.Pred
+	src2Pred := src2Struct.Pred
+	resultPred := src1Pred && src2Pred
+
+	finalPred := resultPred
+	if src1Val > src2Val {
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(1, finalPred), state)
+		}
+	} else {
 		for _, dst := range inst.DstOperands.Operands {
 			i.writeOperand(dst, cgra.NewScalarWithPred(0, finalPred), state)
 		}
