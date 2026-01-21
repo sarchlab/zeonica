@@ -366,7 +366,8 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"GRANT_ONCE":      i.runGrantOnce,
 
 		// comparisons
-		"ICMP_EQ": i.runCmpExport,
+		"ICMP_EQ":  i.runCmpExport,
+		"ICMP_SLT": i.runLTExport,
 
 		// do not distinguish between data_mov and control mov
 		"DATA_MOV": i.runMov,
