@@ -56,7 +56,7 @@ func Histogram() {
 	// preload input data from benchmark (DATA_LEN=20)
 	inputData := []uint32{
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-		11, 12, 13, 14, 14, 14, 14, 14, 14, 19,
+		11, 12, 13, 14, 14, 14, 14, 14, 14, 15,
 	}
 	expected := computeHistogram(inputData, 5)
 
