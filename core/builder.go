@@ -44,10 +44,11 @@ func (b Builder) Build(name string) *Core {
 		CareFlags: true,
 	}
 	c.state = coreState{
-		exit:          b.exitAddr,
-		retVal:        b.retValAddr,
-		SelectedBlock: nil,
-		PCInBlock:     -1,
+		exit:                 b.exitAddr,
+		retVal:               b.retValAddr,
+		requestExitTimestamp: new(float64),
+		SelectedBlock:        nil,
+		PCInBlock:            -1,
 		Directions: map[string]bool{
 			"North":     true,
 			"East":      true,

@@ -13,6 +13,10 @@ import (
 type OpMode int
 
 const (
+	ExitDelay = 100
+)
+
+const (
 	SyncOp OpMode = iota
 	AsyncOp
 )
@@ -78,15 +82,16 @@ func (r *ReservationState) SetReservationMap(ig InstructionGroup, state *coreSta
 }
 
 type coreState struct {
-	exit          *bool   // the signal is shared between cores
-	retVal        *uint32 // the value is shared between cores
-	SelectedBlock *EntryBlock
-	Directions    map[string]bool
-	PCInBlock     int32
-	NextPCInBlock int32
-	TileX, TileY  uint32
-	Registers     []cgra.Data
-	States        map[string]interface{} // This is to store core states, such as Phiconst, CmpFlags
+	exit                 *bool // the signal is shared between cores
+	requestExitTimestamp *float64
+	retVal               *uint32 // the value is shared between cores
+	SelectedBlock        *EntryBlock
+	Directions           map[string]bool
+	PCInBlock            int32
+	NextPCInBlock        int32
+	TileX, TileY         uint32
+	Registers            []cgra.Data
+	States               map[string]interface{} // This is to store core states, such as Phiconst, CmpFlags
 	// still consider using outside block to control pc
 	//Code         [][]string
 	Memory               []uint32
@@ -126,7 +131,7 @@ func (i instEmulator) SetUpInstructionGroup(index int32, state *coreState) {
 
 func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreState, time float64) bool {
 	// check the Return signal
-	if *state.exit {
+	if *state.exit && time-*state.requestExitTimestamp > ExitDelay {
 		return false
 	}
 	prevPC := state.PCInBlock
@@ -334,26 +339,23 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 	// }
 
 	instFuncs := map[string]func(Operation, *coreState){
-		"ADD":          i.runAdd, // ADD, ADDI, INC, SUB, DEC
-		"SUB":          i.runSub,
-		"LLS":          i.runLLS,
-		"LRS":          i.runLRS,
-		"MUL":          i.runMul, // MULI
-		"DIV":          i.runDiv,
-		"OR":           i.runOR,
-		"XOR":          i.runXOR, // XOR XORI
-		"AND":          i.runAND,
-		"MOV":          i.runMov,
-		"JMP":          i.runJmp,
-		"BNE":          i.runBne,
-		"BEQ":          i.runBeq, // BEQI
-		"BLT":          i.runBlt,
-		"RETURN_VALUE": i.runRet,
-		"RETURN_VOID":  i.runRet,
-		"RET":          i.runRet,      // backward compatibility
-		"PHI_CONST":    i.runPhiConst, // backward compatibility
-		"SEXT":         i.runMov,      // identity operation by now
-		"ZEXT":         i.runMov,      // identity operation by now
+		"ADD":       i.runAdd, // ADD, ADDI, INC, SUB, DEC
+		"SUB":       i.runSub,
+		"LLS":       i.runLLS,
+		"LRS":       i.runLRS,
+		"MUL":       i.runMul, // MULI
+		"DIV":       i.runDiv,
+		"OR":        i.runOR,
+		"XOR":       i.runXOR, // XOR XORI
+		"AND":       i.runAND,
+		"MOV":       i.runMov,
+		"JMP":       i.runJmp,
+		"BNE":       i.runBne,
+		"BEQ":       i.runBeq, // BEQI
+		"BLT":       i.runBlt,
+		"PHI_CONST": i.runPhiConst, // backward compatibility
+		"SEXT":      i.runMov,      // identity operation by now
+		"ZEXT":      i.runMov,      // identity operation by now
 
 		"FADD": i.runFAdd, // FADDI
 		"FSUB": i.runFSub,
@@ -394,8 +396,16 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"NOT": i.runNot,
 	}
 
+	retFuncs := map[string]func(Operation, *coreState, float64){
+		"RETURN_VALUE": i.runRet,
+		"RETURN_VOID":  i.runRet,
+		"RET":          i.runRet, // backward compatibility
+	}
+
 	if instFunc, ok := instFuncs[instName]; ok {
 		instFunc(inst, state)
+	} else if retFunc, ok := retFuncs[instName]; ok {
+		retFunc(inst, state, time)
 	} else {
 		panic(fmt.Sprintf("unknown instruction '%s' at PC %d", instName, state.PCInBlock))
 	}
@@ -1047,7 +1057,7 @@ func (i instEmulator) runBlt(inst Operation, state *coreState) {
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 }
 
-func (i instEmulator) runRet(inst Operation, state *coreState) {
+func (i instEmulator) runRet(inst Operation, state *coreState, time float64) {
 	var finalPred bool
 	if len(inst.SrcOperands.Operands) > 0 {
 		src := inst.SrcOperands.Operands[0]
@@ -1063,6 +1073,7 @@ func (i instEmulator) runRet(inst Operation, state *coreState) {
 			)
 			*state.retVal = srcVal
 			*state.exit = true
+			*state.requestExitTimestamp = time
 		}
 	} else {
 		finalPred = false
@@ -1071,6 +1082,7 @@ func (i instEmulator) runRet(inst Operation, state *coreState) {
 			"Y", state.TileY,
 		)
 		*state.exit = true
+		*state.requestExitTimestamp = time
 		*state.retVal = 0
 	}
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
