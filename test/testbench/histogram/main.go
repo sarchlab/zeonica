@@ -87,9 +87,9 @@ func Histogram() {
 	// print output memory data
 	outputTile := [2]int{2, 1}
 	fmt.Printf("output memory @ tile (%d,%d):\n", outputTile[0], outputTile[1])
-	scanLimit := 64
+	scanLimit := 5
 	outputData := make([]uint32, scanLimit)
-	for addr := 0; addr < 5; addr++ {
+	for addr := 0; addr < scanLimit; addr++ {
 		val := driver.ReadMemory(outputTile[0], outputTile[1], uint32(addr))
 		outputData[addr] = val
 		if addr < len(inputData) {
