@@ -834,6 +834,14 @@ func (fs *FunctionalSimulator) writeOperand(x, y int, operand *core.Operand, dat
 	}
 }
 
+// writeAllDsts writes the same data to all destination operands.
+func (fs *FunctionalSimulator) writeAllDsts(x, y int, op *core.Operation, data core.Data) {
+	for i := range op.DstOperands.Operands {
+		dst := &op.DstOperands.Operands[i]
+		fs.writeOperand(x, y, dst, data)
+	}
+}
+
 // readFromNeighbor reads a value from a neighbor PE's port (token-based, consumes on read).
 func (fs *FunctionalSimulator) readFromNeighbor(x, y int, portDir string, color string) core.Data {
 	key := portKey(portDir, color)
