@@ -885,13 +885,13 @@ func (fs *FunctionalSimulator) writeToNeighbor(x, y int, portDir string, color s
 func neighborFromWrite(x, y int, portDir string) (int, int, bool) {
 	switch strings.ToUpper(portDir) {
 	case "NORTH":
-		return x, y+1, true
+		return x, y + 1, true
 	case "SOUTH":
-		return x, y-1, true
+		return x, y - 1, true
 	case "EAST":
-		return x+1, y, true
+		return x + 1, y, true
 	case "WEST":
-		return x-1, y, true
+		return x - 1, y, true
 	default:
 		return x, y, false
 	}
