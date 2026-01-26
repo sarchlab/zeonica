@@ -1233,8 +1233,8 @@ func (i instEmulator) runGTExport(inst Operation, state *coreState) {
 
 	src1Struct := i.readOperand(src1, state)
 	src2Struct := i.readOperand(src2, state)
-	src1Val := int32(src1Struct.First())
-	src2Val := int32(src2Struct.First())
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
 	src1Pred := src1Struct.Pred
 	src2Pred := src2Struct.Pred
 	resultPred := src1Pred && src2Pred
