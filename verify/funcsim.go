@@ -3,6 +3,7 @@ package verify
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -51,6 +52,19 @@ func (fs *FunctionalSimulator) Run(maxSteps int) error {
 			}
 		}
 	}
+	// Deterministic order: by timestep then coordinates/op index
+	sort.Slice(allOps, func(i, j int) bool {
+		if allOps[i].t != allOps[j].t {
+			return allOps[i].t < allOps[j].t
+		}
+		if allOps[i].y != allOps[j].y {
+			return allOps[i].y < allOps[j].y
+		}
+		if allOps[i].x != allOps[j].x {
+			return allOps[i].x < allOps[j].x
+		}
+		return allOps[i].opIdx < allOps[j].opIdx
+	})
 
 	// Execute in topological order (by timestep)
 	for step := 0; step < maxSteps; step++ {
@@ -63,8 +77,15 @@ func (fs *FunctionalSimulator) Run(maxSteps int) error {
 
 			// Try to execute this operation
 			if fs.canExecuteOp(rec.x, rec.y, &rec.op) {
+				if fs.TraceOpPre != nil {
+					fs.TraceOpPre(rec.x, rec.y, rec.t, &rec.op)
+				}
+				fs.currentT = rec.t
 				fs.executeOp(rec.x, rec.y, &rec.op)
 				rec.executed = true
+				if fs.TraceOpPost != nil {
+					fs.TraceOpPost(rec.x, rec.y, rec.t, &rec.op)
+				}
 				progress = true
 			}
 		}
@@ -79,6 +100,15 @@ func (fs *FunctionalSimulator) Run(maxSteps int) error {
 
 // canExecuteOp checks if all source operands are ready
 func (fs *FunctionalSimulator) canExecuteOp(x, y int, op *core.Operation) bool {
+	switch strings.ToUpper(op.OpCode) {
+	case "PHI", "PHI_START":
+		for _, src := range op.SrcOperands.Operands {
+			if fs.isOperandReady(x, y, &src) {
+				return true
+			}
+		}
+		return false
+	}
 	for _, src := range op.SrcOperands.Operands {
 		if !fs.isOperandReady(x, y, &src) {
 			return false
@@ -104,9 +134,8 @@ func (fs *FunctionalSimulator) isOperandReady(x, y int, operand *core.Operand) b
 	}
 
 	if isPortOperand(operand.Impl) {
-		// Port operand: data available from neighbor (in funcsim, we assume ports are always ready)
-		// In functional model, we don't model backpressure
-		return true
+		// Port operand: data available from neighbor if a token is present
+		return fs.hasIncomingPortData(x, y, operand.Impl, operand.Color)
 	}
 
 	return false
@@ -116,6 +145,8 @@ func (fs *FunctionalSimulator) isOperandReady(x, y int, operand *core.Operand) b
 func (fs *FunctionalSimulator) executeOp(x, y int, op *core.Operation) {
 	switch strings.ToUpper(op.OpCode) {
 	case "MOV":
+		fs.runMov(x, y, op)
+	case "DATA_MOV", "CTRL_MOV":
 		fs.runMov(x, y, op)
 	case "ADD":
 		fs.runAdd(x, y, op)
@@ -133,9 +164,9 @@ func (fs *FunctionalSimulator) executeOp(x, y int, op *core.Operation) {
 		fs.runFMul(x, y, op)
 	case "FDIV":
 		fs.runFDiv(x, y, op)
-	case "PHI":
+	case "PHI", "PHI_START":
 		fs.runPhi(x, y, op)
-	case "GPRED":
+	case "GPRED", "GRANT_PREDICATE":
 		fs.runGpred(x, y, op)
 	case "LOAD":
 		fs.runLoad(x, y, op)
@@ -379,8 +410,7 @@ func (fs *FunctionalSimulator) runPhi(x, y int, op *core.Operation) {
 		selectedData = core.NewScalarWithPred(0, false)
 	}
 
-	dst := &op.DstOperands.Operands[0]
-	fs.writeOperand(x, y, dst, selectedData)
+	fs.writeAllDsts(x, y, op, selectedData)
 }
 
 // runGpred implements GPRED opcode: grant predicate (pass through)
@@ -393,8 +423,7 @@ func (fs *FunctionalSimulator) runGpred(x, y int, op *core.Operation) {
 	src := fs.readOperand(x, y, &op.SrcOperands.Operands[0])
 
 	// Output propagates the input predicate
-	dst := &op.DstOperands.Operands[0]
-	fs.writeOperand(x, y, dst, src)
+	fs.writeAllDsts(x, y, op, src)
 }
 
 // runLoad implements LOAD opcode: load from memory
@@ -411,9 +440,7 @@ func (fs *FunctionalSimulator) runLoad(x, y int, op *core.Operation) {
 	// Load from memory
 	value := fs.peStates[y][x].ReadMemory(addr)
 
-	// Write to destination register
-	dst := &op.DstOperands.Operands[0]
-	fs.writeOperand(x, y, dst, value)
+	fs.writeAllDsts(x, y, op, value)
 }
 
 // runStore implements STORE opcode: store to memory
@@ -430,6 +457,9 @@ func (fs *FunctionalSimulator) runStore(x, y int, op *core.Operation) {
 
 	addr := addrData.First()
 	fs.peStates[y][x].WriteMemory(addr, valueData)
+	if fs.TraceStore != nil {
+		fs.TraceStore(x, y, fs.currentT, addr, valueData, op)
+	}
 }
 
 // runGep implements GEP opcode: compute address (base + index)
@@ -447,8 +477,7 @@ func (fs *FunctionalSimulator) runGep(x, y int, op *core.Operation) {
 		base.Pred && index.Pred,
 	)
 
-	dst := &op.DstOperands.Operands[0]
-	fs.writeOperand(x, y, dst, result)
+	fs.writeAllDsts(x, y, op, result)
 }
 
 // runLLS implements LLS (Logical Left Shift) and SHL (alias)
@@ -739,8 +768,10 @@ func (fs *FunctionalSimulator) runGrantOnce(x, y int, op *core.Operation) {
 	// GRANT_ONCE sets predicate=true (valid mark)
 	result := core.NewScalarWithPred(src.First(), true)
 
-	dst := &op.DstOperands.Operands[0]
-	fs.writeOperand(x, y, dst, result)
+	for i := range op.DstOperands.Operands {
+		dst := &op.DstOperands.Operands[i]
+		fs.writeOperand(x, y, dst, result)
+	}
 }
 
 // runConstant implements CONSTANT (Constant generation)
@@ -781,7 +812,7 @@ func (fs *FunctionalSimulator) readOperand(x, y int, operand *core.Operand) core
 
 	if isPortOperand(operand.Impl) {
 		// Port operand: read from neighbor
-		return fs.readFromNeighbor(x, y, operand.Impl)
+		return fs.readFromNeighbor(x, y, operand.Impl, operand.Color)
 	}
 
 	return core.NewScalarWithPred(0, false)
@@ -798,14 +829,92 @@ func (fs *FunctionalSimulator) writeOperand(x, y int, operand *core.Operand, dat
 		fs.peStates[y][x].WriteReg(regIdx, data)
 	}
 
-	// Port operand: write to neighbor (simplified: just track locally)
-	// In a real simulator, this would route through network
-	// For functional sim, we ignore this for now
+	if isPortOperand(operand.Impl) {
+		fs.writeToNeighbor(x, y, operand.Impl, operand.Color, data)
+	}
 }
 
-// readFromNeighbor reads a value from a neighbor PE's port
-func (fs *FunctionalSimulator) readFromNeighbor(x, y int, portDir string) core.Data {
-	// In functional model, we don't model network delays or buffering
-	// For now, return default value (in practice, would fetch from neighbor)
+// writeAllDsts writes the same data to all destination operands.
+func (fs *FunctionalSimulator) writeAllDsts(x, y int, op *core.Operation, data core.Data) {
+	for i := range op.DstOperands.Operands {
+		dst := &op.DstOperands.Operands[i]
+		fs.writeOperand(x, y, dst, data)
+	}
+}
+
+// readFromNeighbor reads a value from a neighbor PE's port (token-based, consumes on read).
+func (fs *FunctionalSimulator) readFromNeighbor(x, y int, portDir string, color string) core.Data {
+	key := portKey(portDir, color)
+	ps := fs.peStates[y][x]
+	ports := getPortBuffer(ps)
+	if data, ok := ports[key]; ok {
+		delete(ports, key)
+		return data
+	}
 	return core.NewScalarWithPred(0, false)
+}
+
+func (fs *FunctionalSimulator) hasIncomingPortData(x, y int, portDir string, color string) bool {
+	key := portKey(portDir, color)
+	ports := getPortBuffer(fs.peStates[y][x])
+	if data, ok := ports[key]; ok {
+		return data.Pred
+	}
+	return false
+}
+
+func (fs *FunctionalSimulator) writeToNeighbor(x, y int, portDir string, color string, data core.Data) {
+	nx, ny, ok := neighborFromWrite(x, y, portDir)
+	if !ok {
+		return
+	}
+	if ny < 0 || ny >= fs.arch.Rows || nx < 0 || nx >= fs.arch.Columns {
+		return
+	}
+	incoming := oppositePort(portDir)
+	key := portKey(incoming, color)
+	ports := getPortBuffer(fs.peStates[ny][nx])
+	if existing, ok := ports[key]; ok {
+		if existing.Pred && !data.Pred {
+			return
+		}
+	}
+	ports[key] = data
+}
+
+func neighborFromWrite(x, y int, portDir string) (int, int, bool) {
+	switch strings.ToUpper(portDir) {
+	case "NORTH":
+		return x, y-1, true
+	case "SOUTH":
+		return x, y+1, true
+	case "EAST":
+		return x+1, y, true
+	case "WEST":
+		return x-1, y, true
+	default:
+		return x, y, false
+	}
+}
+
+func portKey(dir string, color string) string {
+	c := strings.ToUpper(color)
+	if c == "" {
+		c = "RED"
+	}
+	return strings.ToUpper(dir) + ":" + c
+}
+
+func getPortBuffer(ps *PEState) map[string]core.Data {
+	if ps.LocalState == nil {
+		ps.LocalState = make(map[string]interface{})
+	}
+	if existing, ok := ps.LocalState["ports"]; ok {
+		if ports, ok := existing.(map[string]core.Data); ok {
+			return ports
+		}
+	}
+	ports := make(map[string]core.Data)
+	ps.LocalState["ports"] = ports
+	return ports
 }
