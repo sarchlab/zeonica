@@ -576,7 +576,6 @@ func (i instEmulator) runMov(inst Operation, state *coreState) {
 	oprStruct := i.readOperand(src, state)
 	opr := oprStruct.First()
 	finalPred := oprStruct.Pred
-
 	// Write the value into the destination register
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalarWithPred(opr, finalPred), state)
@@ -618,7 +617,6 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) {
 		panic("memory address out of bounds")
 	}
 	value := state.Memory[addr]
-
 	slog.Warn("Memory",
 		"Behavior", "LoadDirect",
 		"Value", value,
@@ -674,12 +672,11 @@ func (i instEmulator) runLoadWaitDRAM(inst Operation, state *coreState) {
 
 func (i instEmulator) runStoreDirect(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
-	addrStruct := i.readOperand(src1, state)
-	addr := addrStruct.First()
-	src2 := inst.SrcOperands.Operands[1]
-	valueStruct := i.readOperand(src2, state)
+	valueStruct := i.readOperand(src1, state)
 	value := valueStruct.First()
-	fmt.Println("value: ", value)
+	src2 := inst.SrcOperands.Operands[1]
+	addrStruct := i.readOperand(src2, state)
+	addr := addrStruct.First()
 	if addr >= uint32(len(state.Memory)) {
 		panic("memory address out of bounds, addr: " + strconv.Itoa(int(addr)) + ", len(state.Memory): " + strconv.Itoa(len(state.Memory)))
 	}
@@ -819,7 +816,6 @@ func (i instEmulator) runAdd(inst Operation, state *coreState) {
 	dstValSigned := src1Signed + src2Signed
 	dstVal := uint32(dstValSigned)
 	finalPred := src1Struct.Pred && src2Struct.Pred
-
 	//fmt.Printf("IADD: Adding %d (src1) + %d (src2) = %d\n", src1Signed, src2Signed, dstValSigned)
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, finalPred), state)
@@ -1076,6 +1072,9 @@ func (i instEmulator) runRet(inst Operation, state *coreState, time float64) {
 			*state.retVal = srcVal
 			*state.exit = true
 			*state.requestExitTimestamp = time
+			fmt.Println("++++++++++++ RETURN executed", srcVal, "T=", time)
+		} else {
+			fmt.Println("++++++++++++ RETURN bypassed")
 		}
 	} else {
 		finalPred = false
@@ -1178,13 +1177,15 @@ func (i instEmulator) runCmpExport(inst Operation, state *coreState) {
 		for _, dst := range inst.DstOperands.Operands {
 			i.writeOperand(dst, cgra.NewScalarWithPred(1, finalPred), state)
 		}
+		fmt.Println(">>>>>>>>>>>>>>> ICMP_EQ: ", src1Val.First(), src2Val.First(), "Yes")
 	} else {
 		finalPred = src1Val.Pred
 		for _, dst := range inst.DstOperands.Operands {
 			i.writeOperand(dst, cgra.NewScalarWithPred(0, finalPred), state)
 		}
+		fmt.Println(">>>>>>>>>>>>>>> ICMP_EQ: ", src1Val.First(), src2Val.First(), "No")
 	}
-	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Src1", fmt.Sprintf("%d(%t)", src1Val.First(), src1Val.Pred), "Src2", fmt.Sprintf("%d(%t)", src2Val.First(), src2Val.Pred), "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -1202,7 +1203,12 @@ func (i instEmulator) runSgtExport(inst Operation, state *coreState) {
 	resultPred := src1Pred && src2Pred
 
 	finalPred := resultPred
-	if src1Val > src2Val {
+
+	//o
+	src1Signed := int32(src1Val)
+	src2Signed := int32(src2Val)
+
+	if src1Signed > src2Signed {
 		for _, dst := range inst.DstOperands.Operands {
 			i.writeOperand(dst, cgra.NewScalarWithPred(1, finalPred), state)
 		}
@@ -1316,10 +1322,12 @@ func (i instEmulator) runGrantPred(inst Operation, state *coreState) {
 
 	//fmt.Printf("GRANTPRED: srcVal = %d, predVal = %t at (%d, %d)\n", srcVal, predVal, state.TileX, state.TileY)
 	finalPred := resultPred
-
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalarWithPred(srcVal, finalPred), state)
 	}
+
+	fmt.Println("<<<<<<<<<<<<<< GRANTPRED: ", srcVal, predVal, finalPred)
+
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 }

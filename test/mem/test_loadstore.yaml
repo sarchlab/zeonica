@@ -21,9 +21,9 @@ array_config:
       - operations:
         - opcode: STD
           src_operands:
-          - operand: '0'
-            color: R
           - operand: $0
+            color: R
+          - operand: '0'
             color: R
           id: 1
       - operations:
@@ -45,9 +45,9 @@ array_config:
       - operations:
         - opcode: STD
           src_operands:
-          - operand: '0'
-            color: R
           - operand: East
+            color: R
+          - operand: '0'
             color: R
           id: 3
       - operations:
@@ -69,9 +69,9 @@ array_config:
       - operations:
         - opcode: STD
           src_operands:
-          - operand: '0'
-            color: R
           - operand: West
+            color: R
+          - operand: '0'
             color: R
           id: 5
       - operations:
@@ -93,9 +93,9 @@ array_config:
       - operations:
         - opcode: STD
           src_operands:
-          - operand: '0'
-            color: R
           - operand: South
+            color: R
+          - operand: '0'
             color: R
           id: 7
       - operations:

@@ -1,0 +1,120 @@
+nodes:
+  - id: 0
+    opcode: "GRANT_ONCE"
+    tile_x: 0
+    tile_y: 0
+    time_step: 0
+  - id: 1
+    opcode: "GRANT_ONCE"
+    tile_x: 0
+    tile_y: 0
+    time_step: 2
+  - id: 7
+    opcode: "PHI_START"
+    tile_x: 1
+    tile_y: 0
+    time_step: 1
+  - id: 8
+    opcode: "PHI_START"
+    tile_x: 0
+    tile_y: 0
+    time_step: 3
+  - id: 11
+    opcode: "ADD"
+    tile_x: 1
+    tile_y: 0
+    time_step: 2
+  - id: 12
+    opcode: "FADD"
+    tile_x: 0
+    tile_y: 1
+    time_step: 4
+  - id: 15
+    opcode: "DATA_MOV"
+    tile_x: 1
+    tile_y: 1
+    time_step: 5
+  - id: 17
+    opcode: "ICMP_SLT"
+    tile_x: 1
+    tile_y: 0
+    time_step: 3
+  - id: 19
+    opcode: "DATA_MOV"
+    tile_x: 0
+    tile_y: 1
+    time_step: 5
+  - id: 21
+    opcode: "NOT"
+    tile_x: 2
+    tile_y: 0
+    time_step: 4
+  - id: 22
+    opcode: "GRANT_PREDICATE"
+    tile_x: 0
+    tile_y: 1
+    time_step: 6
+  - id: 23
+    opcode: "GRANT_PREDICATE"
+    tile_x: 1
+    tile_y: 0
+    time_step: 4
+  - id: 27
+    opcode: "GRANT_PREDICATE"
+    tile_x: 1
+    tile_y: 1
+    time_step: 6
+  - id: 29
+    opcode: "RETURN_VALUE"
+    tile_x: 1
+    tile_y: 1
+    time_step: 7
+  - id: 190001
+    opcode: "DATA_MOV"
+    tile_x: 0
+    tile_y: 0
+    time_step: 4
+  - id: 240001
+    opcode: "DATA_MOV"
+    tile_x: 1
+    tile_y: 0
+    time_step: 5
+edges:
+  - from: 12
+    to: 15
+  - from: 15
+    to: 27
+  - from: 17
+    to: 190001
+  - from: 190001
+    to: 19
+  - from: 19
+    to: 22
+  - from: 21
+    to: 240001
+  - from: 27
+    to: 29
+  - from: 22
+    to: 8
+  - from: 240001
+    to: 27
+  - from: 17
+    to: 23
+  - from: 12
+    to: 22
+  - from: 11
+    to: 17
+  - from: 23
+    to: 7
+  - from: 11
+    to: 23
+  - from: 8
+    to: 12
+  - from: 7
+    to: 11
+  - from: 1
+    to: 8
+  - from: 17
+    to: 21
+  - from: 0
+    to: 7
