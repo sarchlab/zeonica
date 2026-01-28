@@ -1223,38 +1223,6 @@ func (i instEmulator) runCmpExport(inst Operation, state *coreState) {
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Src1", fmt.Sprintf("%d(%t)", src1Val.First(), src1Val.Pred), "Src2", fmt.Sprintf("%d(%t)", src2Val.First(), src2Val.Pred), "Result", fmt.Sprintf("%d(%t)", resultVal, finalPred))
 }
 
-func (i instEmulator) runSgtExport(inst Operation, state *coreState) {
-	src1 := inst.SrcOperands.Operands[0]
-	src2 := inst.SrcOperands.Operands[1]
-
-	src1Struct := i.readOperand(src1, state)
-	src2Struct := i.readOperand(src2, state)
-	src1Val := src1Struct.First()
-	src2Val := src2Struct.First()
-
-	src1Pred := src1Struct.Pred
-	src2Pred := src2Struct.Pred
-	resultPred := src1Pred && src2Pred
-
-	finalPred := resultPred
-
-	//o
-	src1Signed := int32(src1Val)
-	src2Signed := int32(src2Val)
-
-	if src1Signed > src2Signed {
-		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, cgra.NewScalarWithPred(1, finalPred), state)
-		}
-	} else {
-		for _, dst := range inst.DstOperands.Operands {
-			i.writeOperand(dst, cgra.NewScalarWithPred(0, finalPred), state)
-		}
-	}
-	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
-	// elect no next PC
-}
-
 func (i instEmulator) runLTExport(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
@@ -1267,8 +1235,12 @@ func (i instEmulator) runLTExport(inst Operation, state *coreState) {
 	src2Pred := src2Struct.Pred
 	resultPred := src1Pred && src2Pred
 
+	// Convert uint32 to int32 for signed comparison
+	src1Signed := int32(src1Val)
+	src2Signed := int32(src2Val)
+
 	finalPred := resultPred
-	if src1Val < src2Val {
+	if src1Signed < src2Signed {
 		for _, dst := range inst.DstOperands.Operands {
 			i.writeOperand(dst, cgra.NewScalarWithPred(1, finalPred), state)
 		}
@@ -1293,8 +1265,12 @@ func (i instEmulator) runGTExport(inst Operation, state *coreState) {
 	src2Pred := src2Struct.Pred
 	resultPred := src1Pred && src2Pred
 
+	// Convert uint32 to int32 for signed comparison
+	src1Signed := int32(src1Val)
+	src2Signed := int32(src2Val)
+
 	finalPred := resultPred
-	if src1Val > src2Val {
+	if src1Signed > src2Signed {
 		for _, dst := range inst.DstOperands.Operands {
 			i.writeOperand(dst, cgra.NewScalarWithPred(1, finalPred), state)
 		}
@@ -1319,6 +1295,7 @@ func (i instEmulator) runSGEExport(inst Operation, state *coreState) {
 	src2Pred := src2Struct.Pred
 	resultPred := src1Pred && src2Pred
 
+	// Convert uint32 to int32 using bit reinterpretation to handle two's complement correctly
 	src1Signed := int32(src1Val)
 	src2Signed := int32(src2Val)
 
