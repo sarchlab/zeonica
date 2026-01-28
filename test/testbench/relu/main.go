@@ -77,7 +77,7 @@ func Relu() {
 	fmt.Println("========================")
 	fmt.Println("========================")
 
-	// get memory values in (2,3) from 0x0-0x31
+	// get memory values in (1,3) from 0x0-0x31
 	for i := 0; i < 32; i++ {
 		value := driver.ReadMemory(1, 3, uint32(i))
 		fmt.Println("memory[", i, "]:", value)
