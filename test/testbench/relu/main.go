@@ -31,7 +31,7 @@ func Relu() {
 
 	driver.RegisterDevice(device)
 
-	programPath := "test/Zeonica_Testbench/kernel/relu/relu-instructions.yaml"
+	programPath := "test/testbench/relu/relu.yaml"
 
 	// preload data
 
@@ -79,7 +79,7 @@ func Relu() {
 
 	// get memory values in (2,3) from 0x0-0x31
 	for i := 0; i < 32; i++ {
-		value := driver.ReadMemory(2, 3, uint32(i))
+		value := driver.ReadMemory(1, 3, uint32(i))
 		fmt.Println("memory[", i, "]:", value)
 	}
 }

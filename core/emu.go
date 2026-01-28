@@ -132,6 +132,7 @@ func (i instEmulator) SetUpInstructionGroup(index int32, state *coreState) {
 func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreState, time float64) bool {
 	// check the Return signal
 	if *state.exit && time-*state.requestExitTimestamp > ExitDelay {
+		fmt.Println("Exit signal ( requested at", *state.requestExitTimestamp, ") received at time", time)
 		return false
 	}
 	prevPC := state.PCInBlock
@@ -339,7 +340,6 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 	// }
 
 	instFuncs := map[string]func(Operation, *coreState){
-<<<<<<< HEAD
 		"ADD":       i.runAdd, // ADD, ADDI, INC, SUB, DEC
 		"SUB":       i.runSub,
 		"LLS":       i.runLLS,
@@ -357,29 +357,6 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"PHI_CONST": i.runPhiConst, // backward compatibility
 		"SEXT":      i.runMov,      // identity operation by now
 		"ZEXT":      i.runMov,      // identity operation by now
-=======
-		"ADD":          i.runAdd, // ADD, ADDI, INC, SUB, DEC
-		"SUB":          i.runSub,
-		"LLS":          i.runLLS,
-		"SHL":          i.runLLS, // SHL is an alias for LLS
-		"LRS":          i.runLRS,
-		"MUL":          i.runMul, // MULI
-		"DIV":          i.runDiv,
-		"OR":           i.runOR,
-		"XOR":          i.runXOR, // XOR XORI
-		"AND":          i.runAND,
-		"MOV":          i.runMov,
-		"JMP":          i.runJmp,
-		"BNE":          i.runBne,
-		"BEQ":          i.runBeq, // BEQI
-		"BLT":          i.runBlt,
-		"RETURN_VALUE": i.runRet,
-		"RETURN_VOID":  i.runRet,
-		"RET":          i.runRet,      // backward compatibility
-		"PHI_CONST":    i.runPhiConst, // backward compatibility
-		"SEXT":         i.runMov,      // identity operation by now
-		"ZEXT":         i.runMov,      // identity operation by now
->>>>>>> origin/main
 
 		"FADD": i.runFAdd, // FADDI
 		"FSUB": i.runFSub,
@@ -390,15 +367,13 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"PHI_START":       i.runPhiConst,
 		"GRANT_PREDICATE": i.runGrantPred,
 		"GRANT_ONCE":      i.runGrantOnce,
+		"SEL":             i.runSel,
 
 		// comparisons
 		"ICMP_EQ":  i.runCmpExport,
-<<<<<<< HEAD
-		"ICMP_SGT": i.runSgtExport,
-=======
 		"ICMP_SLT": i.runLTExport,
 		"ICMP_SGT": i.runGTExport,
->>>>>>> origin/main
+		"ICMP_SGE": i.runSGEExport,
 
 		// do not distinguish between data_mov and control mov
 		"DATA_MOV": i.runMov,
@@ -1227,22 +1202,25 @@ func (i instEmulator) runCmpExport(inst Operation, state *coreState) {
 	src1Val := i.readOperand(src1, state)
 	src2Val := i.readOperand(src2, state)
 
+	resultVal := 0
+
 	var finalPred bool
 	if src1Val.First() == src2Val.First() && src1Val.Pred == src2Val.Pred {
 		finalPred = src1Val.Pred
+		resultVal = 1
 		for _, dst := range inst.DstOperands.Operands {
 			i.writeOperand(dst, cgra.NewScalarWithPred(1, finalPred), state)
 		}
 		fmt.Println(">>>>>>>>>>>>>>> ICMP_EQ: ", src1Val.First(), src2Val.First(), "Yes")
 	} else {
 		finalPred = src1Val.Pred
+		resultVal = 0
 		for _, dst := range inst.DstOperands.Operands {
 			i.writeOperand(dst, cgra.NewScalarWithPred(0, finalPred), state)
 		}
 		fmt.Println(">>>>>>>>>>>>>>> ICMP_EQ: ", src1Val.First(), src2Val.First(), "No")
 	}
-	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Src1", fmt.Sprintf("%d(%t)", src1Val.First(), src1Val.Pred), "Src2", fmt.Sprintf("%d(%t)", src2Val.First(), src2Val.Pred), "Pred", finalPred)
-	// elect no next PC
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Src1", fmt.Sprintf("%d(%t)", src1Val.First(), src1Val.Pred), "Src2", fmt.Sprintf("%d(%t)", src2Val.First(), src2Val.Pred), "Result", fmt.Sprintf("%d(%t)", resultVal, finalPred))
 }
 
 func (i instEmulator) runSgtExport(inst Operation, state *coreState) {
@@ -1327,6 +1305,37 @@ func (i instEmulator) runGTExport(inst Operation, state *coreState) {
 	}
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
+}
+
+func (i instEmulator) runSGEExport(inst Operation, state *coreState) {
+	src1 := inst.SrcOperands.Operands[0]
+	src2 := inst.SrcOperands.Operands[1]
+
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
+	src1Pred := src1Struct.Pred
+	src2Pred := src2Struct.Pred
+	resultPred := src1Pred && src2Pred
+
+	src1Signed := int32(src1Val)
+	src2Signed := int32(src2Val)
+
+	resultVal := 0
+
+	if src1Signed >= src2Signed {
+		resultVal = 1
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(1, resultPred), state)
+		}
+	} else {
+		resultVal = 0
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(0, resultPred), state)
+		}
+	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Src1", fmt.Sprintf("%d(%t)", src1Val, src1Pred), "Src2", fmt.Sprintf("%d(%t)", src2Val, src2Pred), "Result", fmt.Sprintf("%d(%t)", resultVal, resultPred))
 }
 
 func (i instEmulator) runPhi(inst Operation, state *coreState) {
@@ -1415,7 +1424,7 @@ func (i instEmulator) runGrantPred(inst Operation, state *coreState) {
 
 	fmt.Println("<<<<<<<<<<<<<< GRANTPRED: ", srcVal, predVal, finalPred)
 
-	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "SrcOperand", fmt.Sprintf("%d(%t)", srcVal, srcStruct.Pred), "PredOperand", fmt.Sprintf("%d(%t)", predVal, predStruct.Pred), "Pred", finalPred)
 	// elect no next PC
 }
 
@@ -1439,4 +1448,39 @@ func (i instEmulator) runGrantOnce(inst Operation, state *coreState) {
 		}
 	}
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+}
+
+func (i instEmulator) runSel(inst Operation, state *coreState) {
+	sel := inst.SrcOperands.Operands[0]
+	src1 := inst.SrcOperands.Operands[1]
+	src2 := inst.SrcOperands.Operands[2]
+
+	selStruct := i.readOperand(sel, state)
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+
+	selVal := selStruct.First()
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
+
+	selPred := selStruct.Pred
+	src1Pred := src1Struct.Pred
+	src2Pred := src2Struct.Pred
+
+	resultPred := selPred && src1Pred && src2Pred
+
+	if selVal != 0 && selVal != 1 {
+		panic("Sel must be 0 or 1")
+	}
+
+	if selVal == 0 { // if sel is 0, select src2
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(src2Val, resultPred), state)
+		}
+	} else { // if sel is 1, select src1
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(src1Val, resultPred), state)
+		}
+	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Sel", fmt.Sprintf("%d(%t)", selVal, selPred), "Src1", fmt.Sprintf("%d(%t)", src1Val, src1Pred), "Src2", fmt.Sprintf("%d(%t)", src2Val, src2Pred), "Sel", fmt.Sprintf("%d(%t)", selVal, selPred))
 }
