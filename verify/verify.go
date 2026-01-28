@@ -205,6 +205,11 @@ type FunctionalSimulator struct {
 	programs map[string]core.Program
 	arch     *ArchInfo
 	peStates [][]*PEState
+
+	currentT  int
+	TraceOpPre  func(x, y, t int, op *core.Operation)
+	TraceOpPost func(x, y, t int, op *core.Operation)
+	TraceStore func(x, y, t int, addr uint32, value core.Data, op *core.Operation)
 }
 
 // NewFunctionalSimulator creates a new functional simulator
@@ -243,12 +248,38 @@ func (fs *FunctionalSimulator) GetRegisterValue(x, y int, regIndex int) uint32 {
 	return fs.peStates[y][x].ReadReg(regIndex).First()
 }
 
+// GetRegisterData retrieves a register value with predicate
+func (fs *FunctionalSimulator) GetRegisterData(x, y int, regIndex int) core.Data {
+	if y < 0 || y >= fs.arch.Rows || x < 0 || x >= fs.arch.Columns {
+		return core.Data{Data: []uint32{0}, Pred: false}
+	}
+	return fs.peStates[y][x].ReadReg(regIndex)
+}
+
 // GetMemoryValue retrieves a memory value from a PE
 func (fs *FunctionalSimulator) GetMemoryValue(x, y int, address uint32) uint32 {
 	if y < 0 || y >= fs.arch.Rows || x < 0 || x >= fs.arch.Columns {
 		return 0
 	}
 	return fs.peStates[y][x].ReadMemory(address).First()
+}
+
+// DebugReadOperand reads an operand value for tracing
+func (fs *FunctionalSimulator) DebugReadOperand(x, y int, operand core.Operand) core.Data {
+	return fs.readOperand(x, y, &operand)
+}
+
+// DebugGetPortBuffer returns a snapshot of port tokens at a PE.
+func (fs *FunctionalSimulator) DebugGetPortBuffer(x, y int) map[string]core.Data {
+	if y < 0 || y >= fs.arch.Rows || x < 0 || x >= fs.arch.Columns {
+		return map[string]core.Data{}
+	}
+	ports := getPortBuffer(fs.peStates[y][x])
+	out := make(map[string]core.Data, len(ports))
+	for k, v := range ports {
+		out[k] = v
+	}
+	return out
 }
 
 // GetMemoryRange retrieves a range of memory values

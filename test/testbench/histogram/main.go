@@ -7,7 +7,10 @@ import (
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/api"
+<<<<<<< HEAD
 	// "github.com/sarchlab/zeonica/cgra"
+=======
+>>>>>>> origin/main
 	"github.com/sarchlab/zeonica/config"
 	"github.com/sarchlab/zeonica/core"
 )
@@ -92,9 +95,13 @@ func Histogram() {
 	for addr := 0; addr < scanLimit; addr++ {
 		val := driver.ReadMemory(outputTile[0], outputTile[1], uint32(addr))
 		outputData[addr] = val
+<<<<<<< HEAD
 		if addr < len(inputData) {
 			fmt.Printf("  addr %d -> %d\n", addr, val)
 		}
+=======
+		fmt.Printf("  addr %d -> %d\n", addr, val)
+>>>>>>> origin/main
 	}
 
 	fmt.Println("expected histogram (CPU):")

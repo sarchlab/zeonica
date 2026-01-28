@@ -339,6 +339,7 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 	// }
 
 	instFuncs := map[string]func(Operation, *coreState){
+<<<<<<< HEAD
 		"ADD":       i.runAdd, // ADD, ADDI, INC, SUB, DEC
 		"SUB":       i.runSub,
 		"LLS":       i.runLLS,
@@ -356,6 +357,29 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"PHI_CONST": i.runPhiConst, // backward compatibility
 		"SEXT":      i.runMov,      // identity operation by now
 		"ZEXT":      i.runMov,      // identity operation by now
+=======
+		"ADD":          i.runAdd, // ADD, ADDI, INC, SUB, DEC
+		"SUB":          i.runSub,
+		"LLS":          i.runLLS,
+		"SHL":          i.runLLS, // SHL is an alias for LLS
+		"LRS":          i.runLRS,
+		"MUL":          i.runMul, // MULI
+		"DIV":          i.runDiv,
+		"OR":           i.runOR,
+		"XOR":          i.runXOR, // XOR XORI
+		"AND":          i.runAND,
+		"MOV":          i.runMov,
+		"JMP":          i.runJmp,
+		"BNE":          i.runBne,
+		"BEQ":          i.runBeq, // BEQI
+		"BLT":          i.runBlt,
+		"RETURN_VALUE": i.runRet,
+		"RETURN_VOID":  i.runRet,
+		"RET":          i.runRet,      // backward compatibility
+		"PHI_CONST":    i.runPhiConst, // backward compatibility
+		"SEXT":         i.runMov,      // identity operation by now
+		"ZEXT":         i.runMov,      // identity operation by now
+>>>>>>> origin/main
 
 		"FADD": i.runFAdd, // FADDI
 		"FSUB": i.runFSub,
@@ -369,13 +393,19 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 
 		// comparisons
 		"ICMP_EQ":  i.runCmpExport,
+<<<<<<< HEAD
 		"ICMP_SGT": i.runSgtExport,
+=======
+		"ICMP_SLT": i.runLTExport,
+		"ICMP_SGT": i.runGTExport,
+>>>>>>> origin/main
 
 		// do not distinguish between data_mov and control mov
 		"DATA_MOV": i.runMov,
 		"CTRL_MOV": i.runMov,
+		"CONSTANT": i.runMov,
 
-		"GEP": i.runMov,
+		"GEP": i.runGep,
 
 		"CMP_EXPORT": i.runCmpExport,
 
@@ -579,6 +609,32 @@ func (i instEmulator) runMov(inst Operation, state *coreState) {
 	// Write the value into the destination register
 	for _, dst := range inst.DstOperands.Operands {
 		i.writeOperand(dst, cgra.NewScalarWithPred(opr, finalPred), state)
+	}
+
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+}
+
+func (i instEmulator) runGep(inst Operation, state *coreState) {
+	if len(inst.SrcOperands.Operands) == 0 {
+		return
+	}
+
+	src1 := inst.SrcOperands.Operands[0]
+	src1Struct := i.readOperand(src1, state)
+	src1Val := src1Struct.First()
+	finalPred := src1Struct.Pred
+	dstVal := src1Val
+
+	if len(inst.SrcOperands.Operands) > 1 {
+		src2 := inst.SrcOperands.Operands[1]
+		src2Struct := i.readOperand(src2, state)
+		src2Val := src2Struct.First()
+		dstVal = src1Val + src2Val
+		finalPred = src1Struct.Pred && src2Struct.Pred
+	}
+
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, finalPred), state)
 	}
 
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
@@ -1247,6 +1303,32 @@ func (i instEmulator) runLTExport(inst Operation, state *coreState) {
 	// elect no next PC
 }
 
+func (i instEmulator) runGTExport(inst Operation, state *coreState) {
+	src1 := inst.SrcOperands.Operands[0]
+	src2 := inst.SrcOperands.Operands[1]
+
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
+	src1Pred := src1Struct.Pred
+	src2Pred := src2Struct.Pred
+	resultPred := src1Pred && src2Pred
+
+	finalPred := resultPred
+	if src1Val > src2Val {
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(1, finalPred), state)
+		}
+	} else {
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(0, finalPred), state)
+		}
+	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+	// elect no next PC
+}
+
 func (i instEmulator) runPhi(inst Operation, state *coreState) {
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
@@ -1264,6 +1346,11 @@ func (i instEmulator) runPhi(inst Operation, state *coreState) {
 		finalPred = src2Struct.Pred
 		for _, dst := range inst.DstOperands.Operands {
 			i.writeOperand(dst, cgra.NewScalarWithPred(src2Struct.First(), finalPred), state)
+		}
+	} else if !src1Struct.Pred && !src2Struct.Pred {
+		finalPred = false
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(0, finalPred), state)
 		}
 	} else {
 		panic("Phi operation: both sources have the same predicate")
@@ -1336,10 +1423,12 @@ func (i instEmulator) runGrantOnce(inst Operation, state *coreState) {
 	src := inst.SrcOperands.Operands[0]
 
 	srcStruct := i.readOperand(src, state)
+	// Track GRANT_ONCE per instruction to avoid cross-interference.
+	stateKey := fmt.Sprintf("GrantOnce_%d", inst.ID)
 	var finalPred bool
-	if state.States["GrantOnce"] == false {
-		state.States["GrantOnce"] = true
-		finalPred = true
+	if state.States[stateKey] == nil || state.States[stateKey] == false {
+		state.States[stateKey] = true
+		finalPred = srcStruct.Pred
 		for _, dst := range inst.DstOperands.Operands {
 			i.writeOperand(dst, cgra.NewScalarWithPred(srcStruct.First(), finalPred), state)
 		}

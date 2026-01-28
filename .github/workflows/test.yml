@@ -31,3 +31,6 @@ jobs:
 
       - name: Unit Test
         run: ginkgo -r
+
+      - name: Go Test
+        run: go test ./...
