@@ -84,6 +84,78 @@ var _ = Describe("InstEmulator", func() {
 
 	})
 
+	Context("Signed Comparison Instructions", func() {
+		testSignedComparison := func(opcode string, src1Val uint32, src2Val uint32, expectedResult uint32) {
+			s.Registers[0] = cgra.NewScalar(src1Val)
+			s.Registers[1] = cgra.NewScalar(src2Val)
+			inst := InstructionGroup{
+				Operations: []Operation{
+					{
+						OpCode: opcode,
+						SrcOperands: OperandList{
+							Operands: []Operand{
+								{Color: "RED", Impl: "$0"},
+								{Color: "RED", Impl: "$1"},
+							},
+						},
+						DstOperands: OperandList{
+							Operands: []Operand{
+								{Color: "RED", Impl: "$2"},
+							},
+						},
+					},
+				},
+			}
+			s.SelectedBlock = &EntryBlock{
+				InstructionGroups: []InstructionGroup{inst},
+			}
+			ie.RunInstructionGroup(inst, &s, 0)
+			Expect(s.Registers[2].First()).To(Equal(expectedResult))
+		}
+
+		Describe("ICMP_SGT", func() {
+			It("should handle positive > positive", func() {
+				testSignedComparison("ICMP_SGT", 5, 3, 1)
+			})
+
+			It("should handle negative > positive (false)", func() {
+				testSignedComparison("ICMP_SGT", 0xFFFFFFFF, 0, 0) // -1 > 0 = false
+			})
+
+			It("should handle negative > negative", func() {
+				testSignedComparison("ICMP_SGT", 0xFFFFFFFF, 0xFFFFFFFE, 1) // -1 > -2 = true
+			})
+		})
+
+		Describe("ICMP_SLT", func() {
+			It("should handle positive < positive", func() {
+				testSignedComparison("ICMP_SLT", 3, 5, 1)
+			})
+
+			It("should handle positive < negative (false)", func() {
+				testSignedComparison("ICMP_SLT", 0, 0xFFFFFFFF, 0) // 0 < -1 = false
+			})
+
+			It("should handle negative < negative", func() {
+				testSignedComparison("ICMP_SLT", 0xFFFFFFFE, 0xFFFFFFFF, 1) // -2 < -1 = true
+			})
+		})
+
+		Describe("ICMP_SGE", func() {
+			It("should handle equality", func() {
+				testSignedComparison("ICMP_SGE", 5, 5, 1)
+			})
+
+			It("should handle negative >= positive (false)", func() {
+				testSignedComparison("ICMP_SGE", 0xFFFFFFFF, 0, 0) // -1 >= 0 = false
+			})
+
+			It("should handle negative >= negative (equal)", func() {
+				testSignedComparison("ICMP_SGE", 0xFFFFFFFF, 0xFFFFFFFF, 1) // -1 >= -1 = true
+			})
+		})
+	})
+
 	/*
 
 		Context("Bitwise Instructions", func() {

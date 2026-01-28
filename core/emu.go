@@ -1295,7 +1295,7 @@ func (i instEmulator) runSGEExport(inst Operation, state *coreState) {
 	src2Pred := src2Struct.Pred
 	resultPred := src1Pred && src2Pred
 
-	// Convert uint32 to int32 using bit reinterpretation to handle two's complement correctly
+	// Convert uint32 to int32 for signed comparison
 	src1Signed := int32(src1Val)
 	src2Signed := int32(src2Val)
 
