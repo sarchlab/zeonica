@@ -7,8 +7,6 @@ import (
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/api"
-
-	// "github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/config"
 	"github.com/sarchlab/zeonica/core"
 )
