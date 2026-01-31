@@ -11,7 +11,7 @@ import (
 	"github.com/sarchlab/zeonica/core"
 )
 
-func Fir() {
+func Fir() (int32, int32) {
 	width := 4
 	height := 4
 
@@ -33,7 +33,7 @@ func Fir() {
 
 	programPath := os.Getenv("ZEONICA_PROGRAM_YAML")
 	if programPath == "" {
-		programPath = "test/testbench/fir/fir4x4.yaml"
+		programPath = "tmp-generated-instructions.yaml"
 	}
 	program := core.LoadProgramFileFromYAML(programPath)
 
@@ -62,10 +62,35 @@ func Fir() {
 		}
 	}
 
-	driver.PreloadMemory(3, 3, 3, 0)
-	driver.PreloadMemory(3, 3, 1, 1)
-	driver.PreloadMemory(2, 2, 2, 0)
-	driver.PreloadMemory(2, 2, 4, 1) // addr has ERRORS !!!!!!
+	const NTAPS = 32
+	input := make([]int32, NTAPS)
+	coeff := []int32{
+		0, 1, 3, -2, 0, 0, -3, 1,
+		0, 1, 3, -2, 0, 0, -3, 1,
+		0, 1, 3, -2, 0, 0, -3, 1,
+		0, 1, 3, -2, 0, 0, -3, 1,
+	}
+
+	for i := 0; i < NTAPS; i++ {
+		input[i] = int32(i + 1)
+	}
+
+	var expected int32
+	for i := 0; i < NTAPS; i++ {
+		expected += input[i] * coeff[i]
+	}
+
+	// From tmp-generated-instructions.yaml:
+	// LOAD (arg0/input) on tile (2,1); LOAD (arg2/coeff) on tile (3,2).
+	inputTile := [2]int{2, 1}
+	coeffTile := [2]int{3, 2}
+
+	for addr, val := range input {
+		driver.PreloadMemory(inputTile[0], inputTile[1], uint32(val), uint32(addr))
+	}
+	for addr, val := range coeff {
+		driver.PreloadMemory(coeffTile[0], coeffTile[1], uint32(val), uint32(addr))
+	}
 
 	driver.Run()
 
@@ -73,15 +98,17 @@ func Fir() {
 	fmt.Println("========================")
 	fmt.Println("========================")
 
-	// get the returned value
-	retVal := device.GetTile(0, 0).GetRetVal()
-	fmt.Println("retVal:", retVal)
+	// RETURN_VALUE is on tile (1,2) in tmp-generated-instructions.yaml.
+	retBits := device.GetTile(1, 2).GetRetVal()
+	retVal := int32(retBits)
+	fmt.Printf("retVal(bits=0x%08x) -> %d\n", retBits, retVal)
 
-	if retVal == 10 {
+	if retVal == expected {
 		fmt.Println("✅ Fir tests passed!")
 	} else {
-		fmt.Println("❌ Fir tests failed!")
+		fmt.Printf("❌ Fir tests failed! expected=%d\n", expected)
 	}
+	return retVal, expected
 }
 
 func main() {
