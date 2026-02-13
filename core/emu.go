@@ -131,7 +131,7 @@ func (i instEmulator) SetUpInstructionGroup(index int32, state *coreState) {
 
 func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreState, time float64) bool {
 	// check the Return signal
-	if *state.exit && time-*state.requestExitTimestamp > ExitDelay {
+	if *state.exit && time > *state.requestExitTimestamp {
 		fmt.Println("Exit signal ( requested at", *state.requestExitTimestamp, ") received at time", time)
 		return false
 	}
@@ -289,7 +289,9 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 	for index, src := range inst.SrcOperands.Operands {
 		if index == 1 {
 			if inst.OpCode == "PHI_CONST" || inst.OpCode == "PHI_START" {
-				if state.States["Phiconst"] == false { // first execution
+				// Track PHI_CONST per instruction to avoid cross-interference.
+				stateKey := fmt.Sprintf("PhiConst_%d", inst.ID)
+				if state.States[stateKey] == nil || state.States[stateKey] == false { // first execution
 					if len(inst.SrcOperands.Operands) > 1 {
 						continue
 					} else {
@@ -364,7 +366,7 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"NOP":  i.runNOP,
 
 		"PHI":             i.runPhi,
-		"PHI_START":       i.runPhiConst,
+		"PHI_START":       i.runPhiStart,
 		"GRANT_PREDICATE": i.runGrantPred,
 		"GRANT_ONCE":      i.runGrantOnce,
 		"SEL":             i.runSel,
@@ -1114,7 +1116,7 @@ func (i instEmulator) runRet(inst Operation, state *coreState, time float64) {
 			"Y", state.TileY,
 		)
 		*state.exit = true
-		*state.requestExitTimestamp = time
+		*state.requestExitTimestamp = time + ExitDelay
 		*state.retVal = 0
 	}
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
@@ -1368,7 +1370,7 @@ func (i instEmulator) runPhi(inst Operation, state *coreState) {
 	// elect no next PC
 }
 
-func (i instEmulator) runPhiConst(inst Operation, state *coreState) {
+func (i instEmulator) runPhiConst(inst Operation, state *coreState) { // Possibly wrong
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
@@ -1379,18 +1381,64 @@ func (i instEmulator) runPhiConst(inst Operation, state *coreState) {
 	src1Pred := src1Struct.Pred
 	src2Pred := src2Struct.Pred
 
+	// Track PHI_CONST per instruction to avoid cross-interference.
+	stateKey := fmt.Sprintf("PhiConst_%d", inst.ID)
 	var result uint32
 	var finalPred bool
-	if state.States["Phiconst"] == false {
+	if state.States[stateKey] == nil || state.States[stateKey] == false {
 		result = src1Val
 		finalPred = src1Pred
-		state.States["Phiconst"] = true
+		state.States[stateKey] = true
 		for _, dst := range inst.DstOperands.Operands {
 			i.writeOperand(dst, cgra.NewScalarWithPred(result, finalPred), state)
 		}
 	} else {
 		result = src2Val
 		finalPred = src2Pred
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(result, finalPred), state)
+		}
+	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+	// elect no next PC
+}
+
+func (i instEmulator) runPhiStart(inst Operation, state *coreState) {
+	src1 := inst.SrcOperands.Operands[0]
+	src2 := inst.SrcOperands.Operands[1]
+	src1Struct := i.readOperand(src1, state)
+	src1Val := src1Struct.First()
+	src1Pred := src1Struct.Pred
+
+	// Track PHI_START per instruction to avoid cross-interference.
+	stateKey := fmt.Sprintf("PhiStart_%d", inst.ID)
+	var result uint32
+	var finalPred bool
+
+	if state.States[stateKey] == nil || state.States[stateKey] == false { // first execution
+		if !src1Pred {
+			panic("Predicate of first time PHI_START must be true")
+		}
+		result = src1Val
+		finalPred = src1Pred
+		state.States[stateKey] = true
+		for _, dst := range inst.DstOperands.Operands {
+			i.writeOperand(dst, cgra.NewScalarWithPred(result, finalPred), state)
+		}
+	} else {
+		src2Struct := i.readOperand(src2, state) // only in normal path will consume src2
+		src2Val := src2Struct.First()
+		src2Pred := src2Struct.Pred
+		if src1Pred && src2Pred {
+			panic("Only one of the predicates of PHI_START can be true")
+		}
+		if src1Pred {
+			result = src1Val
+			finalPred = src1Pred
+		} else { // src2Pred is true or both are false(arbitrary)
+			result = src2Val
+			finalPred = src2Pred
+		}
 		for _, dst := range inst.DstOperands.Operands {
 			i.writeOperand(dst, cgra.NewScalarWithPred(result, finalPred), state)
 		}

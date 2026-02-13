@@ -90,8 +90,6 @@ func (b Builder) Build(name string) *Core {
 		c.state.SendBufHeadBusy[i] = make([]bool, 12)
 	}
 
-	c.state.States["Phiconst"] = false
-
 	c.ports = make(map[cgra.Side]*portPair)
 
 	b.makePort(c, cgra.North)
