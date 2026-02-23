@@ -340,6 +340,7 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"SHL":          i.runLLS, // SHL is an alias for LLS
 		"LRS":          i.runLRS,
 		"MUL":          i.runMul, // MULI
+		"MUL_ADD":      i.runMulAdd, // dst = src0 * src1 + src2 (systolic MAC)
 		"DIV":          i.runDiv,
 		"OR":           i.runOR,
 		"XOR":          i.runXOR, // XOR XORI
@@ -887,6 +888,29 @@ func (i instEmulator) runMul(inst Operation, state *coreState) {
 	}
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
+}
+
+func (i instEmulator) runMulAdd(inst Operation, state *coreState) {
+	// MUL_ADD: dst = src0 * src1 + src2 (systolic MAC: psum += activation * weight)
+	src0 := inst.SrcOperands.Operands[0]
+	src1 := inst.SrcOperands.Operands[1]
+	src2 := inst.SrcOperands.Operands[2]
+
+	s0 := i.readOperand(src0, state)
+	s1 := i.readOperand(src1, state)
+	s2 := i.readOperand(src2, state)
+
+	s0Val := int32(s0.First())
+	s1Val := int32(s1.First())
+	s2Val := int32(s2.First())
+	dstValSigned := s0Val*s1Val + s2Val
+	dstVal := uint32(dstValSigned)
+	finalPred := s0.Pred && s1.Pred && s2.Pred
+
+	for _, dst := range inst.DstOperands.Operands {
+		i.writeOperand(dst, cgra.NewScalarWithPred(dstVal, finalPred), state)
+	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 }
 
 func (i instEmulator) runDiv(inst Operation, state *coreState) {
