@@ -9,6 +9,7 @@ import (
 	"github.com/sarchlab/zeonica/api"
 	"github.com/sarchlab/zeonica/config"
 	"github.com/sarchlab/zeonica/core"
+	"github.com/sarchlab/zeonica/report"
 )
 
 func Fir() (int32, int32) {
@@ -116,12 +117,44 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
 
 	handler := slog.NewJSONHandler(f, &slog.HandlerOptions{
 		Level: core.LevelTrace,
 	})
 
 	slog.SetDefault(slog.New(handler))
-	Fir()
+	retVal, expected := Fir()
+
+	if err := f.Sync(); err != nil {
+		panic(err)
+	}
+	if err := f.Close(); err != nil {
+		panic(err)
+	}
+
+	passed := retVal == expected
+	mismatchCount := 0
+	if !passed {
+		mismatchCount = 1
+	}
+
+	r, err := report.GenerateFromLog(report.GenerateOptions{
+		TestName:      "fir",
+		LogPath:       "fir.json.log",
+		GridWidth:     4,
+		GridHeight:    4,
+		TopN:          5,
+		Passed:        &passed,
+		MismatchCount: &mismatchCount,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	if err := report.SaveJSON(r, "fir.report.json"); err != nil {
+		panic(err)
+	}
+
+	report.PrintSummary(r)
+	fmt.Println("report saved: fir.report.json")
 }
