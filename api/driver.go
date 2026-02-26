@@ -125,7 +125,10 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 
 		dataIndex := task.portRounds[i]*task.stride + i
 		if dataIndex < 0 || dataIndex >= len(task.data) {
-			continue
+			panic(fmt.Sprintf(
+				"feed task index out of range: idx=%d len=%d stride=%d port=%d round=%d",
+				dataIndex, len(task.data), task.stride, i, task.portRounds[i],
+			))
 		}
 
 		msg := cgra.MoveMsgBuilder{}.
@@ -191,9 +194,13 @@ func (d *driverImpl) doOneCollectTask(task *collectTask) bool {
 
 		port.RetrieveIncoming()
 		dataIndex := task.portRounds[i]*task.stride + i
-		if dataIndex >= 0 && dataIndex < len(task.data) {
-			task.data[dataIndex] = msg.Data.First()
+		if dataIndex < 0 || dataIndex >= len(task.data) {
+			panic(fmt.Sprintf(
+				"collect task index out of range: idx=%d len=%d stride=%d port=%d round=%d",
+				dataIndex, len(task.data), task.stride, i, task.portRounds[i],
+			))
 		}
+		task.data[dataIndex] = msg.Data.First()
 
 		core.Trace("DataFlow",
 			"Behavior", "Collect",
@@ -318,6 +325,38 @@ type feedInTask struct {
 	portRounds []int
 }
 
+func validateTaskLayout(dataLen, stride, portCount int, taskName string) int {
+	if stride <= 0 {
+		panic(fmt.Sprintf("%s: stride must be > 0", taskName))
+	}
+	if portCount <= 0 {
+		panic(fmt.Sprintf("%s: no ports to process", taskName))
+	}
+	if stride < portCount {
+		panic(fmt.Sprintf(
+			"%s: stride (%d) must be >= number of ports (%d)",
+			taskName, stride, portCount,
+		))
+	}
+	if dataLen%stride != 0 {
+		panic(fmt.Sprintf(
+			"%s: data length (%d) must be a multiple of stride (%d)",
+			taskName, dataLen, stride,
+		))
+	}
+	rounds := dataLen / stride
+	if rounds > 0 {
+		maxIndex := (rounds-1)*stride + (portCount - 1)
+		if maxIndex >= dataLen {
+			panic(fmt.Sprintf(
+				"%s: invalid layout (max index %d out of data length %d)",
+				taskName, maxIndex, dataLen,
+			))
+		}
+	}
+	return rounds
+}
+
 func (t *feedInTask) isFinished() bool {
 	for _, r := range t.portRounds {
 		if r < t.rounds {
@@ -340,7 +379,7 @@ func (d *driverImpl) FeedIn(
 		stride:     stride,
 		color:      d.getColorIndex(color),
 	}
-	task.rounds = len(task.data) / task.stride
+	task.rounds = validateTaskLayout(len(task.data), task.stride, len(task.localPorts), "FeedIn")
 	task.portRounds = make([]int, len(task.localPorts))
 
 	sideIndex := int(side)
@@ -412,7 +451,7 @@ func (d *driverImpl) Collect(
 		stride: stride,
 		color:  d.getColorIndex(color),
 	}
-	task.rounds = len(task.data) / task.stride
+	task.rounds = validateTaskLayout(len(task.data), task.stride, len(task.ports), "Collect")
 	task.portRounds = make([]int, len(task.ports))
 
 	sideIndex := int(side)
