@@ -115,23 +115,23 @@ func (d *driverImpl) removeFinishedFeedInTasks() {
 func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 	madeProgress := false
 
-	canSendAll := true
-	for _, port := range task.localPorts {
-		if !port.CanSend() {
-			canSendAll = false
-			break
-		}
-	}
-
-	if !canSendAll {
-		return false
-	}
-
 	for i, port := range task.localPorts {
+		if task.portRounds[i] >= task.rounds {
+			continue
+		}
+		if !port.CanSend() {
+			continue
+		}
+
+		dataIndex := task.portRounds[i]*task.stride + i
+		if dataIndex < 0 || dataIndex >= len(task.data) {
+			continue
+		}
+
 		msg := cgra.MoveMsgBuilder{}.
 			WithSrc(port.AsRemote()).
 			WithDst(task.remotePorts[i]).
-			WithData(cgra.NewScalar(task.data[task.round*task.stride+i])).
+			WithData(cgra.NewScalar(task.data[dataIndex])).
 			WithColor(task.color).
 			WithSendTime(d.Engine.CurrentTime()). // Set the current engine time here
 			Build()
@@ -145,15 +145,15 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 		core.Trace("DataFlow",
 			"Behavior", "FeedIn",
 			slog.Float64("Time", float64(d.Engine.CurrentTime()*1e9)),
-			"Data", task.data[task.round*task.stride+i],
+			"Data", task.data[dataIndex],
 			"Color", task.color,
 			"From", port.Name(),
 			"To", task.remotePorts[i],
 		)
+		task.portRounds[i]++
 		madeProgress = true
 	}
 
-	task.round++
 	return madeProgress
 }
 
@@ -171,31 +171,45 @@ func (d *driverImpl) doCollect() bool {
 }
 
 func (d *driverImpl) doOneCollectTask(task *collectTask) bool {
-	if !d.allDataReady(task) {
-		return false
-	}
-
-	//fmt.Printf("\033[31mCollect Task: %v\033[0m\n", task)
-
+	madeProgress := false
 	for i, port := range task.ports {
-		msg := port.RetrieveIncoming().(*cgra.MoveMsg)
-		task.data[task.round*task.stride+i] = msg.Data.First()
-		// in red
+		if task.portRounds[i] >= task.rounds {
+			continue
+		}
+		item := port.PeekIncoming()
+		if item == nil {
+			continue
+		}
+
+		msg, ok := item.(*cgra.MoveMsg)
+		if !ok {
+			continue
+		}
+		if msg.Color != task.color {
+			continue
+		}
+
+		port.RetrieveIncoming()
+		dataIndex := task.portRounds[i]*task.stride + i
+		if dataIndex >= 0 && dataIndex < len(task.data) {
+			task.data[dataIndex] = msg.Data.First()
+		}
 
 		core.Trace("DataFlow",
 			"Behavior", "Collect",
 			slog.Float64("Time", float64(d.Engine.CurrentTime()*1e9)),
-			"Data", task.data[task.round*task.stride+i],
+			"Data", msg.Data.First(),
 			"Pred", msg.Data.Pred,
 			"Color", task.color,
 			"From", task.ports[i].Name(),
 			"To", "None",
 		)
+
+		task.portRounds[i]++
+		madeProgress = true
 	}
 
-	task.round++
-
-	return true
+	return madeProgress
 }
 
 func (*driverImpl) allDataReady(task *collectTask) bool {
@@ -298,11 +312,19 @@ type feedInTask struct {
 
 	stride int
 	color  int
-	round  int
+	rounds int
+
+	// Port-wise progress allows opportunistic feed-in and avoids global barriers.
+	portRounds []int
 }
 
 func (t *feedInTask) isFinished() bool {
-	return t.round >= len(t.data)/t.stride
+	for _, r := range t.portRounds {
+		if r < t.rounds {
+			return false
+		}
+	}
+	return true
 }
 
 func (d *driverImpl) FeedIn(
@@ -318,6 +340,8 @@ func (d *driverImpl) FeedIn(
 		stride:     stride,
 		color:      d.getColorIndex(color),
 	}
+	task.rounds = len(task.data) / task.stride
+	task.portRounds = make([]int, len(task.localPorts))
 
 	sideIndex := int(side)
 	d.feedInTasks[sideIndex] = append(d.feedInTasks[sideIndex], task)
@@ -360,11 +384,19 @@ type collectTask struct {
 	ports  []sim.Port
 	stride int
 	color  int
-	round  int
+	rounds int
+
+	// Port-wise progress allows opportunistic collect and avoids global barriers.
+	portRounds []int
 }
 
 func (t *collectTask) isFinished() bool {
-	return t.round >= len(t.data)/t.stride
+	for _, r := range t.portRounds {
+		if r < t.rounds {
+			return false
+		}
+	}
+	return true
 }
 
 func (d *driverImpl) Collect(
@@ -380,6 +412,8 @@ func (d *driverImpl) Collect(
 		stride: stride,
 		color:  d.getColorIndex(color),
 	}
+	task.rounds = len(task.data) / task.stride
+	task.portRounds = make([]int, len(task.ports))
 
 	sideIndex := int(side)
 	//fmt.Println(color)

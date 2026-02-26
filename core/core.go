@@ -85,11 +85,11 @@ func (c *Core) MapProgram(program interface{}, x int, y int) {
 
 // Tick runs the program for one cycle.
 func (c *Core) Tick() (madeProgress bool) {
-	madeProgress = c.doSend() || madeProgress
+	madeProgress = c.doRecv() || madeProgress
 	// madeProgress = c.AlwaysPart() || madeProgress
 	// madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
 	madeProgress = c.runProgram() || madeProgress
-	madeProgress = c.doRecv() || madeProgress
+	madeProgress = c.doSend() || madeProgress
 	return madeProgress
 }
 
