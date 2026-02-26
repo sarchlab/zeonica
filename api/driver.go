@@ -212,16 +212,16 @@ func (d *driverImpl) doOneCollectTask(task *collectTask) bool {
 	return madeProgress
 }
 
-func (*driverImpl) allDataReady(task *collectTask) bool {
-	for _, port := range task.ports {
-		item := port.PeekIncoming()
-		if item == nil {
-			return false
-		}
-	}
+// func (*driverImpl) allDataReady(task *collectTask) bool {
+// 	for _, port := range task.ports {
+// 		item := port.PeekIncoming()
+// 		if item == nil {
+// 			return false
+// 		}
+// 	}
 
-	return true
-}
+// 	return true
+// }
 
 func (d *driverImpl) removeFinishedCollectTasks() {
 	for i := 0; i < 4; i++ {
