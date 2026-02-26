@@ -165,7 +165,8 @@ var _ = Describe("Driver", func() {
 				remotePorts: remotePorts,
 				stride:      3,
 				color:       0, // R
-				round:       0,
+				rounds:      2,
+				portRounds:  []int{0, 0, 0},
 			},
 		}
 
@@ -203,22 +204,20 @@ var _ = Describe("Driver", func() {
 				ports:  ports,
 				stride: 3,
 				color:  0, // R
-				round:  0,
+				rounds: 2,
+				portRounds: []int{
+					0, 0, 0,
+				},
 			},
 		}
 
-		// Mock PeekIncoming and RetrieveIncoming for first round
-		// Note: allDataReady checks PeekIncoming multiple times (once per port),
-		// then doOneCollectTask calls RetrieveIncoming for each port
+		// Mock PeekIncoming and RetrieveIncoming for first round.
 		msg1 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(1)).Build()
 		msg2 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(2)).Build()
 		msg3 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(3)).Build()
-		// allDataReady will call PeekIncoming for all ports (at least once each)
-		// Since allDataReady may be called multiple times, we use AnyTimes
-		localPort1.EXPECT().PeekIncoming().Return(msg1).AnyTimes()
-		localPort2.EXPECT().PeekIncoming().Return(msg2).AnyTimes()
-		localPort3.EXPECT().PeekIncoming().Return(msg3).AnyTimes()
-		// Then doOneCollectTask will call RetrieveIncoming for each port
+		localPort1.EXPECT().PeekIncoming().Return(msg1).Times(1)
+		localPort2.EXPECT().PeekIncoming().Return(msg2).Times(1)
+		localPort3.EXPECT().PeekIncoming().Return(msg3).Times(1)
 		localPort1.EXPECT().RetrieveIncoming().Return(msg1).Times(1)
 		localPort2.EXPECT().RetrieveIncoming().Return(msg2).Times(1)
 		localPort3.EXPECT().RetrieveIncoming().Return(msg3).Times(1)
@@ -229,9 +228,9 @@ var _ = Describe("Driver", func() {
 		msg4 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(4)).Build()
 		msg5 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(5)).Build()
 		msg6 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(6)).Build()
-		localPort1.EXPECT().PeekIncoming().Return(msg4).AnyTimes()
-		localPort2.EXPECT().PeekIncoming().Return(msg5).AnyTimes()
-		localPort3.EXPECT().PeekIncoming().Return(msg6).AnyTimes()
+		localPort1.EXPECT().PeekIncoming().Return(msg4).Times(1)
+		localPort2.EXPECT().PeekIncoming().Return(msg5).Times(1)
+		localPort3.EXPECT().PeekIncoming().Return(msg6).Times(1)
 		localPort1.EXPECT().RetrieveIncoming().Return(msg4).Times(1)
 		localPort2.EXPECT().RetrieveIncoming().Return(msg5).Times(1)
 		localPort3.EXPECT().RetrieveIncoming().Return(msg6).Times(1)
