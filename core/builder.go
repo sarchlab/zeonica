@@ -25,17 +25,21 @@ func (b Builder) WithFreq(freq sim.Freq) Builder {
 	return b
 }
 
+// WithExitAddr sets the shared exit flag address.
 func (b Builder) WithExitAddr(exitAddr *bool) Builder {
 	b.exitAddr = exitAddr
 	return b
 }
 
+// WithRetValAddr sets the shared return value address.
 func (b Builder) WithRetValAddr(retValAddr *uint32) Builder {
 	b.retValAddr = retValAddr
 	return b
 }
 
 // Build creates a core.
+//
+//nolint:funlen
 func (b Builder) Build(name string) *Core {
 	c := &Core{}
 

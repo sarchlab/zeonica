@@ -1,3 +1,4 @@
+// Package report generates and prints execution summaries from trace logs.
 package report
 
 import (
@@ -11,6 +12,7 @@ import (
 	"sort"
 )
 
+// GenerateOptions controls report generation behavior from a trace log.
 type GenerateOptions struct {
 	TestName      string
 	LogPath       string
@@ -21,6 +23,7 @@ type GenerateOptions struct {
 	MismatchCount *int
 }
 
+// Report is the aggregate execution summary derived from a trace log.
 type Report struct {
 	TestName        string       `json:"testName,omitempty"`
 	LogPath         string       `json:"logPath"`
@@ -40,11 +43,13 @@ type Report struct {
 	TopHotTiles     []TopHotTile `json:"topHotTiles"`
 }
 
+// GridInfo describes the grid size used by the workload.
 type GridInfo struct {
 	Width  int `json:"width"`
 	Height int `json:"height"`
 }
 
+// TileStats stores per-tile metrics in the generated report.
 type TileStats struct {
 	X              int     `json:"x"`
 	Y              int     `json:"y"`
@@ -58,6 +63,7 @@ type TileStats struct {
 	TotalEvents    int64   `json:"totalEvents"`
 }
 
+// TopHotTile is a ranked hot tile summary entry.
 type TopHotTile struct {
 	X              int     `json:"x"`
 	Y              int     `json:"y"`
@@ -96,6 +102,9 @@ type tileAccumulator struct {
 
 var tileEndpointPattern = regexp.MustCompile(`Device\.Tile\[(\d+)\]\[(\d+)\]\.Core\.`)
 
+// GenerateFromLog builds a report by parsing a JSON trace log.
+//
+//nolint:gocyclo,funlen
 func GenerateFromLog(opts GenerateOptions) (Report, error) {
 	if opts.LogPath == "" {
 		return Report{}, fmt.Errorf("log path is required")
@@ -110,7 +119,7 @@ func GenerateFromLog(opts GenerateOptions) (Report, error) {
 	if err != nil {
 		return Report{}, fmt.Errorf("open log file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	tileData := make(map[tileCoord]*tileAccumulator)
 	globalCycleSet := make(map[int64]struct{})
@@ -259,6 +268,7 @@ func GenerateFromLog(opts GenerateOptions) (Report, error) {
 	return report, nil
 }
 
+// SaveJSON writes a report as pretty-printed JSON.
 func SaveJSON(report Report, path string) error {
 	content, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
@@ -272,10 +282,12 @@ func SaveJSON(report Report, path string) error {
 	return nil
 }
 
+// PrintSummary prints a compact report summary to stdout.
 func PrintSummary(report Report) {
 	PrintSummaryToWriter(report, os.Stdout)
 }
 
+// PrintSummaryToWriter prints a compact report summary to the writer.
 func PrintSummaryToWriter(report Report, w io.Writer) {
 	fmt.Fprintln(w, "========================")
 	fmt.Fprintln(w, "Zeonica Report Summary")

@@ -1,3 +1,4 @@
+//nolint:funlen
 package verify
 
 import (
@@ -12,6 +13,8 @@ import (
 
 // Run executes the functional simulator for up to maxSteps iterations.
 // Returns an error if execution fails.
+//
+//nolint:gocyclo
 func (fs *FunctionalSimulator) Run(maxSteps int) error {
 	if fs.programs == nil || fs.arch == nil {
 		return fmt.Errorf("FunctionalSimulator not properly initialized")
@@ -142,6 +145,8 @@ func (fs *FunctionalSimulator) isOperandReady(x, y int, operand *core.Operand) b
 }
 
 // executeOp executes a single operation
+//
+//nolint:gocyclo
 func (fs *FunctionalSimulator) executeOp(x, y int, op *core.Operation) {
 	switch strings.ToUpper(op.OpCode) {
 	case "MOV":
@@ -597,6 +602,8 @@ func (fs *FunctionalSimulator) runNot(x, y int, op *core.Operation) {
 
 // runIcmp implements integer comparison operations
 // Semantics: ICMP_EQ, ICMP_SGT, ICMP_SLT, ICMP_SGE, ICMP_SLE, ICMP_SNE
+//
+//nolint:gocyclo
 func (fs *FunctionalSimulator) runIcmp(x, y int, op *core.Operation) {
 	if len(op.SrcOperands.Operands) < 2 || len(op.DstOperands.Operands) == 0 {
 		return
@@ -885,13 +892,13 @@ func (fs *FunctionalSimulator) writeToNeighbor(x, y int, portDir string, color s
 func neighborFromWrite(x, y int, portDir string) (int, int, bool) {
 	switch strings.ToUpper(portDir) {
 	case "NORTH":
-		return x, y-1, true
+		return x, y - 1, true
 	case "SOUTH":
-		return x, y+1, true
+		return x, y + 1, true
 	case "EAST":
-		return x+1, y, true
+		return x + 1, y, true
 	case "WEST":
-		return x-1, y, true
+		return x - 1, y, true
 	default:
 		return x, y, false
 	}

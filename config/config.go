@@ -90,6 +90,7 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 	return dev
 }
 
+//nolint:funlen
 func (d DeviceBuilder) createSharedMemory(dev *device) {
 	if d.memoryMode == "shared" {
 		// Create shared memory controller
@@ -230,7 +231,6 @@ func (d DeviceBuilder) connectTilePorts(srcTile *tile,
 	srcSide cgra.Side,
 	dstTile *tile,
 	dstSide cgra.Side) {
-
 	srcPort := srcTile.GetPort(srcSide)
 	dstPort := dstTile.GetPort(dstSide)
 

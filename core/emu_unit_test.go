@@ -41,7 +41,7 @@ var _ = Describe("InstEmulator", func() {
 		}
 	})
 
-	var mul_const_inst = InstructionGroup{
+	var mulConstInst = InstructionGroup{
 		Operations: []Operation{
 			{
 				OpCode: "MUL",
@@ -66,10 +66,10 @@ var _ = Describe("InstEmulator", func() {
 				s.Registers[0] = cgra.NewScalar(5)
 				s.SelectedBlock = &EntryBlock{
 					InstructionGroups: []InstructionGroup{
-						mul_const_inst,
+						mulConstInst,
 					},
 				}
-				ie.RunInstructionGroup(mul_const_inst, &s, 0)
+				ie.RunInstructionGroup(mulConstInst, &s, 0)
 				Expect(s.Registers[1]).To(Equal(cgra.NewScalar(15)))
 				Expect(s.PCInBlock).To(Equal(int32(0)))
 				// in the test, there is no SelectedBlock, so emu will not increase the PCInBlock

@@ -9,14 +9,20 @@ import (
 )
 
 const (
-	PrintToggle            = false
-	LevelTrace  slog.Level = slog.LevelInfo + 1
+	// PrintToggle enables verbose state table printing in debugging.
+	PrintToggle = false
+	// LevelTrace is a custom trace level above info.
+	LevelTrace slog.Level = slog.LevelInfo + 1
 )
 
+// Trace writes a trace-level structured log record.
 func Trace(msg string, args ...any) {
 	slog.Log(context.Background(), LevelTrace, msg, args...)
 }
 
+// PrintState prints a formatted snapshot of core runtime state.
+//
+//nolint:gocyclo,funlen
 func PrintState(state *coreState) {
 	if !PrintToggle {
 		return
@@ -153,6 +159,7 @@ func PrintState(state *coreState) {
 	fmt.Println("================================================")
 }
 
+// LogState writes a structured debug checkpoint for the core state.
 func LogState(state *coreState) {
 	slog.Debug("StateCheckpoint",
 		"X", state.TileX, "Y", state.TileY,

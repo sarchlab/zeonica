@@ -1,3 +1,4 @@
+//nolint:funlen,gocyclo,lll,unused,gosimple
 package core
 
 import (
@@ -10,10 +11,13 @@ import (
 	"github.com/sarchlab/zeonica/cgra"
 )
 
+// OpMode controls how instruction groups are scheduled.
 type OpMode int
 
 const (
+	// SyncOp executes one instruction group synchronously.
 	SyncOp OpMode = iota
+	// AsyncOp executes operations asynchronously with reservation tracking.
 	AsyncOp
 )
 
@@ -23,19 +27,21 @@ type routingRule struct {
 	color string
 }
 
+// Trigger describes routing trigger metadata.
 type Trigger struct {
 	src    [12]bool
 	color  int
 	branch string
 }
 
+// ReservationState tracks pending operations and operand usage.
 type ReservationState struct {
 	ReservationMap  map[int]bool // to show whether each operation of a instruction group is finished.
 	OpToExec        int
 	RefCountRuntime map[string]int // to record the left times to be used of each source opearand. deep copied from RefCount
 }
 
-// return bool, True means the operand is still in use, False means the operand is not in use anymore
+// DecrementRefCount decrements runtime operand use count and reports if still in use.
 func (r *ReservationState) DecrementRefCount(opr Operand, state *coreState) bool {
 	key := opr.Impl + opr.Color
 	if _, ok := r.RefCountRuntime[key]; ok {
@@ -47,28 +53,25 @@ func (r *ReservationState) DecrementRefCount(opr Operand, state *coreState) bool
 			return false
 		}
 		return true
-	} else {
-		// something wrong, raise error
-		panic("invalid operand in DecrementRefCount")
 	}
+	// something wrong, raise error
+	panic("invalid operand in DecrementRefCount")
 }
 
+// SetRefCount initializes runtime operand reference counters for an instruction group.
 func (r *ReservationState) SetRefCount(ig InstructionGroup, state *coreState) {
 	for _, op := range ig.Operations {
 		for _, opr := range op.SrcOperands.Operands {
 			if state.Directions[opr.Impl] {
 				key := opr.Impl + opr.Color
-				if _, ok := r.RefCountRuntime[key]; ok {
-					r.RefCountRuntime[key]++
-				} else {
-					r.RefCountRuntime[key] = 1
-				}
+				r.RefCountRuntime[key]++
 			}
 		}
 		// only port in the src is needed to be considered
 	}
 }
 
+// SetReservationMap marks operations in the instruction group as pending.
 func (r *ReservationState) SetReservationMap(ig InstructionGroup, state *coreState) {
 	for i := 0; i < len(ig.Operations); i++ {
 		r.ReservationMap[i] = true
@@ -131,9 +134,9 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 	}
 	prevPC := state.PCInBlock
 	prevCount := state.CurrReservationState.OpToExec
-	progress_sync := false
+	progressSync := false
 	if state.Mode == SyncOp {
-		progress_sync = i.RunInstructionGroupWithSyncOps(cinst, state, time)
+		progressSync = i.RunInstructionGroupWithSyncOps(cinst, state, time)
 	} else if state.Mode == AsyncOp {
 		i.RunInstructionGroupWithAsyncOps(cinst, state, time)
 	} else {
@@ -146,7 +149,7 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 	if state.Mode == AsyncOp {
 		if state.CurrReservationState.OpToExec == 0 { // this instruction group is finished
 			if state.NextPCInBlock == -1 { // nobody elect PC other than +4
-				state.PCInBlock += 1
+				state.PCInBlock++
 			} else { //  there is a jump
 				state.PCInBlock = state.NextPCInBlock
 				// not set block, in case of index out of range
@@ -163,7 +166,7 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 			state.NextPCInBlock = -1
 		} // else, this group is not finished, PC stays the same
 	} else if state.Mode == SyncOp {
-		if progress_sync {
+		if progressSync {
 			if state.NextPCInBlock == -1 {
 				print("PC+4 for PC=", state.PCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
 				print("Instruction at PC=", state.PCInBlock, " is ", state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[0].OpCode, "\n")
@@ -192,7 +195,7 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 			return false
 		}
 	} else if state.Mode == SyncOp {
-		return progress_sync
+		return progressSync
 	} else {
 		panic("invalid mode")
 	}
@@ -339,7 +342,7 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"LLS":          i.runLLS,
 		"SHL":          i.runLLS, // SHL is an alias for LLS
 		"LRS":          i.runLRS,
-		"MUL":          i.runMul, // MULI
+		"MUL":          i.runMul,    // MULI
 		"MUL_ADD":      i.runMulAdd, // dst = src0 * src1 + src2 (systolic MAC)
 		"DIV":          i.runDiv,
 		"OR":           i.runOR,
@@ -441,9 +444,7 @@ func (i instEmulator) readOperand(operand Operand, state *coreState) (value cgra
 			//fmt.Println("[ReadOperand] read", value, "from port", operand.Impl, ":", value, "@(", state.TileX, ",", state.TileY, ")")
 		} else {
 			// try to convert into int
-			if strings.HasPrefix(operand.Impl, "#") {
-				operand.Impl = strings.TrimPrefix(operand.Impl, "#")
-			}
+			operand.Impl = strings.TrimPrefix(operand.Impl, "#")
 			num, err := strconv.Atoi(operand.Impl)
 			if err == nil {
 				value = cgra.NewScalar(uint32(num))

@@ -9,21 +9,35 @@ import (
 type Side int
 
 const (
+	// North is the top cardinal side.
 	North Side = iota
+	// East is the right cardinal side.
 	East
+	// South is the bottom cardinal side.
 	South
+	// West is the left cardinal side.
 	West
+	// NorthEast is the upper-right diagonal side.
 	NorthEast
+	// NorthWest is the upper-left diagonal side.
 	NorthWest
+	// SouthEast is the lower-right diagonal side.
 	SouthEast
+	// SouthWest is the lower-left diagonal side.
 	SouthWest
+	// Router is the logical router port side.
 	Router
+	// Dummy1 is an auxiliary placeholder side.
 	Dummy1
+	// Dummy2 is an auxiliary placeholder side.
 	Dummy2
+	// Dummy3 is an auxiliary placeholder side.
 	Dummy3
 )
 
 // Name returns the name of the side.
+//
+//nolint:gocyclo
 func (s Side) Name() string {
 	switch s {
 	case North:

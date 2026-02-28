@@ -49,7 +49,9 @@ func GenerateReport(programs map[string]core.Program, arch *ArchInfo, maxSimStep
 	return report
 }
 
-// WriteReport writes a formatted report to a writer
+// WriteReport writes a formatted report to a writer.
+//
+//nolint:gocyclo,funlen
 func (r *VerificationReport) WriteReport(w io.Writer) {
 	separator := strings.Repeat("=", 60)
 	dash := strings.Repeat("-", 60)
@@ -90,17 +92,17 @@ func (r *VerificationReport) WriteReport(w io.Writer) {
 					i+1, issue.PEX, issue.PEY, issue.Time, issue.OpID)
 				fmt.Fprintf(w, "    Message: %s\n", issue.Message)
 				if issue.Details != nil {
-					if producer_t, ok := issue.Details["producer_t"]; ok {
-						fmt.Fprintf(w, "    Producer writes at t=%v\n", producer_t)
+					if producerT, ok := issue.Details["producer_t"]; ok {
+						fmt.Fprintf(w, "    Producer writes at t=%v\n", producerT)
 					}
-					if consumer_t, ok := issue.Details["consumer_t"]; ok {
-						fmt.Fprintf(w, "    Consumer reads at t=%v\n", consumer_t)
+					if consumerT, ok := issue.Details["consumer_t"]; ok {
+						fmt.Fprintf(w, "    Consumer reads at t=%v\n", consumerT)
 					}
-					if required_lat, ok := issue.Details["required_latency"]; ok {
-						fmt.Fprintf(w, "    Required latency: %v cycles\n", required_lat)
+					if requiredLat, ok := issue.Details["required_latency"]; ok {
+						fmt.Fprintf(w, "    Required latency: %v cycles\n", requiredLat)
 					}
-					if actual_lat, ok := issue.Details["actual_latency"]; ok {
-						fmt.Fprintf(w, "    Actual latency: %v cycles\n", actual_lat)
+					if actualLat, ok := issue.Details["actual_latency"]; ok {
+						fmt.Fprintf(w, "    Actual latency: %v cycles\n", actualLat)
 					}
 				}
 				fmt.Fprintln(w)
@@ -158,7 +160,7 @@ func (r *VerificationReport) SaveReportToFile(filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create report file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	r.WriteReport(file)
 	return nil
