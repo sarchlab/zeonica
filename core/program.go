@@ -1,3 +1,4 @@
+//nolint:funlen,gocyclo,lll
 package core
 
 import (
@@ -10,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// CoreProgram represents a program for a specific core
+// YAMLCoreProgram represents one core program section in YAML.
 type YAMLCoreProgram struct {
 	Row     int         `yaml:"row"`
 	Column  int         `yaml:"column"`
@@ -25,12 +26,13 @@ type YAMLEntry struct {
 	InstructionGroups []YAMLInstructionGroup `yaml:"instructions"`
 }
 
-// Instruction represents a single instruction in the YAML
+// YAMLInstructionGroup represents one grouped instruction bundle in YAML.
 type YAMLInstructionGroup struct {
 	Operations []YAMLOperation `yaml:"operations"`
 	IndexPerII int             `yaml:"index_per_ii"`
 }
 
+// YAMLOperation represents one operation in a YAML instruction group.
 type YAMLOperation struct {
 	OpCode            string        `yaml:"opcode"`
 	SrcOperands       []YAMLOperand `yaml:"src_operands"`
@@ -59,17 +61,20 @@ type YAMLRoot struct {
 	ArrayConfig ArrayConfig `yaml:"array_config"`
 }
 
+// Program is the internal executable representation for one core.
 type Program struct {
 	EntryBlocks []EntryBlock
 	CompiledII  int
 }
 
+// EntryBlock is one entry block in a core program.
 type EntryBlock struct {
 	EntryCond         OperandList // not used
 	InstructionGroups []InstructionGroup
 	Label             map[string]int
 }
 
+// InstructionGroup is one schedulable instruction group.
 type InstructionGroup struct {
 	Operations []Operation
 	RefCount   map[string]int
@@ -91,6 +96,7 @@ func (ig *InstructionGroup) String() string {
 	}
 }
 
+// Operation is one executable operation in an instruction group.
 type Operation struct {
 	// The raw text of the instruction.
 	OpCode            string
@@ -100,10 +106,12 @@ type Operation struct {
 	InvalidIterations int // Invalid iterations from YAML file
 }
 
+// OperandList wraps source or destination operands for an operation.
 type OperandList struct {
 	Operands []Operand
 }
 
+// Operand describes a single operand with implementation and color metadata.
 type Operand struct {
 	Flag  bool
 	Color string
@@ -665,6 +673,7 @@ func LoadProgramFileFromASM(programFilePath string) map[string]Program {
 	}
 }
 
+// PrintProgram prints a human-readable view of one program.
 func PrintProgram(program Program) {
 	for _, entryBlock := range program.EntryBlocks {
 		fmt.Println(entryBlock.Label)

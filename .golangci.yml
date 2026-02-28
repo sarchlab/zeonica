@@ -258,7 +258,7 @@ linters:
     - misspell
     - nakedret
     - prealloc
-    - exportloopref
+    - copyloopvar
     - unconvert
     - whitespace
     - gosimple

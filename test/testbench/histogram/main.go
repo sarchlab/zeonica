@@ -2,34 +2,37 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
+	"math/rand"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/sarchlab/akita/v4/sim"
-	"github.com/sarchlab/zeonica/api"
-	"github.com/sarchlab/zeonica/config"
 	"github.com/sarchlab/zeonica/core"
+	"github.com/sarchlab/zeonica/runtimecfg"
 )
 
-func Histogram() {
-	width := 4
-	height := 4
+// Histogram runs the histogram testbench on the configured runtime.
+//
+//nolint:gocyclo,funlen
+func Histogram(rt *runtimecfg.Runtime) int {
+	width := rt.Config.Columns
+	height := rt.Config.Rows
+	seed := time.Now().UnixNano()
+	if seedStr := os.Getenv("ZEONICA_RAND_SEED"); seedStr != "" {
+		if parsed, err := strconv.ParseInt(seedStr, 10, 64); err == nil {
+			seed = parsed
+		}
+	}
+	rng := rand.New(rand.NewSource(seed))
+	fmt.Printf("Using random seed: %d\n", seed)
 
-	engine := sim.NewSerialEngine()
-
-	driver := api.DriverBuilder{}.
-		WithEngine(engine).
-		WithFreq(1 * sim.GHz).
-		Build("Driver")
-
-	device := config.DeviceBuilder{}.
-		WithEngine(engine).
-		WithFreq(1 * sim.GHz).
-		WithWidth(width).
-		WithHeight(height).
-		Build("Device")
-
-	driver.RegisterDevice(device)
+	driver := rt.Driver
+	device := rt.Device
+	engine := rt.Engine
 
 	programPath := os.Getenv("ZEONICA_PROGRAM_YAML")
 	if programPath == "" {
@@ -52,10 +55,10 @@ func Histogram() {
 		}
 	}
 
-	// preload input data from benchmark (DATA_LEN=20)
-	inputData := []uint32{
-		1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-		11, 12, 13, 14, 14, 14, 14, 14, 14, 15,
+	// preload randomized input data (DATA_LEN=20, value range [1, 19])
+	inputData := make([]uint32, 20)
+	for i := range inputData {
+		inputData[i] = uint32(rng.Intn(19) + 1)
 	}
 	expected := computeHistogram(inputData, 5)
 
@@ -107,6 +110,7 @@ func Histogram() {
 	} else {
 		fmt.Printf("❌ output mismatches histogram: %d\n", histMismatch)
 	}
+	return histMismatch
 }
 
 func computeHistogram(input []uint32, bins int) []uint32 {
@@ -130,17 +134,75 @@ func computeHistogram(input []uint32, bins int) []uint32 {
 	return result
 }
 
+func resolveArchSpecPath() (string, error) {
+	fromEnv := strings.TrimSpace(os.Getenv("ZEONICA_ARCH_SPEC"))
+	if fromEnv != "" {
+		if _, err := os.Stat(fromEnv); err == nil {
+			return fromEnv, nil
+		}
+		return "", fmt.Errorf("ZEONICA_ARCH_SPEC points to a missing file: %s", fromEnv)
+	}
+
+	candidates := []string{
+		"test/arch_spec/arch_spec.yaml",
+		"../../arch_spec/arch_spec.yaml",
+	}
+
+	if _, thisFile, _, ok := runtime.Caller(0); ok {
+		candidates = append(candidates,
+			filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", "..", "arch_spec", "arch_spec.yaml")),
+		)
+	}
+
+	seen := make(map[string]struct{}, len(candidates))
+	normalized := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		clean := filepath.Clean(candidate)
+		if _, exists := seen[clean]; exists {
+			continue
+		}
+		seen[clean] = struct{}{}
+		normalized = append(normalized, clean)
+		if _, err := os.Stat(clean); err == nil {
+			return clean, nil
+		}
+	}
+
+	return "", fmt.Errorf("cannot locate arch spec, tried: %s", strings.Join(normalized, ", "))
+}
+
 func main() {
-	f, err := os.Create("histogram.json.log")
+	const testName = "histogram"
+
+	archSpecPath, err := resolveArchSpecPath()
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
 
-	handler := slog.NewJSONHandler(f, &slog.HandlerOptions{
-		Level: core.LevelTrace,
-	})
+	rt, err := runtimecfg.LoadRuntime(archSpecPath, testName)
+	if err != nil {
+		panic(err)
+	}
 
-	slog.SetDefault(slog.New(handler))
-	Histogram()
+	traceLog, err := rt.InitTraceLogger(core.LevelTrace)
+	if err != nil {
+		panic(err)
+	}
+
+	mismatch := Histogram(rt)
+
+	if err := runtimecfg.CloseTraceLog(traceLog); err != nil {
+		panic(err)
+	}
+
+	passed := mismatch == 0
+	if rt.Config.LoggingEnabled {
+		reportPath, err := rt.GenerateSaveAndPrintReport(5, &passed, &mismatch)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("report saved: %s\n", reportPath)
+	} else {
+		fmt.Println("logging disabled in arch spec, skipped report generation")
+	}
 }

@@ -1,5 +1,6 @@
 package cgra
 
+// Data is the value container transferred between CGRA components.
 type Data struct {
 	Data []uint32
 	Pred bool
@@ -10,7 +11,7 @@ func NewScalar(v uint32) Data {
 	return Data{Data: []uint32{v}, Pred: true}
 }
 
-// NewScalar creates a Data that wraps a single uint32 value with Pred=true by default.
+// NewScalarWithPred creates a scalar Data value with an explicit predicate.
 func NewScalarWithPred(v uint32, pred bool) Data {
 	return Data{Data: []uint32{v}, Pred: pred}
 }

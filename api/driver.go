@@ -62,7 +62,7 @@ type driverImpl struct {
 	collectTasks [4][]*collectTask //Four Directions
 }
 
-// struct for manually mapping different kernel to different PE
+// PerPEKernels maps each PE coordinate to a kernel/program payload.
 type PerPEKernels map[[2]int]string
 
 func (d *driverImpl) PreloadMemory(x int, y int, data uint32, baseAddr uint32) {

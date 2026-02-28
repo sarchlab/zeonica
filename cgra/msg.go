@@ -61,7 +61,7 @@ func (m MoveMsgBuilder) WithData(data Data) MoveMsgBuilder {
 	return m
 }
 
-// WithData sets the color of the msg
+// WithColor sets the color of the msg.
 func (m MoveMsgBuilder) WithColor(color int) MoveMsgBuilder {
 	m.color = color
 	return m

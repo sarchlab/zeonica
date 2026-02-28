@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/sarchlab/zeonica/core"
+	"github.com/sarchlab/zeonica/runtimecfg"
 )
 
 func TestFir(t *testing.T) {
@@ -22,8 +23,17 @@ func TestFir(t *testing.T) {
 	})
 	slog.SetDefault(slog.New(handler))
 
-	retVal, expected := Fir()
-	if retVal != expected {
-		t.Fatalf("fir mismatch: got=%d expected=%d", retVal, expected)
+	archSpecPath, err := resolveArchSpecPath()
+	if err != nil {
+		t.Fatalf("resolve arch spec: %v", err)
+	}
+	rt, err := runtimecfg.LoadRuntime(archSpecPath, "fir")
+	if err != nil {
+		t.Fatalf("load runtime: %v", err)
+	}
+
+	mismatch := Fir(rt)
+	if mismatch != 0 {
+		t.Fatalf("fir mismatch count: got=%d expected=0", mismatch)
 	}
 }

@@ -1,3 +1,4 @@
+//nolint:funlen
 package main
 
 import (
@@ -15,9 +16,7 @@ import (
 )
 
 func TestPhiGpredOperation(t *testing.T) {
-
 	// log to file
-
 	f, err := os.Create("phi_gpred.json.log")
 	if err != nil {
 		panic(err)

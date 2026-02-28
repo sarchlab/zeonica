@@ -392,6 +392,7 @@ func expectPortsToSend(
 	}
 }
 
+//nolint:unused
 func expectPortsToRecv(
 	ports []*MockPort,
 	data []uint32,
