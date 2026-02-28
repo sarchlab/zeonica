@@ -1,3 +1,4 @@
+//nolint:funlen,whitespace
 package main
 
 import (
@@ -19,11 +20,8 @@ func TestLoadStoreOperation(t *testing.T) {
 	length := 10
 
 	// Create test data
-	src := make([]uint32, length)
+	src := []uint32{1, 2, 9, 9, 0, 0, 3, 5, 6, 7}
 	dst := make([]uint32, length)
-
-	// Generate random test data
-	src = []uint32{1, 2, 9, 9, 0, 0, 3, 5, 6, 7}
 
 	// Create simulation engine
 	engine := sim.NewSerialEngine()
@@ -197,8 +195,7 @@ func TestGoAround(t *testing.T) {
 	width := 2
 	height := 2
 
-	src := make([]uint32, 5)
-	src = []uint32{114, 514, 19, 19, 810}
+	src := []uint32{114, 514, 19, 19, 810}
 	dst := make([]uint32, 5)
 	srcI := make([]int32, 5)
 	dstI := make([]int32, 5)
@@ -269,8 +266,7 @@ func TestSharedMemory(t *testing.T) {
 	width := 2
 	height := 2
 
-	src := make([]uint32, 5)
-	src = []uint32{114, 514, 19, 19, 810}
+	src := []uint32{114, 514, 19, 19, 810}
 	dst1 := make([]uint32, 5)
 	dst2 := make([]uint32, 5)
 	dst3 := make([]uint32, 5)

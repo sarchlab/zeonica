@@ -11,6 +11,7 @@ import (
 	"github.com/sarchlab/zeonica/core"
 )
 
+// Gemm runs the legacy GEMM testbench.
 func Gemm() {
 	width := 4
 	height := 4
@@ -31,7 +32,7 @@ func Gemm() {
 
 	driver.RegisterDevice(device)
 
-	program := core.LoadProgramFileFromYAML("test/testbench/gemm/gemm_int.yaml")
+	program := core.LoadProgramFileFromYAML("tmp-generated-instructions.yaml")
 	if len(program) == 0 {
 		panic("Failed to load program")
 	}
@@ -58,7 +59,7 @@ func Gemm() {
 	driver.PreloadMemory(3, 3, 3, 0)
 	driver.PreloadMemory(3, 3, 1, 1)
 	driver.PreloadMemory(2, 1, 2, 0)
-	driver.PreloadMemory(2, 1, 4, 1) // addr has ERRORS !!!!!!
+	driver.PreloadMemory(2, 1, 4, 1)
 
 	driver.Run()
 

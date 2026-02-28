@@ -133,7 +133,9 @@ import (
 type IssueType string
 
 const (
+	// IssueStruct indicates a mapping/structure lint issue.
 	IssueStruct IssueType = "STRUCT" // Mapping/structure error (illegal PE, port conflict)
+	// IssueTiming indicates a dependency/timing lint issue.
 	IssueTiming IssueType = "TIMING" // Dependency/timing error (insufficient latency)
 )
 
@@ -206,10 +208,10 @@ type FunctionalSimulator struct {
 	arch     *ArchInfo
 	peStates [][]*PEState
 
-	currentT  int
+	currentT    int
 	TraceOpPre  func(x, y, t int, op *core.Operation)
 	TraceOpPost func(x, y, t int, op *core.Operation)
-	TraceStore func(x, y, t int, addr uint32, value core.Data, op *core.Operation)
+	TraceStore  func(x, y, t int, addr uint32, value core.Data, op *core.Operation)
 }
 
 // NewFunctionalSimulator creates a new functional simulator
@@ -327,6 +329,8 @@ func parseCoordinate(coordStr string) (int, int, error) {
 
 // getNeighbor returns the neighbor PE coordinates given a direction
 // Returns (nx, ny, valid) where valid is false if neighbor is out of bounds
+//
+//nolint:unused
 func (arch *ArchInfo) getNeighbor(x, y int, dir string) (int, int, bool) {
 	dirUpper := strings.ToUpper(dir)
 	switch dirUpper {

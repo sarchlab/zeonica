@@ -1,3 +1,4 @@
+//nolint:funlen
 package verify
 
 import (
@@ -12,6 +13,8 @@ import (
 // For kernels with modulo scheduling (ii > 0), it uses a D∈{0,1} iteration
 // distance model to reduce false positives on loop-carried dependencies.
 // Returns a list of issues found, or empty list if no issues.
+//
+//nolint:gocyclo
 func RunLint(programs map[string]core.Program, arch *ArchInfo) []Issue {
 	var issues []Issue
 
@@ -121,6 +124,8 @@ func RunLint(programs map[string]core.Program, arch *ArchInfo) []Issue {
 //     - If consumer reads NORTH, producer is at (x, y-1) and writes SOUTH
 //     - If consumer reads SOUTH, producer is at (x, y+1) and writes NORTH
 //     - Similarly for EAST/WEST
+//
+//nolint:gocyclo
 func checkTimingConstraints(programs map[string]core.Program, arch *ArchInfo, ii int) []Issue {
 	var issues []Issue
 

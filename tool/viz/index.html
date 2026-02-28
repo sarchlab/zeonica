@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CGRA GEMM Log Viewer</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  </head>
+  <body>
+    <main class="layout">
+      <header class="panel topbar">
+        <div>
+          <h1>CGRA GEMM Log Viewer</h1>
+          <p class="subtitle">Timeline visualization for JSONL execution traces</p>
+        </div>
+        <div class="file-load">
+          <label for="fileInput">Load log</label>
+          <input id="fileInput" type="file" accept=".log,.json,.jsonl,.txt" />
+        </div>
+      </header>
+
+      <section class="panel controls">
+        <div class="row">
+          <button id="playBtn" type="button">Play</button>
+          <button id="stepBackBtn" type="button">-1</button>
+          <button id="stepFwdBtn" type="button">+1</button>
+          <label class="inline" for="speedSelect">Speed</label>
+          <select id="speedSelect">
+            <option value="1100">1x</option>
+            <option value="650">1.7x</option>
+            <option value="350">3x</option>
+          </select>
+          <span id="timeLabel">T=0</span>
+        </div>
+        <div class="row">
+          <input id="timeSlider" type="range" min="0" max="0" value="0" />
+        </div>
+        <div class="row filters">
+          <label><input type="checkbox" id="showDataFlow" checked /> DataFlow</label>
+          <label><input type="checkbox" id="showInst" checked /> Inst</label>
+          <label><input type="checkbox" id="showMemory" checked /> Memory</label>
+          <label><input type="checkbox" id="showLabels" checked /> Tile labels</label>
+        </div>
+      </section>
+
+      <section class="panel viz">
+        <svg id="canvas" viewBox="0 0 940 620" preserveAspectRatio="xMidYMid meet"></svg>
+      </section>
+
+      <section class="panel details">
+        <h2>Cycle Details</h2>
+        <p id="statsLine"></p>
+        <pre id="eventDump"></pre>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

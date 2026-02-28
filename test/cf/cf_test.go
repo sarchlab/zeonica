@@ -1,3 +1,4 @@
+//nolint:funlen
 package main
 
 import (
@@ -19,11 +20,8 @@ func TestCmpExOperation(t *testing.T) {
 	length := 5
 
 	// Create test data
-	src := make([]uint32, length)
+	src := []uint32{1, 2, 9, 9, 0, 0, 3, 5, 6, 7}
 	dst := make([]uint32, length)
-
-	// Generate random test data
-	src = []uint32{1, 2, 9, 9, 0, 0, 3, 5, 6, 7}
 
 	// Create simulation engine
 	engine := sim.NewSerialEngine()

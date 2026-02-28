@@ -1,0 +1,187 @@
+:root {
+  --bg: #f2efe7;
+  --panel: #fffdf7;
+  --panel-2: #f8f3e6;
+  --text: #1a1f24;
+  --muted: #6c7680;
+  --line: #cbbfa1;
+  --tile: #fbf4df;
+  --tile-active: #ffebad;
+  --send: #006d77;
+  --recv: #118ab2;
+  --feed: #ef476f;
+  --collect: #8338ec;
+  --inst: #f77f00;
+  --memory: #d62828;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 8px 20px rgba(0, 0, 0, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 90% 5%, #ffd89e44, transparent 35%),
+    radial-gradient(circle at 10% 90%, #8ecae644, transparent 38%),
+    var(--bg);
+  font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+.layout {
+  max-width: 1200px;
+  margin: 1rem auto;
+  padding: 0 1rem 1.5rem;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: 1fr;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.subtitle {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.file-load {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+}
+
+.controls .row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+button,
+select,
+input[type="file"] {
+  border-radius: 8px;
+  border: 1px solid #bfb8a6;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 0.9rem;
+  padding: 0.35rem 0.55rem;
+}
+
+button {
+  cursor: pointer;
+}
+
+#timeSlider {
+  width: 100%;
+}
+
+.filters {
+  margin-bottom: 0;
+}
+
+.filters label {
+  font-size: 0.9rem;
+}
+
+.viz {
+  padding: 0.2rem;
+}
+
+#canvas {
+  width: 100%;
+  min-height: 480px;
+  display: block;
+}
+
+#statsLine {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+#eventDump {
+  max-height: 260px;
+  overflow: auto;
+  background: #fbf7ea;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.7rem;
+  margin-top: 0.6rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.tile {
+  fill: var(--tile);
+  stroke: #9c9070;
+  stroke-width: 1.4px;
+}
+
+.tile.active {
+  fill: var(--tile-active);
+}
+
+.tile-label {
+  fill: #444;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.legend-text,
+.driver-label {
+  fill: #4d4d4d;
+  font-size: 11px;
+}
+
+.event-link {
+  fill: none;
+  stroke-width: 2.4px;
+  stroke-linecap: round;
+}
+
+.pulse {
+  r: 5;
+}
+
+.inst-badge,
+.memory-badge {
+  stroke: #222;
+  stroke-width: 0.5px;
+}
+
+@media (max-width: 860px) {
+  #canvas {
+    min-height: 360px;
+  }
+}

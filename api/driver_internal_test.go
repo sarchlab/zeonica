@@ -114,6 +114,8 @@ var _ = Describe("Driver", func() {
 		Expect(driver.feedInTasks[sideIndex][0].remotePorts).
 			To(HaveLen(3))
 		Expect(driver.feedInTasks[sideIndex][0].stride).To(Equal(3))
+		Expect(driver.feedInTasks[sideIndex][0].rounds).To(Equal(4))
+		Expect(driver.feedInTasks[sideIndex][0].portRounds).To(Equal([]int{0, 0, 0}))
 	})
 
 	It("should handle Collect API", func() {
@@ -126,6 +128,26 @@ var _ = Describe("Driver", func() {
 		Expect(driver.collectTasks[sideIndex][0].data).To(Equal(data))
 		Expect(driver.collectTasks[sideIndex][0].ports).
 			To(HaveLen(3))
+		Expect(driver.collectTasks[sideIndex][0].rounds).To(Equal(2))
+		Expect(driver.collectTasks[sideIndex][0].portRounds).To(Equal([]int{0, 0, 0}))
+	})
+
+	It("should reject invalid FeedIn layout", func() {
+		Expect(func() {
+			driver.FeedIn([]uint32{1, 2, 3, 4, 5}, cgra.North, [2]int{0, 3}, 3, "R")
+		}).To(Panic())
+		Expect(func() {
+			driver.FeedIn([]uint32{1, 2, 3, 4}, cgra.North, [2]int{0, 3}, 2, "R")
+		}).To(Panic())
+	})
+
+	It("should reject invalid Collect layout", func() {
+		Expect(func() {
+			driver.Collect(make([]uint32, 5), cgra.North, [2]int{0, 3}, 3, "R")
+		}).To(Panic())
+		Expect(func() {
+			driver.Collect(make([]uint32, 4), cgra.North, [2]int{0, 3}, 2, "R")
+		}).To(Panic())
 	})
 
 	It("should do feed in", func() {
@@ -165,7 +187,8 @@ var _ = Describe("Driver", func() {
 				remotePorts: remotePorts,
 				stride:      3,
 				color:       0, // R
-				round:       0,
+				rounds:      2,
+				portRounds:  []int{0, 0, 0},
 			},
 		}
 
@@ -188,6 +211,58 @@ var _ = Describe("Driver", func() {
 		Expect(driver.feedInTasks[sideIndex]).To(BeEmpty())
 	})
 
+	It("should do feed in opportunistically", func() {
+		localPort1 := portFactory.ports["Driver.DeviceNorth[0]"]
+		localPort2 := portFactory.ports["Driver.DeviceNorth[1]"]
+		localPort3 := portFactory.ports["Driver.DeviceNorth[2]"]
+
+		localPort1.EXPECT().CanSend().Return(true).AnyTimes()
+		localPort2.EXPECT().CanSend().Return(false).Times(1)
+		localPort2.EXPECT().CanSend().Return(true).AnyTimes()
+		localPort3.EXPECT().CanSend().Return(true).AnyTimes()
+
+		sent1 := make([]uint32, 0, 2)
+		sent2 := make([]uint32, 0, 2)
+		sent3 := make([]uint32, 0, 2)
+		localPort1.EXPECT().Send(gomock.Any()).DoAndReturn(func(msg *cgra.MoveMsg) error {
+			sent1 = append(sent1, msg.Data.First())
+			return nil
+		}).Times(2)
+		localPort2.EXPECT().Send(gomock.Any()).DoAndReturn(func(msg *cgra.MoveMsg) error {
+			sent2 = append(sent2, msg.Data.First())
+			return nil
+		}).Times(2)
+		localPort3.EXPECT().Send(gomock.Any()).DoAndReturn(func(msg *cgra.MoveMsg) error {
+			sent3 = append(sent3, msg.Data.First())
+			return nil
+		}).Times(2)
+
+		sideIndex := int(cgra.North)
+		driver.feedInTasks[sideIndex] = []*feedInTask{
+			{
+				data:        []uint32{1, 2, 3, 4, 5, 6},
+				localPorts:  []sim.Port{localPort1, localPort2, localPort3},
+				remotePorts: []sim.RemotePort{"remotePort1", "remotePort2", "remotePort3"},
+				stride:      3,
+				color:       0,
+				rounds:      2,
+				portRounds:  []int{0, 0, 0},
+			},
+		}
+
+		driver.Tick()
+		Expect(driver.feedInTasks[sideIndex][0].portRounds).To(Equal([]int{1, 0, 1}))
+
+		driver.Tick()
+		Expect(driver.feedInTasks[sideIndex][0].portRounds).To(Equal([]int{2, 1, 2}))
+
+		driver.Tick()
+		Expect(driver.feedInTasks[sideIndex]).To(BeEmpty())
+		Expect(sent1).To(Equal([]uint32{1, 4}))
+		Expect(sent2).To(Equal([]uint32{2, 5}))
+		Expect(sent3).To(Equal([]uint32{3, 6}))
+	})
+
 	It("should do collect", func() {
 		localPort1 := portFactory.ports["Driver.DeviceNorth[0]"]
 		localPort2 := portFactory.ports["Driver.DeviceNorth[1]"]
@@ -203,22 +278,20 @@ var _ = Describe("Driver", func() {
 				ports:  ports,
 				stride: 3,
 				color:  0, // R
-				round:  0,
+				rounds: 2,
+				portRounds: []int{
+					0, 0, 0,
+				},
 			},
 		}
 
-		// Mock PeekIncoming and RetrieveIncoming for first round
-		// Note: allDataReady checks PeekIncoming multiple times (once per port),
-		// then doOneCollectTask calls RetrieveIncoming for each port
+		// Mock PeekIncoming and RetrieveIncoming for first round.
 		msg1 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(1)).Build()
 		msg2 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(2)).Build()
 		msg3 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(3)).Build()
-		// allDataReady will call PeekIncoming for all ports (at least once each)
-		// Since allDataReady may be called multiple times, we use AnyTimes
-		localPort1.EXPECT().PeekIncoming().Return(msg1).AnyTimes()
-		localPort2.EXPECT().PeekIncoming().Return(msg2).AnyTimes()
-		localPort3.EXPECT().PeekIncoming().Return(msg3).AnyTimes()
-		// Then doOneCollectTask will call RetrieveIncoming for each port
+		localPort1.EXPECT().PeekIncoming().Return(msg1).Times(1)
+		localPort2.EXPECT().PeekIncoming().Return(msg2).Times(1)
+		localPort3.EXPECT().PeekIncoming().Return(msg3).Times(1)
 		localPort1.EXPECT().RetrieveIncoming().Return(msg1).Times(1)
 		localPort2.EXPECT().RetrieveIncoming().Return(msg2).Times(1)
 		localPort3.EXPECT().RetrieveIncoming().Return(msg3).Times(1)
@@ -229,15 +302,71 @@ var _ = Describe("Driver", func() {
 		msg4 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(4)).Build()
 		msg5 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(5)).Build()
 		msg6 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(6)).Build()
-		localPort1.EXPECT().PeekIncoming().Return(msg4).AnyTimes()
-		localPort2.EXPECT().PeekIncoming().Return(msg5).AnyTimes()
-		localPort3.EXPECT().PeekIncoming().Return(msg6).AnyTimes()
+		localPort1.EXPECT().PeekIncoming().Return(msg4).Times(1)
+		localPort2.EXPECT().PeekIncoming().Return(msg5).Times(1)
+		localPort3.EXPECT().PeekIncoming().Return(msg6).Times(1)
 		localPort1.EXPECT().RetrieveIncoming().Return(msg4).Times(1)
 		localPort2.EXPECT().RetrieveIncoming().Return(msg5).Times(1)
 		localPort3.EXPECT().RetrieveIncoming().Return(msg6).Times(1)
 
 		driver.Tick()
 
+		Expect(driver.collectTasks[sideIndex]).To(BeEmpty())
+		Expect(data).To(Equal([]uint32{1, 2, 3, 4, 5, 6}))
+	})
+
+	It("should do collect opportunistically", func() {
+		localPort1 := portFactory.ports["Driver.DeviceNorth[0]"]
+		localPort2 := portFactory.ports["Driver.DeviceNorth[1]"]
+		localPort3 := portFactory.ports["Driver.DeviceNorth[2]"]
+
+		data := make([]uint32, 6)
+		sideIndex := int(cgra.North)
+		driver.collectTasks[sideIndex] = []*collectTask{
+			{
+				data:       data,
+				ports:      []sim.Port{localPort1, localPort2, localPort3},
+				stride:     3,
+				color:      0,
+				rounds:     2,
+				portRounds: []int{0, 0, 0},
+			},
+		}
+
+		msg1 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(1)).WithColor(0).Build()
+		msg2 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(2)).WithColor(0).Build()
+		msg3 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(3)).WithColor(0).Build()
+		msg4 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(4)).WithColor(0).Build()
+		msg5 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(5)).WithColor(0).Build()
+		msg6 := cgra.MoveMsgBuilder{}.WithData(cgra.NewScalar(6)).WithColor(0).Build()
+
+		gomock.InOrder(
+			localPort1.EXPECT().PeekIncoming().Return(msg1),
+			localPort1.EXPECT().RetrieveIncoming().Return(msg1),
+			localPort1.EXPECT().PeekIncoming().Return(msg4),
+			localPort1.EXPECT().RetrieveIncoming().Return(msg4),
+		)
+		gomock.InOrder(
+			localPort2.EXPECT().PeekIncoming().Return(nil),
+			localPort2.EXPECT().PeekIncoming().Return(msg2),
+			localPort2.EXPECT().RetrieveIncoming().Return(msg2),
+			localPort2.EXPECT().PeekIncoming().Return(msg5),
+			localPort2.EXPECT().RetrieveIncoming().Return(msg5),
+		)
+		gomock.InOrder(
+			localPort3.EXPECT().PeekIncoming().Return(msg3),
+			localPort3.EXPECT().RetrieveIncoming().Return(msg3),
+			localPort3.EXPECT().PeekIncoming().Return(msg6),
+			localPort3.EXPECT().RetrieveIncoming().Return(msg6),
+		)
+
+		driver.Tick()
+		Expect(driver.collectTasks[sideIndex][0].portRounds).To(Equal([]int{1, 0, 1}))
+
+		driver.Tick()
+		Expect(driver.collectTasks[sideIndex][0].portRounds).To(Equal([]int{2, 1, 2}))
+
+		driver.Tick()
 		Expect(driver.collectTasks[sideIndex]).To(BeEmpty())
 		Expect(data).To(Equal([]uint32{1, 2, 3, 4, 5, 6}))
 	})
@@ -263,6 +392,7 @@ func expectPortsToSend(
 	}
 }
 
+//nolint:unused
 func expectPortsToRecv(
 	ports []*MockPort,
 	data []uint32,
