@@ -218,6 +218,13 @@ issues:
         - dupl
         - gosec
 
+    # Testbench main programs: skip strict checks to avoid unnecessary code churn
+    - path: test/testbench/
+      linters:
+        - errcheck
+        - funlen
+        - lll
+
     # Exclude known linters from partially hard-vendored code,
     # which is impossible to exclude via "nolint" comments.
     - path: internal/hmac/
