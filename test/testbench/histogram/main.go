@@ -94,7 +94,9 @@ func Histogram(rt *runtimecfg.Runtime) int {
 	for addr := 0; addr < scanLimit; addr++ {
 		val := driver.ReadMemory(outputTile[0], outputTile[1], uint32(addr))
 		outputData[addr] = val
-		fmt.Printf("  addr %d -> %d\n", addr, val)
+		if addr < len(inputData) {
+			fmt.Printf("  addr %d -> %d\n", addr, val)
+		}
 	}
 
 	fmt.Println("expected histogram (CPU):")
