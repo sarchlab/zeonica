@@ -1556,7 +1556,7 @@ func (i instEmulator) runPhiStart(inst Operation, state *coreState) map[Operand]
 
 	if state.States[stateKey] == nil || state.States[stateKey] == false { // first execution
 		if !src1Pred {
-			panic("Predicate of first time PHI_START must be true at (" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ") instruction " + strconv.Itoa(int(inst.ID)))
+			panic("Predicate of first time PHI_START must be true at (" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ") instruction " + strconv.Itoa(inst.ID))
 		}
 		result = src1Val
 		finalPred = src1Pred
@@ -1571,7 +1571,7 @@ func (i instEmulator) runPhiStart(inst Operation, state *coreState) map[Operand]
 		src2Val := src2Struct.First()
 		src2Pred := src2Struct.Pred
 		if src1Pred && src2Pred {
-			panic("Only one of the predicates of PHI_START can be true at (" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ") instruction " + strconv.Itoa(int(inst.ID)))
+			panic("Only one of the predicates of PHI_START can be true at (" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ") instruction " + strconv.Itoa(inst.ID))
 		}
 		if src1Pred {
 			result = src1Val
