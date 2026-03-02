@@ -148,7 +148,8 @@ function parseJsonLines(text) {
   for (const line of lines) {
     try {
       const obj = JSON.parse(line);
-      if (obj && Number.isInteger(obj.Time)) {
+      if (obj && typeof obj.Time === "number" && Number.isFinite(obj.Time)) {
+        obj.Time = Math.round(obj.Time);
         rows.push(obj);
       }
     } catch (_) {
@@ -163,11 +164,11 @@ function indexByTime(events) {
   let minTime = Number.POSITIVE_INFINITY;
   let maxTime = Number.NEGATIVE_INFINITY;
   for (const e of events) {
-    const t = e.Time;
-    if (!byTime.has(t)) byTime.set(t, []);
-    byTime.get(t).push(e);
-    minTime = Math.min(minTime, t);
-    maxTime = Math.max(maxTime, t);
+    const tKey = Math.round(Number(e.Time));
+    if (!byTime.has(tKey)) byTime.set(tKey, []);
+    byTime.get(tKey).push(e);
+    minTime = Math.min(minTime, tKey);
+    maxTime = Math.max(maxTime, tKey);
   }
   if (!Number.isFinite(minTime) || !Number.isFinite(maxTime)) {
     minTime = 0;
