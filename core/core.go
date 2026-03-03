@@ -85,6 +85,7 @@ func (c *Core) MapProgram(program interface{}, x int, y int) {
 		panic("MapProgram expects core.Program type")
 	}
 	c.state.PCInBlock = -1
+	c.state.CurrentCycle = 0
 	c.state.TileX = uint32(x)
 	c.state.TileY = uint32(y)
 }
@@ -96,6 +97,7 @@ func (c *Core) Tick() (madeProgress bool) {
 	// madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
 	madeProgress = c.runProgram() || madeProgress
 	madeProgress = c.doSend() || madeProgress
+	c.state.CurrentCycle++
 	return madeProgress
 }
 

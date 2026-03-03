@@ -24,6 +24,12 @@ const (
 	AsyncOp
 )
 
+const (
+	ExecutionPolicyStrictTimed      = "strict_timed"
+	ExecutionPolicyElasticScheduled = "elastic_scheduled"
+	ExecutionPolicyInOrderDataflow  = "in_order_dataflow"
+)
+
 type routingRule struct {
 	src   cgra.Side
 	dst   cgra.Side
@@ -112,10 +118,105 @@ type coreState struct {
 	routingRules []*routingRule
 	triggers     []*Trigger
 	CurrentTime  float64 // current simulation time for logging
+	CurrentCycle int64
 }
 
 type instEmulator struct {
-	CareFlags bool
+	CareFlags       bool
+	ExecutionPolicy string
+}
+
+func normalizeExecutionPolicyString(policy string) string {
+	text := strings.ToLower(strings.TrimSpace(policy))
+	switch text {
+	case ExecutionPolicyStrictTimed, "strict-timed", "static":
+		return ExecutionPolicyStrictTimed
+	case ExecutionPolicyElasticScheduled, "elastic-scheduled", "hybrid":
+		return ExecutionPolicyElasticScheduled
+	case "", ExecutionPolicyInOrderDataflow, "in-order-dataflow", "dynamic":
+		return ExecutionPolicyInOrderDataflow
+	default:
+		// Fall back to in-order dataflow for backward compatibility.
+		return ExecutionPolicyInOrderDataflow
+	}
+}
+
+func (i instEmulator) panicSynchronizationViolation(operation Operation, state *coreState, reason string) {
+	currentStep, targetStep, ii := i.resolveScheduleStep(operation, state)
+	panic(fmt.Sprintf(
+		"synchronization violation under %s: op=%s id=%d cycle=%d schedule_step=%d target_step=%d ii=%d raw_timestep=%d tile=(%d,%d): %s",
+		normalizeExecutionPolicyString(i.ExecutionPolicy),
+		operation.OpCode,
+		operation.ID,
+		state.CurrentCycle,
+		currentStep,
+		targetStep,
+		ii,
+		operation.TimeStep,
+		state.TileX,
+		state.TileY,
+		reason,
+	))
+}
+
+func (i instEmulator) resolveScheduleStep(operation Operation, state *coreState) (currentStep int64, targetStep int64, ii int64) {
+	ii = int64(state.Code.CompiledII)
+	if ii <= 0 {
+		return state.CurrentCycle, int64(operation.TimeStep), 0
+	}
+
+	currentStep = state.CurrentCycle % ii
+	if currentStep < 0 {
+		currentStep += ii
+	}
+
+	targetStep = int64(operation.TimeStep)
+	if targetStep < 0 || targetStep >= ii {
+		panic(fmt.Sprintf(
+			"invalid time_step=%d for compiled_ii=%d at op=%s id=%d tile=(%d,%d)",
+			operation.TimeStep,
+			state.Code.CompiledII,
+			operation.OpCode,
+			operation.ID,
+			state.TileX,
+			state.TileY,
+		))
+	}
+
+	return currentStep, targetStep, ii
+}
+
+func (i instEmulator) canIssue(operation Operation, state *coreState) bool {
+	if !i.CareFlags || operation.InvalidIterations > 0 {
+		return true
+	}
+
+	ready := i.CheckFlags(operation, state)
+	currentStep, targetStep, _ := i.resolveScheduleStep(operation, state)
+
+	switch normalizeExecutionPolicyString(i.ExecutionPolicy) {
+	case ExecutionPolicyStrictTimed:
+		if currentStep < targetStep {
+			return false
+		}
+		if currentStep == targetStep {
+			if ready {
+				return true
+			}
+			i.panicSynchronizationViolation(operation, state, "operand/credit not ready at scheduled step")
+		}
+		i.panicSynchronizationViolation(operation, state, "operation missed its exact scheduled step")
+		return false
+	case ExecutionPolicyElasticScheduled:
+		if currentStep < targetStep {
+			return false
+		}
+		return ready
+	case ExecutionPolicyInOrderDataflow:
+		return ready
+	default:
+		return ready
+	}
 }
 
 // set up the necessary state for the instruction group
@@ -210,7 +311,7 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, state *coreState, time float64) bool {
 	run := true
 	for _, operation := range cinst.Operations {
-		if (!i.CareFlags) || operation.InvalidIterations > 0 || i.CheckFlags(operation, state) {
+		if i.canIssue(operation, state) {
 			continue
 		} else {
 			run = false
@@ -254,7 +355,7 @@ func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, st
 		}
 		// Get reference to the original operation in state.SelectedBlock
 		operation := &state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[index]
-		if (!i.CareFlags) || operation.InvalidIterations > 0 || i.CheckFlags(*operation, state) { // can also only choose one (another pattern)
+		if i.canIssue(*operation, state) { // can also only choose one (another pattern)
 			state.CurrReservationState.ReservationMap[index] = false
 			state.CurrReservationState.OpToExec--
 			// Decrement InvalidIterations before running if needed

@@ -104,6 +104,7 @@ type Operation struct {
 	SrcOperands       OperandList
 	ID                int // ID from YAML file
 	InvalidIterations int // Invalid iterations from YAML file
+	TimeStep          int // Time step from YAML file
 }
 
 // OperandList wraps source or destination operands for an operation.
@@ -192,6 +193,7 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 						DstOperands:       OperandList{Operands: dstOperands},
 						ID:                yamlOp.ID,
 						InvalidIterations: yamlOp.InvalidIterations,
+						TimeStep:          yamlOp.TimeStep,
 					}
 
 					operations = append(operations, operation)

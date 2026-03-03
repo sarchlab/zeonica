@@ -1,0 +1,47 @@
+array_config:
+  columns: 2
+  rows: 1
+  compiled_ii: 8
+  cores:
+    - column: 0
+      row: 0
+      core_id: "relay"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 0
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+    - column: 1
+      row: 0
+      core_id: "sink"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "STORE"
+                  id: 1
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                    - operand: "0"
+                      color: "RED"
+                - opcode: "RETURN_VALUE"
+                  id: 2
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "1"
+                      color: "RED"

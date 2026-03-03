@@ -20,9 +20,10 @@ type DeviceBuilder struct {
 	freq    sim.Freq
 	monitor *monitoring.Monitor
 	//portFactory   portFactory
-	width, height int
-	memoryMode    string         // simple or shared or local
-	memoryShare   map[[2]int]int //map[[x, y]]GroupID
+	width, height   int
+	memoryMode      string         // simple or shared or local
+	memoryShare     map[[2]int]int //map[[x, y]]GroupID
+	executionPolicy string
 }
 
 // type portFactory interface {
@@ -71,6 +72,12 @@ func (d DeviceBuilder) WithMemoryMode(mode string) DeviceBuilder {
 // WithMemoryShare sets the memory sharing configuration.
 func (d DeviceBuilder) WithMemoryShare(share map[[2]int]int) DeviceBuilder {
 	d.memoryShare = share
+	return d
+}
+
+// WithExecutionPolicy sets core execution policy.
+func (d DeviceBuilder) WithExecutionPolicy(policy string) DeviceBuilder {
+	d.executionPolicy = policy
 	return d
 }
 
@@ -188,6 +195,7 @@ func (d DeviceBuilder) createTiles(
 				WithExitAddr(&exit).
 				WithRetValAddr(&retVal).
 				WithExitReqAddr(&exitReqTimestamp).
+				WithExecutionPolicy(d.executionPolicy).
 				Build(coreName)
 
 			if d.monitor != nil {

@@ -15,12 +15,13 @@ import (
 )
 
 const (
-	defaultRows           = 4
-	defaultColumns        = 4
-	defaultExecutionModel = "serial"
-	defaultDriverName     = "Driver"
-	defaultDeviceName     = "Device"
-	defaultLogTemplate    = "<test>.json.log"
+	defaultRows            = 4
+	defaultColumns         = 4
+	defaultExecutionModel  = "serial"
+	defaultExecutionPolicy = "in_order_dataflow"
+	defaultDriverName      = "Driver"
+	defaultDeviceName      = "Device"
+	defaultLogTemplate     = "<test>.json.log"
 )
 
 var freqPattern = regexp.MustCompile(`^([0-9]+)\s*(ghz|mhz|khz|hz)$`)
@@ -31,6 +32,7 @@ type ResolvedConfig struct {
 	Rows               int
 	Columns            int
 	ExecutionModel     string
+	ExecutionPolicy    string
 	DriverName         string
 	DriverFreq         sim.Freq
 	DeviceName         string
@@ -84,11 +86,18 @@ func Resolve(spec ArchSpec, testName string) (ResolvedConfig, error) {
 		Rows:               defaultOrPositive(spec.CGRADefaults.Rows, defaultRows),
 		Columns:            defaultOrPositive(spec.CGRADefaults.Columns, defaultColumns),
 		ExecutionModel:     defaultOrString(spec.Simulator.ExecutionModel, defaultExecutionModel),
+		ExecutionPolicy:    defaultOrString(spec.Simulator.ExecutionPolicy, defaultExecutionPolicy),
 		DriverName:         defaultOrString(spec.Simulator.Driver.Name, defaultDriverName),
 		DeviceName:         defaultOrString(spec.Simulator.Device.Name, defaultDeviceName),
 		BindToArchitecture: defaultOrBool(spec.Simulator.Device.BindToArchitecture, true),
 		LoggingEnabled:     defaultOrBool(spec.Simulator.Logging.Enabled, true),
 	}
+
+	normalizedPolicy, err := normalizeExecutionPolicy(resolved.ExecutionPolicy)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+	resolved.ExecutionPolicy = normalizedPolicy
 
 	driverFreq, err := parseFrequency(spec.Simulator.Driver.Frequency, 1*sim.GHz)
 	if err != nil {
@@ -140,6 +149,7 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 		WithFreq(cfg.DeviceFreq).
 		WithWidth(width).
 		WithHeight(height).
+		WithExecutionPolicy(cfg.ExecutionPolicy).
 		Build(cfg.DeviceName)
 
 	driver.RegisterDevice(device)
@@ -252,5 +262,22 @@ func parseFrequency(input string, fallback sim.Freq) (sim.Freq, error) {
 		return sim.Freq(value), nil
 	default:
 		return 0, fmt.Errorf("unsupported frequency unit %q", matches[2])
+	}
+}
+
+func normalizeExecutionPolicy(input string) (string, error) {
+	text := strings.ToLower(strings.TrimSpace(input))
+	switch text {
+	case "", "in_order_dataflow", "in-order-dataflow", "dynamic":
+		return "in_order_dataflow", nil
+	case "elastic_scheduled", "elastic-scheduled", "hybrid":
+		return "elastic_scheduled", nil
+	case "strict_timed", "strict-timed", "static":
+		return "strict_timed", nil
+	default:
+		return "", fmt.Errorf(
+			"unsupported execution_policy %q (supported: strict_timed, elastic_scheduled, in_order_dataflow)",
+			input,
+		)
 	}
 }
