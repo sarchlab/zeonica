@@ -171,7 +171,7 @@ func (i instEmulator) resolveScheduleStep(operation Operation, state *coreState)
 	}
 
 	targetStep = int64(operation.TimeStep)
-	if targetStep < 0 || targetStep >= ii {
+	if targetStep < 0 {
 		panic(fmt.Sprintf(
 			"invalid time_step=%d for compiled_ii=%d at op=%s id=%d tile=(%d,%d)",
 			operation.TimeStep,
@@ -181,6 +181,10 @@ func (i instEmulator) resolveScheduleStep(operation Operation, state *coreState)
 			state.TileX,
 			state.TileY,
 		))
+	}
+	// Normalize to phase within II: compiler may emit time_step >= ii (e.g. 4 when ii=4 → step 0).
+	if targetStep >= ii {
+		targetStep = targetStep % ii
 	}
 
 	return currentStep, targetStep, ii
