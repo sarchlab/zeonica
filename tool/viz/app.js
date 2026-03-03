@@ -2188,7 +2188,7 @@ function drawStaticScene() {
   bindMeshZoom();
 }
 
-function drawLink(type, srcPoint, dstPoint) {
+function drawLink(type, srcPoint, dstPoint, payload = null) {
   const path = d3.path();
   path.moveTo(srcPoint.x, srcPoint.y);
   const dx = dstPoint.x - srcPoint.x;
@@ -2203,12 +2203,51 @@ function drawLink(type, srcPoint, dstPoint) {
     dstPoint.y,
   );
 
-  dynamicLayer
+  const link = dynamicLayer
     .append("path")
     .attr("class", "event-link")
     .attr("d", path.toString())
     .attr("stroke", colors[type] || "#555")
     .attr("stroke-opacity", 0.78);
+
+  const dataText = payload?.dataText == null ? "" : String(payload.dataText);
+  if (payload?.drawDataLabel && dataText) {
+    const shortData = shortText(dataText, 12);
+    let anchorX = srcPoint.x + dx * 0.58;
+    let anchorY = srcPoint.y + dy * 0.58;
+    try {
+      const node = link.node();
+      if (node) {
+        const total = node.getTotalLength();
+        if (Number.isFinite(total) && total > 0) {
+          const p = node.getPointAtLength(total * 0.58);
+          anchorX = p.x;
+          anchorY = p.y;
+        }
+      }
+    } catch (_) {
+      // Fall back to linear interpolation point when path metrics unavailable.
+    }
+    const tag = dynamicLayer.append("g")
+      .attr("class", "flow-data-tag")
+      .attr("transform", `translate(${anchorX},${anchorY})`);
+    const text = tag.append("text")
+      .attr("class", "flow-data-text")
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "middle")
+      .text(shortData);
+    const box = text.node()?.getBBox();
+    if (box) {
+      tag.insert("rect", "text")
+        .attr("class", "flow-data-bg")
+        .attr("x", box.x - 3)
+        .attr("y", box.y - 1)
+        .attr("width", box.width + 6)
+        .attr("height", box.height + 2)
+        .attr("rx", 4);
+    }
+    tag.append("title").text(`data=${dataText}`);
+  }
 
   const pulse = dynamicLayer
     .append("circle")
@@ -2273,10 +2312,10 @@ function drawTileBadges(timeEvents) {
   const ensure = (key) => {
     if (!byTile.has(key)) {
       byTile.set(key, {
-        inst: [],
+        op: [],
         mem: [],
-        inData: [],
-        outData: [],
+        txData: [],
+        rxData: [],
         details: [],
       });
     }
@@ -2288,7 +2327,7 @@ function drawTileBadges(timeEvents) {
       const k = tileKey(Number(e.X), Number(e.Y));
       const rec = ensure(k);
       const op = shortText(e.OpCode || "Inst", 10);
-      rec.inst.push(op || "Inst");
+      rec.op.push(op || "Inst");
       rec.details.push(`Inst#${e.ID ?? "?"} ${e.OpCode ?? "N/A"} pred=${e.Pred ?? "N/A"}`);
       continue;
     }
@@ -2308,21 +2347,34 @@ function drawTileBadges(timeEvents) {
     }
 
     if (e.msg === "DataFlow" && state.showDataFlow) {
-      if (e.Behavior === "FeedIn") {
+      const dataValue = e.Data;
+      if (e.Behavior === "Send") {
+        const src = parseEndpoint(e.Src);
+        if (src?.kind === "tilePort") {
+          const rec = ensure(tileKey(src.x, src.y));
+          rec.txData.push(dataValue);
+          rec.details.push(`TX ${dataValue} ${e.Src} -> ${e.Dst}`);
+        }
+      } else if (e.Behavior === "Recv") {
+        const dst = parseEndpoint(e.Dst);
+        if (dst?.kind === "tilePort") {
+          const rec = ensure(tileKey(dst.x, dst.y));
+          rec.rxData.push(dataValue);
+          rec.details.push(`RX ${dataValue} ${e.Src} -> ${e.Dst}`);
+        }
+      } else if (e.Behavior === "FeedIn") {
         const dst = parseEndpoint(e.To);
         if (dst?.kind === "tilePort") {
-          const k = tileKey(dst.x, dst.y);
-          const rec = ensure(k);
-          rec.inData.push(e.Data);
-          rec.details.push(`IN ${e.Data} via ${e.To}`);
+          const rec = ensure(tileKey(dst.x, dst.y));
+          rec.rxData.push(dataValue);
+          rec.details.push(`FeedIn ${dataValue} ${e.From} -> ${e.To}`);
         }
       } else if (e.Behavior === "Collect") {
         const src = parseEndpoint(e.From);
         if (src?.kind === "tilePort") {
-          const k = tileKey(src.x, src.y);
-          const rec = ensure(k);
-          rec.outData.push(e.Data);
-          rec.details.push(`OUT ${e.Data} via ${e.From}`);
+          const rec = ensure(tileKey(src.x, src.y));
+          rec.txData.push(dataValue);
+          rec.details.push(`Collect ${dataValue} ${e.From} -> ${e.To || e.Dst || "Driver"}`);
         }
       }
     }
@@ -2332,35 +2384,44 @@ function drawTileBadges(timeEvents) {
     const [x, y] = k.split(",").map(Number);
     const r = tileRect(x, y);
     const lineHeight = clamp(Math.round(layout.tileSize * 0.12), 9, 13);
+    const fontSize = clamp(Math.round(layout.tileSize * 0.1), 7, 11);
+    const innerWidth = Math.max(20, r.w - 8);
+    const approxCharWidth = fontSize * 0.6;
+    const maxCharsPerLine = Math.max(4, Math.floor(innerWidth / approxCharWidth));
     const textTop = r.y + 24;
     const maxTextHeight = Math.max(8, r.h - 30);
     const maxLines = Math.max(1, Math.floor(maxTextHeight / lineHeight));
 
-    const lines = [
-      summarizeTokens(rec.inst, "OP", 3),
-      summarizeTokens(rec.mem, "MEM", 2),
-      summarizeData(rec.inData, "IN", 4),
-      summarizeData(rec.outData, "OUT", 4),
-    ].filter(Boolean);
+    const lines = [];
+    const lineOps = [summarizeTokens(rec.op, "OP", 2), summarizeTokens(rec.mem, "MEM", 1)]
+      .filter(Boolean)
+      .join(" | ");
+    const lineFlow = [summarizeData(rec.rxData, "RX", 2), summarizeData(rec.txData, "TX", 2)]
+      .filter(Boolean)
+      .join(" | ");
+    // Prioritize flow values so data is still visible when space is tight.
+    if (lineFlow) lines.push(lineFlow);
+    if (lineOps) lines.push(lineOps);
     if (lines.length === 0) continue;
 
-    const shown = lines.slice(0, maxLines);
+    const shown = lines.slice(0, maxLines).map((line) => shortText(line, maxCharsPerLine));
     if (lines.length > maxLines) {
-      shown[maxLines - 1] = `${shortText(shown[maxLines - 1], 18)} ...`;
+      shown[maxLines - 1] = `${shortText(shown[maxLines - 1], Math.max(4, maxCharsPerLine - 3))}...`;
     }
-    const bgHeight = shown.length * lineHeight + 6;
+    const bgHeight = shown.length * lineHeight + 8;
     const g = dynamicLayer.append("g")
       .attr("class", "tile-overlay")
       .attr("transform", `translate(${r.x + 4},${textTop})`);
     g.append("rect")
-      .attr("class", "tile-overlay-bg")
-      .attr("width", Math.max(20, r.w - 8))
+      .attr("class", "tile-overlay-card")
+      .attr("width", innerWidth)
       .attr("height", bgHeight)
       .attr("rx", 4);
     const text = g.append("text")
       .attr("class", "tile-overlay-text")
+      .style("font-size", `${fontSize}px`)
       .attr("x", 4)
-      .attr("y", lineHeight - 2);
+      .attr("y", lineHeight - 1);
     shown.forEach((line, idx) => {
       text.append("tspan")
         .attr("x", 4)
@@ -2401,6 +2462,7 @@ function renderTime(t) {
 
   const events = state.byTime.get(t) || [];
   const activeTiles = new Set();
+  const linkLabelSeen = new Set();
 
   for (const e of events) {
     if (e.msg === "DataFlow" && state.showDataFlow) {
@@ -2419,7 +2481,11 @@ function renderTime(t) {
       const srcPoint = endpointPoint(src);
       const dstPoint = endpointPoint(dst);
       if (srcPoint && dstPoint) {
-        drawLink(type, srcPoint, dstPoint);
+        const dataText = e.Data == null ? "" : String(e.Data);
+        const labelKey = `${src?.raw || srcPoint.tile || "?"}|${dst?.raw || dstPoint.tile || "?"}|${dataText}`;
+        const drawDataLabel = dataText && !linkLabelSeen.has(labelKey);
+        if (drawDataLabel) linkLabelSeen.add(labelKey);
+        drawLink(type, srcPoint, dstPoint, { dataText, drawDataLabel });
       } else if (srcPoint) {
         dynamicLayer
           .append("circle")
@@ -2447,6 +2513,11 @@ function renderTime(t) {
 
   applyTileActivity(activeTiles);
   drawTileBadges(events);
+  // Keep link arrows above tile overlay cards.
+  dynamicLayer.selectAll(".event-link").raise();
+  // Keep transfer data labels/pulses above tile cards for readability.
+  dynamicLayer.selectAll(".flow-data-tag").raise();
+  dynamicLayer.selectAll(".pulse").raise();
   renderCycleDetails(events, t);
 }
 
@@ -2463,6 +2534,7 @@ function playOrPause() {
     stopPlayback();
     return;
   }
+  if (state.currentTime >= state.maxTime) renderTime(state.maxTime);
   controls.playBtn.textContent = "Pause";
   state.timer = setInterval(() => {
     if (state.currentTime >= state.maxTime) {
@@ -2484,8 +2556,13 @@ function initControls() {
     renderTime(Math.min(state.maxTime, state.currentTime + 1));
   });
   controls.timeSlider.addEventListener("input", (e) => {
+    const wasPlaying = Boolean(state.timer);
     stopPlayback();
-    renderTime(Number(e.target.value));
+    const nextTime = Number(e.target.value);
+    renderTime(nextTime);
+    if (wasPlaying) {
+      playOrPause();
+    }
   });
   controls.speedSelect.addEventListener("change", (e) => {
     state.speedMs = Number(e.target.value);

@@ -291,15 +291,17 @@ button {
   pointer-events: none;
 }
 
+.tile-overlay-card,
 .tile-overlay-bg {
-  fill: rgba(255, 255, 255, 0.82);
-  stroke: rgba(122, 109, 84, 0.4);
-  stroke-width: 0.6px;
+  fill: rgba(255, 253, 247, 0.9);
+  stroke: rgba(122, 109, 84, 0.5);
+  stroke-width: 0.75px;
 }
 
 .tile-overlay-text {
-  fill: #3f3a31;
-  font-size: 10px;
+  fill: #3a352d;
+  font-size: 9.5px;
+  font-weight: 600;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   pointer-events: none;
 }
@@ -314,6 +316,23 @@ button {
   fill: none;
   stroke-width: 2.4px;
   stroke-linecap: round;
+}
+
+.flow-data-tag {
+  pointer-events: none;
+}
+
+.flow-data-bg {
+  fill: rgba(255, 251, 240, 0.92);
+  stroke: rgba(122, 109, 84, 0.48);
+  stroke-width: 0.7px;
+}
+
+.flow-data-text {
+  fill: #3b3427;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .pulse {

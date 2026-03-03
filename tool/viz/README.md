@@ -19,7 +19,7 @@ Open:
 http://localhost:8000/viz/
 ```
 
-The page tries to auto-load:
+The page tries to auto-load files (example):
 
 - `../gemm.json.log` (trace)
 - `../gemm.yaml` (program)
@@ -52,7 +52,8 @@ Layout behavior:
 - Active tiles render per-cycle summary text in-tile:
   - `OP:` instruction opcode summary
   - `MEM:` direct memory behaviors (e.g. `LoadDirect` / `StoreDirect`)
-  - `IN:` / `OUT:` data snippets from `FeedIn` / `Collect`
+  - `RX:` / `TX:` data snippets from `Send` / `Recv` / `FeedIn` / `Collect`
+- DataFlow links keep pulse animation and include inline data labels from trace `Data` fields (deduplicated for same path/data in one cycle).
 - Bottom timing view uses a timeline axis (`Y=core`, `X=cycle`) + drilldown.
 
 Report view:
