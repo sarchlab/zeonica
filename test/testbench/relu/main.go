@@ -13,6 +13,8 @@ import (
 )
 
 // Relu runs the ReLU testbench on the configured runtime.
+//
+//nolint:gocyclo
 func Relu(rt *runtimecfg.Runtime) int {
 	width := rt.Config.Columns
 	height := rt.Config.Rows
