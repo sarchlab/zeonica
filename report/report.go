@@ -379,13 +379,14 @@ func parseTileFromEndpoint(endpoint string) (tileCoord, bool) {
 		return tileCoord{}, false
 	}
 
-	var x int
-	var y int
-	if _, err := fmt.Sscanf(matches[0], "Device.Tile[%d][%d].Core.", &x, &y); err != nil {
+	var row int
+	var col int
+	if _, err := fmt.Sscanf(matches[0], "Device.Tile[%d][%d].Core.", &row, &col); err != nil {
 		return tileCoord{}, false
 	}
 
-	return tileCoord{x: x, y: y}, true
+	// Endpoint naming is Tile[row][col], while report coordinates are (x=col, y=row).
+	return tileCoord{x: col, y: row}, true
 }
 
 func parseCycle(timeValue *float64) (int64, bool) {

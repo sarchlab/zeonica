@@ -46,7 +46,7 @@ extensions:
 simulator:
   execution_model: "serial"
   execution_policy: "in_order_dataflow"
-  # three policy: strict-timed, elastic_scheduled, in_order_dataflow
+  # three policy: strict_timed, elastic_scheduled, in_order_dataflow
 
   logging:
     enabled: true

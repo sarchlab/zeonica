@@ -3,20 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CGRA GEMM Log Viewer</title>
+    <title>CGRA Log Viewer</title>
     <link rel="stylesheet" href="./styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
   </head>
   <body>
     <main class="layout">
       <header class="panel topbar">
         <div>
-          <h1>CGRA GEMM Log Viewer</h1>
+          <h1>CGRA Log Viewer</h1>
           <p class="subtitle">Timeline visualization for JSONL execution traces</p>
         </div>
         <div class="file-load">
-          <label for="fileInput">Load log</label>
-          <input id="fileInput" type="file" accept=".log,.json,.jsonl,.txt" />
+          <div class="file-load-item">
+            <label for="fileInput">Trace log</label>
+            <input id="fileInput" type="file" accept=".log,.json,.jsonl,.txt" />
+          </div>
+          <div class="file-load-item">
+            <label for="yamlInput">Program YAML</label>
+            <input id="yamlInput" type="file" accept=".yaml,.yml,.txt" />
+          </div>
+          <div class="file-load-item">
+            <label for="reportInput">Report JSON</label>
+            <input id="reportInput" type="file" accept=".json,.txt" />
+          </div>
         </div>
       </header>
 
@@ -45,13 +56,98 @@
       </section>
 
       <section class="panel viz">
-        <svg id="canvas" viewBox="0 0 940 620" preserveAspectRatio="xMidYMid meet"></svg>
+        <div id="meshLegend" class="mesh-legend-panel"></div>
+        <svg id="canvas" preserveAspectRatio="xMidYMid meet"></svg>
       </section>
 
       <section class="panel details">
         <h2>Cycle Details</h2>
         <p id="statsLine"></p>
         <pre id="eventDump"></pre>
+      </section>
+
+      <section class="panel report">
+        <h2>Report Overview</h2>
+        <p id="reportWarning" class="report-warning"></p>
+        <div id="reportSummary" class="report-summary"></div>
+        <div id="reportHotTiles" class="report-hot-tiles"></div>
+      </section>
+
+      <section class="panel timing">
+        <h2>Strict Timing Offset View</h2>
+        <p id="timingSummary" class="timing-summary"></p>
+        <div class="timing-toolbar">
+          <label class="timing-toggle">
+            <input type="checkbox" id="timingAnomalyOnly" />
+            anomaly-only
+          </label>
+          <label class="timing-toggle">
+            <input type="checkbox" id="timingShowPhaseExplain" checked />
+            show-phase-explain
+          </label>
+          <label class="timing-toggle">
+            <input type="checkbox" id="timingBoundaryOnly" />
+            boundary-only
+          </label>
+          <label class="timing-toggle timing-select">
+            core-focus
+            <select id="timingCoreFocus">
+              <option value="">All cores</option>
+            </select>
+          </label>
+          <label class="timing-toggle timing-select">
+            baseline-view
+            <select id="timingBaselineView">
+              <option value="strict">strict</option>
+              <option value="compensated" selected>compensated</option>
+              <option value="split">split</option>
+            </select>
+          </label>
+          <label class="timing-toggle timing-select">
+            comp-model
+            <select id="timingCompModel">
+              <option value="distance">distance-heuristic</option>
+              <option value="fitted">trace-fitted-phase</option>
+              <option value="hybrid" selected>hybrid</option>
+            </select>
+          </label>
+          <label class="timing-toggle timing-export-setting">
+            max-side
+            <input id="timingExportMaxSide" type="number" min="512" max="16000" step="256" value="4096" />
+          </label>
+          <button id="timingExportPng" type="button">Export PNG</button>
+          <button id="timingJumpFirstMismatch" type="button">Jump to first hybrid mismatch</button>
+        </div>
+        <div class="timing-window">
+          <label class="timing-toggle timing-window-item">
+            window-size
+            <input id="timingWindowSize" type="range" min="1" max="1" value="1" />
+            <span id="timingWindowSizeLabel">1 cycle</span>
+          </label>
+          <label class="timing-toggle timing-window-item">
+            y-zoom
+            <input id="timingZoomY" type="range" min="60" max="400" step="5" value="100" />
+            <span id="timingZoomYLabel">1.00x</span>
+          </label>
+          <button id="timingResetZoom" type="button">Reset Zoom</button>
+        </div>
+        <div class="timing-legend">
+          <span class="legend-chip on-time">on-time</span>
+          <span class="legend-chip early">early</span>
+          <span class="legend-chip late">late</span>
+          <span class="legend-chip missing">missing</span>
+          <span class="legend-chip propagated">propagated</span>
+        </div>
+        <div id="timingGrid" class="timing-grid-wrap"></div>
+        <div id="timingCoreMini" class="timing-core-mini"></div>
+        <div class="timing-window timing-window-below">
+          <label class="timing-toggle timing-window-item">
+            window-start
+            <input id="timingWindowStart" type="range" min="0" max="0" value="0" />
+            <span id="timingWindowStartLabel">T0-T0</span>
+          </label>
+        </div>
+        <div id="timingDrilldown" class="timing-drilldown"></div>
       </section>
     </main>
 
