@@ -54,6 +54,7 @@ func TestCanIssueElasticScheduled(t *testing.T) {
 		ExecutionPolicy: ExecutionPolicyElasticScheduled,
 	}
 	state := newPolicyTestState()
+	state.Code.CompiledII = 10 // must have schedule so elastic time-gating applies
 	op := Operation{
 		OpCode:   "NOP",
 		TimeStep: 5,
@@ -104,10 +105,12 @@ func TestCanIssueStrictTimedViolation(t *testing.T) {
 		ExecutionPolicy: ExecutionPolicyStrictTimed,
 	}
 	state := newPolicyTestState()
-	state.CurrentCycle = 3
+	state.Code.CompiledII = 4   // must have schedule so strict time check runs
+	state.CurrentCycle = 6      // step 2 (6%4); op was for step 1 → missed step, violation
+	state.RecvBufHeadReady[0][0] = true // North dir slot 0 ready so CheckFlags passes
 	op := Operation{
 		OpCode:   "DATA_MOV",
-		TimeStep: 3,
+		TimeStep: 1, // scheduled step 1; current step 2 > 1 → panic
 		SrcOperands: OperandList{
 			Operands: []Operand{
 				{Impl: "North", Color: "R"},

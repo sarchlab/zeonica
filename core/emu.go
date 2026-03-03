@@ -196,7 +196,13 @@ func (i instEmulator) canIssue(operation Operation, state *coreState) bool {
 	}
 
 	ready := i.CheckFlags(operation, state)
-	currentStep, targetStep, _ := i.resolveScheduleStep(operation, state)
+	currentStep, targetStep, ii := i.resolveScheduleStep(operation, state)
+
+	// No schedule (compiled_ii missing or 0): ignore time gating so existing workloads
+	// (e.g. histogram) that do not use II-based scheduling still run like in-order.
+	if ii <= 0 {
+		return ready
+	}
 
 	switch normalizeExecutionPolicyString(i.ExecutionPolicy) {
 	case ExecutionPolicyStrictTimed:
@@ -323,8 +329,6 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 		}
 	}
 	if run {
-		// Collect all results first
-		allResults := make(map[Operand]cgra.Data)
 		for index := range cinst.Operations {
 			// Get reference to the original operation in state.SelectedBlock
 			operation := &state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[index]
@@ -335,15 +339,11 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 				continue
 			}
 			results := i.RunOperation(*operation, state, time)
-			// Merge results into allResults
+			// In Sync mode, apply each op result immediately so later ops in the
+			// same instruction group can observe updated registers/ports.
 			for operand, value := range results {
-				allResults[operand] = value
+				i.writeOperand(operand, value, state)
 			}
-			//print("RunOperation", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")", time, ":", "YES", "\n")
-		}
-		// Write all results at once
-		for operand, value := range allResults {
-			i.writeOperand(operand, value, state)
 		}
 	}
 	return run
@@ -787,9 +787,19 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) map[Operan
 	src1 := inst.SrcOperands.Operands[0]
 	addrStruct := i.readOperand(src1, state)
 	addr := addrStruct.First()
+	finalPred := addrStruct.Pred
+	results := make(map[Operand]cgra.Data)
+
+	// Predicated-off load should not touch memory or trigger bounds checks.
+	if !finalPred {
+		for _, dst := range inst.DstOperands.Operands {
+			results[dst] = cgra.NewScalarWithPred(0, false)
+		}
+		return results
+	}
 
 	if addr >= uint32(len(state.Memory)) {
-		panic("memory address out of bounds")
+		panic("memory address out of bounds, addr: " + strconv.Itoa(int(addr)) + ", len(state.Memory): " + strconv.Itoa(len(state.Memory)))
 	}
 	value := state.Memory[addr]
 	slog.Warn("Memory",
@@ -800,8 +810,6 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) map[Operan
 		"X", state.TileX,
 		"Y", state.TileY,
 	)
-	finalPred := addrStruct.Pred
-	results := make(map[Operand]cgra.Data)
 	for _, dst := range inst.DstOperands.Operands {
 		results[dst] = cgra.NewScalarWithPred(value, finalPred)
 	}
@@ -859,6 +867,11 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) map[Opera
 	src2 := inst.SrcOperands.Operands[1]
 	addrStruct := i.readOperand(src2, state)
 	addr := addrStruct.First()
+	finalPred := addrStruct.Pred && valueStruct.Pred
+	if !finalPred {
+		Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+		return make(map[Operand]cgra.Data)
+	}
 	if addr >= uint32(len(state.Memory)) {
 		panic("memory address out of bounds, addr: " + strconv.Itoa(int(addr)) + ", len(state.Memory): " + strconv.Itoa(len(state.Memory)))
 	}
@@ -870,7 +883,6 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) map[Opera
 		"Y", state.TileY,
 	)
 	state.Memory[addr] = value
-	finalPred := addrStruct.Pred && valueStruct.Pred
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 	return make(map[Operand]cgra.Data)
