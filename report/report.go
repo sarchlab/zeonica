@@ -25,22 +25,25 @@ type GenerateOptions struct {
 
 // Report is the aggregate execution summary derived from a trace log.
 type Report struct {
-	TestName        string       `json:"testName,omitempty"`
-	LogPath         string       `json:"logPath"`
-	Grid            GridInfo     `json:"grid"`
-	TotalCycles     int64        `json:"totalCycles"`
-	ActiveCycles    int64        `json:"activeCyclesGlobal"`
-	IdleCycles      int64        `json:"idleCyclesGlobal"`
-	Passed          *bool        `json:"passed,omitempty"`
-	MismatchCount   *int         `json:"mismatchCount,omitempty"`
-	InstCount       int64        `json:"instCount"`
-	SendCount       int64        `json:"sendCount"`
-	RecvCount       int64        `json:"recvCount"`
-	MemoryCount     int64        `json:"memoryCount"`
-	TotalEvents     int64        `json:"totalEvents"`
-	ActiveTileCount int          `json:"activeTileCount"`
-	Tiles           []TileStats  `json:"tiles"`
-	TopHotTiles     []TopHotTile `json:"topHotTiles"`
+	TestName             string                `json:"testName,omitempty"`
+	LogPath              string                `json:"logPath"`
+	Grid                 GridInfo              `json:"grid"`
+	TotalCycles          int64                 `json:"totalCycles"`
+	ActiveCycles         int64                 `json:"activeCyclesGlobal"`
+	IdleCycles           int64                 `json:"idleCyclesGlobal"`
+	Passed               *bool                 `json:"passed,omitempty"`
+	MismatchCount        *int                  `json:"mismatchCount,omitempty"`
+	InstCount            int64                 `json:"instCount"`
+	SendCount            int64                 `json:"sendCount"`
+	RecvCount            int64                 `json:"recvCount"`
+	MemoryCount          int64                 `json:"memoryCount"`
+	TotalEvents          int64                 `json:"totalEvents"`
+	BackpressureCount    int64                 `json:"backpressureCount"`
+	BackpressureCycles   int64                 `json:"backpressureCycles"`
+	ActiveTileCount      int                   `json:"activeTileCount"`
+	Tiles                []TileStats           `json:"tiles"`
+	TopHotTiles          []TopHotTile          `json:"topHotTiles"`
+	TopBackpressureTiles []TopBackpressureTile `json:"topBackpressureTiles"`
 }
 
 // GridInfo describes the grid size used by the workload.
@@ -51,16 +54,17 @@ type GridInfo struct {
 
 // TileStats stores per-tile metrics in the generated report.
 type TileStats struct {
-	X              int     `json:"x"`
-	Y              int     `json:"y"`
-	Coord          string  `json:"coord"`
-	ActiveCycles   int64   `json:"activeCycles"`
-	UtilizationPct float64 `json:"utilizationPct"`
-	InstCount      int64   `json:"instCount"`
-	SendCount      int64   `json:"sendCount"`
-	RecvCount      int64   `json:"recvCount"`
-	MemoryCount    int64   `json:"memoryCount"`
-	TotalEvents    int64   `json:"totalEvents"`
+	X                 int     `json:"x"`
+	Y                 int     `json:"y"`
+	Coord             string  `json:"coord"`
+	ActiveCycles      int64   `json:"activeCycles"`
+	UtilizationPct    float64 `json:"utilizationPct"`
+	InstCount         int64   `json:"instCount"`
+	SendCount         int64   `json:"sendCount"`
+	RecvCount         int64   `json:"recvCount"`
+	MemoryCount       int64   `json:"memoryCount"`
+	TotalEvents       int64   `json:"totalEvents"`
+	BackpressureCount int64   `json:"backpressureCount"`
 }
 
 // TopHotTile is a ranked hot tile summary entry.
@@ -71,6 +75,14 @@ type TopHotTile struct {
 	UtilizationPct float64 `json:"utilizationPct"`
 	ActiveCycles   int64   `json:"activeCycles"`
 	TotalEvents    int64   `json:"totalEvents"`
+}
+
+// TopBackpressureTile is a ranked backpressure hot tile entry.
+type TopBackpressureTile struct {
+	X                 int    `json:"x"`
+	Y                 int    `json:"y"`
+	Coord             string `json:"coord"`
+	BackpressureCount int64  `json:"backpressureCount"`
 }
 
 type traceEvent struct {
@@ -92,12 +104,14 @@ type tileCoord struct {
 }
 
 type tileAccumulator struct {
-	cycles      map[int64]struct{}
-	instCount   int64
-	sendCount   int64
-	recvCount   int64
-	memoryCount int64
-	totalEvents int64
+	cycles             map[int64]struct{}
+	backpressureCycles map[int64]struct{}
+	instCount          int64
+	sendCount          int64
+	recvCount          int64
+	memoryCount        int64
+	totalEvents        int64
+	backpressureCount  int64
 }
 
 var tileEndpointPattern = regexp.MustCompile(`Device\.Tile\[(\d+)\]\[(\d+)\]\.Core\.`)
@@ -123,9 +137,11 @@ func GenerateFromLog(opts GenerateOptions) (Report, error) {
 
 	tileData := make(map[tileCoord]*tileAccumulator)
 	globalCycleSet := make(map[int64]struct{})
+	globalBackpressureCycleSet := make(map[int64]struct{})
 
 	var maxCycle int64 = -1
 	maxX, maxY := -1, -1
+	var globalBackpressureCount int64
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -154,13 +170,15 @@ func GenerateFromLog(opts GenerateOptions) (Report, error) {
 		acc, exists := tileData[coord]
 		if !exists {
 			acc = &tileAccumulator{
-				cycles: make(map[int64]struct{}),
+				cycles:             make(map[int64]struct{}),
+				backpressureCycles: make(map[int64]struct{}),
 			}
 			tileData[coord] = acc
 		}
 
+		isBackpressureEvent := event.Msg == "Backpressure"
 		cycle, hasCycle := parseCycle(event.Time)
-		if hasCycle {
+		if hasCycle && !isBackpressureEvent {
 			acc.cycles[cycle] = struct{}{}
 			globalCycleSet[cycle] = struct{}{}
 			if cycle > maxCycle {
@@ -168,7 +186,12 @@ func GenerateFromLog(opts GenerateOptions) (Report, error) {
 			}
 		}
 
-		classifyAndCount(event, acc)
+		if classifyAndCount(event, acc, cycle, hasCycle) {
+			globalBackpressureCount++
+			if hasCycle {
+				globalBackpressureCycleSet[cycle] = struct{}{}
+			}
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -210,16 +233,17 @@ func GenerateFromLog(opts GenerateOptions) (Report, error) {
 		}
 
 		tiles = append(tiles, TileStats{
-			X:              coord.x,
-			Y:              coord.y,
-			Coord:          formatCoord(coord.x, coord.y),
-			ActiveCycles:   activeTileCycles,
-			UtilizationPct: util,
-			InstCount:      acc.instCount,
-			SendCount:      acc.sendCount,
-			RecvCount:      acc.recvCount,
-			MemoryCount:    acc.memoryCount,
-			TotalEvents:    acc.totalEvents,
+			X:                 coord.x,
+			Y:                 coord.y,
+			Coord:             formatCoord(coord.x, coord.y),
+			ActiveCycles:      activeTileCycles,
+			UtilizationPct:    util,
+			InstCount:         acc.instCount,
+			SendCount:         acc.sendCount,
+			RecvCount:         acc.recvCount,
+			MemoryCount:       acc.memoryCount,
+			TotalEvents:       acc.totalEvents,
+			BackpressureCount: acc.backpressureCount,
 		})
 	}
 
@@ -245,24 +269,28 @@ func GenerateFromLog(opts GenerateOptions) (Report, error) {
 	}
 
 	topHotTiles := buildTopHotTiles(tiles, topN)
+	topBackpressureTiles := buildTopBackpressureTiles(tiles, topN)
 
 	report := Report{
-		TestName:        opts.TestName,
-		LogPath:         opts.LogPath,
-		Grid:            GridInfo{Width: width, Height: height},
-		TotalCycles:     totalCycles,
-		ActiveCycles:    activeCycles,
-		IdleCycles:      idleCycles,
-		Passed:          opts.Passed,
-		MismatchCount:   opts.MismatchCount,
-		InstCount:       instTotal,
-		SendCount:       sendTotal,
-		RecvCount:       recvTotal,
-		MemoryCount:     memoryTotal,
-		TotalEvents:     eventTotal,
-		ActiveTileCount: len(tiles),
-		Tiles:           tiles,
-		TopHotTiles:     topHotTiles,
+		TestName:             opts.TestName,
+		LogPath:              opts.LogPath,
+		Grid:                 GridInfo{Width: width, Height: height},
+		TotalCycles:          totalCycles,
+		ActiveCycles:         activeCycles,
+		IdleCycles:           idleCycles,
+		Passed:               opts.Passed,
+		MismatchCount:        opts.MismatchCount,
+		InstCount:            instTotal,
+		SendCount:            sendTotal,
+		RecvCount:            recvTotal,
+		MemoryCount:          memoryTotal,
+		TotalEvents:          eventTotal,
+		BackpressureCount:    globalBackpressureCount,
+		BackpressureCycles:   int64(len(globalBackpressureCycleSet)),
+		ActiveTileCount:      len(tiles),
+		Tiles:                tiles,
+		TopHotTiles:          topHotTiles,
+		TopBackpressureTiles: topBackpressureTiles,
 	}
 
 	return report, nil
@@ -298,6 +326,7 @@ func PrintSummaryToWriter(report Report, w io.Writer) {
 	fmt.Fprintf(w, "cycles: total=%d active=%d idle=%d\n", report.TotalCycles, report.ActiveCycles, report.IdleCycles)
 	fmt.Fprintf(w, "events: total=%d inst=%d send=%d recv=%d memory=%d\n",
 		report.TotalEvents, report.InstCount, report.SendCount, report.RecvCount, report.MemoryCount)
+	fmt.Fprintf(w, "backpressure: count=%d cycles=%d\n", report.BackpressureCount, report.BackpressureCycles)
 	fmt.Fprintf(w, "active tiles: %d\n", report.ActiveTileCount)
 	if report.Passed != nil {
 		fmt.Fprintf(w, "passed: %t\n", *report.Passed)
@@ -313,9 +342,15 @@ func PrintSummaryToWriter(report Report, w io.Writer) {
 				idx+1, tile.Coord, tile.UtilizationPct, tile.ActiveCycles, tile.TotalEvents)
 		}
 	}
+	if len(report.TopBackpressureTiles) > 0 {
+		fmt.Fprintln(w, "top backpressure tiles:")
+		for idx, tile := range report.TopBackpressureTiles {
+			fmt.Fprintf(w, "  %d) %s bp=%d\n", idx+1, tile.Coord, tile.BackpressureCount)
+		}
+	}
 }
 
-func classifyAndCount(event traceEvent, acc *tileAccumulator) {
+func classifyAndCount(event traceEvent, acc *tileAccumulator, cycle int64, hasCycle bool) bool {
 	switch event.Msg {
 	case "Inst":
 		acc.instCount++
@@ -331,7 +366,14 @@ func classifyAndCount(event traceEvent, acc *tileAccumulator) {
 			acc.recvCount++
 		}
 		acc.totalEvents++
+	case "Backpressure":
+		acc.backpressureCount++
+		if hasCycle {
+			acc.backpressureCycles[cycle] = struct{}{}
+		}
+		return true
 	}
+	return false
 }
 
 func resolveTileCoord(event traceEvent) (tileCoord, bool) {
@@ -436,6 +478,39 @@ func buildTopHotTiles(tiles []TileStats, topN int) []TopHotTile {
 		})
 	}
 
+	return out
+}
+
+func buildTopBackpressureTiles(tiles []TileStats, topN int) []TopBackpressureTile {
+	if len(tiles) == 0 || topN <= 0 {
+		return nil
+	}
+	tmp := make([]TileStats, len(tiles))
+	copy(tmp, tiles)
+	sort.Slice(tmp, func(i, j int) bool {
+		if tmp[i].BackpressureCount != tmp[j].BackpressureCount {
+			return tmp[i].BackpressureCount > tmp[j].BackpressureCount
+		}
+		if tmp[i].Y != tmp[j].Y {
+			return tmp[i].Y < tmp[j].Y
+		}
+		return tmp[i].X < tmp[j].X
+	})
+	if topN > len(tmp) {
+		topN = len(tmp)
+	}
+	out := make([]TopBackpressureTile, 0, topN)
+	for i := 0; i < topN; i++ {
+		if tmp[i].BackpressureCount <= 0 {
+			continue
+		}
+		out = append(out, TopBackpressureTile{
+			X:                 tmp[i].X,
+			Y:                 tmp[i].Y,
+			Coord:             tmp[i].Coord,
+			BackpressureCount: tmp[i].BackpressureCount,
+		})
+	}
 	return out
 }
 

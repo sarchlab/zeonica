@@ -16,7 +16,7 @@ python3 -m http.server 8000
 Open:
 
 ```text
-http://localhost:8000/viz/
+http://localhost:8000/tool/viz/
 ```
 
 The page tries to auto-load files (example):
@@ -37,6 +37,10 @@ Optional aggregate report input:
 
 - **Report JSON**: generated report (for example `fir.report.json`) with `grid`, global counters, per-tile `utilizationPct`, and `topHotTiles`.
 - Report can be loaded independently from trace/yaml for quick utilization review.
+- Backpressure metrics are supported when report includes runtime `Backpressure` events:
+  - `backpressureCount`: total downstream backpressure hits (`SendBufBusy`)
+  - `backpressureCycles`: cycles containing at least one backpressure hit
+  - `tiles[].backpressureCount` and `topBackpressureTiles`
 
 ## Strict Timing Offset View
 
@@ -60,6 +64,7 @@ Report view:
 
 - Report panel shows summary cards: `totalCycles`, `activeCyclesGlobal`, `idleCyclesGlobal`, `passed`, `mismatchCount`, `activeTileCount`, `totalEvents`.
 - Hot-tile table shows ranked `coord`, `utilizationPct`, `activeCycles`, `totalEvents`.
+- Backpressure section shows ranked `coord`, `bp-count` from `topBackpressureTiles` (if available).
 - If report grid and current mesh grid differ, viewer shows a warning; overlay is clipped to current mesh bounds.
 
 Timing view layout:
@@ -77,6 +82,14 @@ Timing view layout:
 - Mismatch blocks/links are drawn as rectangles (not points) for slot-level readability
 - Drilldown panel still shows operation-level details for selected `(core, slot)`
 - `window-start` + `window-size` let you pan/zoom through full trace cycles
+- Optional IO waveform expansion supports multiple cores:
+  - `io-wave-all`: expand waveform rows for all visible cores
+  - `io-wave-core`: multi-select a subset of cores to expand
+  - double-click Y-axis core label: toggle that core's IO wave quickly
+- Expanded IO rows are bus-style waveform segments (trapezoid/diamond transition with parallel top and bottom edges):
+  - `IN` row: DataFlow values from `FeedIn(to tile)` and `Recv(dst tile)`
+  - `OUT` row: DataFlow values from `Send(src tile)` and `Collect(from tile)`
+- IO waveform values are rendered in signed decimal; when multiple values occur in one cycle, the waveform label shows a compact summary and full values remain in tooltip.
 
 Default view (hybrid as main):
 
@@ -99,6 +112,9 @@ Default interaction:
 - Drilldown now includes sample source fields so each match can be traced back to `Inst` / `LoadDirect` / `StoreDirect`.
 - Core focus supports two synced entry points: click Y-axis core label, or select from `core-focus` dropdown.
 - When a core is focused, the main timeline keeps only that core and an inline mini panel shows source distribution plus a compact in-window trace list.
+- Y-axis label interaction is split:
+  - single-click: focus/unfocus core for main timeline
+  - double-click: toggle IO waveform expansion for that core
 - `Export PNG` downloads the current timeline window
 - `max-side` controls export scaling upper bound; oversized windows are proportionally downscaled
 - For repeated op executions, timeline labels/tooltips include occurrence tag (e.g. `@2` or `[2/5]`).

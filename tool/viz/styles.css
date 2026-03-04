@@ -377,6 +377,11 @@ button {
   color: #514a3f;
 }
 
+#timingIoWaveCore[multiple] {
+  min-width: 140px;
+  min-height: 92px;
+}
+
 .timing-export-setting input[type="number"] {
   width: 86px;
   padding: 0.2rem 0.35rem;
@@ -750,10 +755,26 @@ button {
   text-decoration: underline;
 }
 
+.timeline-core-label.io-expanded {
+  fill: #6a2b96;
+  text-decoration: underline;
+  text-decoration-style: dashed;
+}
+
 .timeline-lane-tag {
   fill: #7f7460;
   font-size: 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.timeline-io-tag-in {
+  fill: #2d6cdf;
+  font-weight: 700;
+}
+
+.timeline-io-tag-out {
+  fill: #8f2ac7;
+  font-weight: 700;
 }
 
 .timeline-rect {
@@ -804,6 +825,34 @@ button {
 .timeline-rect.selected {
   stroke-width: 1.8;
   filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.28));
+}
+
+.timeline-io-bus {
+  stroke-width: 0.9;
+}
+
+.timeline-io-bus-in {
+  fill: #deebff;
+  stroke: #7da3ea;
+}
+
+.timeline-io-bus-out {
+  fill: #f1e1ff;
+  stroke: #b589dd;
+}
+
+.timeline-io-bus-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  pointer-events: none;
+  font-size: 7px;
+}
+
+.timeline-io-bus-label-in {
+  fill: #214a9c;
+}
+
+.timeline-io-bus-label-out {
+  fill: #6d2094;
 }
 
 .timeline-rect-label {
@@ -871,6 +920,16 @@ button {
 
 .timeline-legend-comp-bad {
   fill: #9b2ce0;
+}
+
+.timeline-legend-io-in {
+  fill: #deebff;
+  stroke: #7da3ea;
+}
+
+.timeline-legend-io-out {
+  fill: #f1e1ff;
+  stroke: #b589dd;
 }
 
 .timeline-legend-missing {

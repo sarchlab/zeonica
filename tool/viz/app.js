@@ -29,12 +29,15 @@ const state = {
   timingBoundaryOnly: false,
   timingBaselineView: "compensated",
   timingCompModel: "hybrid",
+  timingIoWaveExpandAll: false,
+  timingIoWaveExpandedCoreKeys: new Set(),
   timingWindowStart: 0,
   timingWindowSize: 120,
   timingZoomX: 1,
   timingZoomY: 1,
   timingViewport: null,
   firstHybridMismatchTime: null,
+  coreIoWaveByTime: new Map(),
 };
 
 const layout = {
@@ -104,6 +107,8 @@ const controls = {
   timingShowPhaseExplain: document.getElementById("timingShowPhaseExplain"),
   timingBoundaryOnly: document.getElementById("timingBoundaryOnly"),
   timingCoreFocus: document.getElementById("timingCoreFocus"),
+  timingIoWaveAll: document.getElementById("timingIoWaveAll"),
+  timingIoWaveCore: document.getElementById("timingIoWaveCore"),
   timingBaselineView: document.getElementById("timingBaselineView"),
   timingCompModel: document.getElementById("timingCompModel"),
   timingWindowStart: document.getElementById("timingWindowStart"),
@@ -121,6 +126,7 @@ const controls = {
   meshLegend: document.getElementById("meshLegend"),
   vizPanel: document.querySelector(".panel.viz"),
 };
+let timingCoreLabelClickTimer = null;
 
 function tileKey(x, y) {
   return `${x},${y}`;
@@ -394,6 +400,17 @@ function formatDelta(delta) {
   return `${v >= 0 ? "+" : ""}${v}`;
 }
 
+function formatDataAsDecimal(value) {
+  if (value == null) return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    if (Number.isInteger(numeric)) return String(numeric);
+    return String(numeric);
+  }
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+}
+
 function numberOr(value, fallback = 0) {
   const v = Number(value);
   return Number.isFinite(v) ? v : fallback;
@@ -436,6 +453,7 @@ function parseReportJson(text) {
         recvCount: Math.max(0, integerOr(item?.recvCount, 0)),
         memoryCount: Math.max(0, integerOr(item?.memoryCount, 0)),
         totalEvents: Math.max(0, integerOr(item?.totalEvents, 0)),
+        backpressureCount: Math.max(0, integerOr(item?.backpressureCount, 0)),
       };
     })
     .filter(Boolean);
@@ -452,6 +470,19 @@ function parseReportJson(text) {
         utilizationPct: Math.max(0, Math.min(100, numberOr(item?.utilizationPct, 0))),
         activeCycles: Math.max(0, integerOr(item?.activeCycles, 0)),
         totalEvents: Math.max(0, integerOr(item?.totalEvents, 0)),
+      };
+    })
+    .filter(Boolean);
+  const topBackpressureTiles = (Array.isArray(raw.topBackpressureTiles) ? raw.topBackpressureTiles : [])
+    .map((item) => {
+      const x = integerOr(item?.x, NaN);
+      const y = integerOr(item?.y, NaN);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      return {
+        x,
+        y,
+        coord: String(item?.coord || `(${x},${y})`),
+        backpressureCount: Math.max(0, integerOr(item?.backpressureCount, 0)),
       };
     })
     .filter(Boolean);
@@ -474,6 +505,20 @@ function parseReportJson(text) {
       activeCycles: t.activeCycles,
       totalEvents: t.totalEvents,
     }));
+  const fallbackBackpressure = [...tiles]
+    .filter((t) => t.backpressureCount > 0)
+    .sort((a, b) => {
+      if (b.backpressureCount !== a.backpressureCount) return b.backpressureCount - a.backpressureCount;
+      if (b.totalEvents !== a.totalEvents) return b.totalEvents - a.totalEvents;
+      return b.activeCycles - a.activeCycles;
+    })
+    .slice(0, 8)
+    .map((t) => ({
+      x: t.x,
+      y: t.y,
+      coord: t.coord,
+      backpressureCount: t.backpressureCount,
+    }));
 
   return {
     testName: String(raw.testName || ""),
@@ -492,9 +537,12 @@ function parseReportJson(text) {
     recvCount: Math.max(0, integerOr(raw.recvCount, 0)),
     memoryCount: Math.max(0, integerOr(raw.memoryCount, 0)),
     totalEvents: Math.max(0, integerOr(raw.totalEvents, 0)),
+    backpressureCount: Math.max(0, integerOr(raw.backpressureCount, 0)),
+    backpressureCycles: Math.max(0, integerOr(raw.backpressureCycles, 0)),
     activeTileCount,
     tiles,
     topHotTiles: topHotTiles.length > 0 ? topHotTiles : fallbackHot,
+    topBackpressureTiles: topBackpressureTiles.length > 0 ? topBackpressureTiles : fallbackBackpressure,
   };
 }
 
@@ -532,6 +580,8 @@ function renderReportView() {
     ["idle(global)", report.idleCyclesGlobal],
     ["active-tiles", report.activeTileCount],
     ["events", report.totalEvents],
+    ["bp-count", report.backpressureCount],
+    ["bp-cycles", report.backpressureCycles],
   ];
   controls.reportSummary.innerHTML = cards.map(
     ([k, v]) => `<div class="report-card"><div class="report-card-k">${escapeHtml(k)}</div><div class="report-card-v">${escapeHtml(v)}</div></div>`,
@@ -551,19 +601,33 @@ function renderReportView() {
   }
 
   const hotTiles = (Array.isArray(report.topHotTiles) ? report.topHotTiles : []).slice(0, 12);
-  if (hotTiles.length === 0) {
-    controls.reportHotTiles.innerHTML = "<div class=\"report-empty\">No hot-tile entries.</div>";
-    return;
+  const bpTiles = (Array.isArray(report.topBackpressureTiles) ? report.topBackpressureTiles : []).slice(0, 12);
+  const sections = [];
+  if (hotTiles.length > 0) {
+    const rows = hotTiles.map((tile, idx) =>
+      `<tr><td>${idx + 1}</td><td>${escapeHtml(tile.coord || `(${tile.x},${tile.y})`)}</td><td>${escapeHtml(formatPercent(tile.utilizationPct))}</td><td>${escapeHtml(tile.activeCycles)}</td><td>${escapeHtml(tile.totalEvents)}</td></tr>`).join("");
+    sections.push([
+      "<div class=\"report-hot-title\">Top Hot Tiles</div>",
+      "<table class=\"report-hot-table\">",
+      "<thead><tr><th>#</th><th>coord</th><th>utilization</th><th>activeCycles</th><th>events</th></tr></thead>",
+      `<tbody>${rows}</tbody>`,
+      "</table>",
+    ].join(""));
+  } else {
+    sections.push("<div class=\"report-empty\">No hot-tile entries.</div>");
   }
-  const rows = hotTiles.map((tile, idx) =>
-    `<tr><td>${idx + 1}</td><td>${escapeHtml(tile.coord || `(${tile.x},${tile.y})`)}</td><td>${escapeHtml(formatPercent(tile.utilizationPct))}</td><td>${escapeHtml(tile.activeCycles)}</td><td>${escapeHtml(tile.totalEvents)}</td></tr>`).join("");
-  controls.reportHotTiles.innerHTML = [
-    "<div class=\"report-hot-title\">Top Hot Tiles</div>",
-    "<table class=\"report-hot-table\">",
-    "<thead><tr><th>#</th><th>coord</th><th>utilization</th><th>activeCycles</th><th>events</th></tr></thead>",
-    `<tbody>${rows}</tbody>`,
-    "</table>",
-  ].join("");
+  if (bpTiles.length > 0) {
+    const bpRows = bpTiles.map((tile, idx) =>
+      `<tr><td>${idx + 1}</td><td>${escapeHtml(tile.coord || `(${tile.x},${tile.y})`)}</td><td>${escapeHtml(tile.backpressureCount)}</td></tr>`).join("");
+    sections.push([
+      "<div class=\"report-hot-title\">Top Backpressure Tiles</div>",
+      "<table class=\"report-hot-table\">",
+      "<thead><tr><th>#</th><th>coord</th><th>bp-count</th></tr></thead>",
+      `<tbody>${bpRows}</tbody>`,
+      "</table>",
+    ].join(""));
+  }
+  controls.reportHotTiles.innerHTML = sections.join("");
 }
 
 function applyReportHeatOverlay() {
@@ -1107,10 +1171,36 @@ function renderTimelineSvg(_view, timeline) {
   const subLaneGap = clamp(Math.round(5 * zoomY), 3, 22);
   const laneGap = clamp(Math.round(10 * zoomY), 6, 46);
   const splitView = baselineView === "split";
-  const laneRows = splitView ? 3 : 2;
-  const laneStep = slotHeight * laneRows + subLaneGap * (laneRows - 1) + laneGap;
-  const laneCount = Math.max(1, timeline.lanes.length);
-  const plotH = laneCount * laneStep;
+  const baseLaneRows = splitView ? 3 : 2;
+  const availableCoreKeys = new Set(timeline.lanes.map((lane) => lane.coreKey));
+  const selectedIoKeys = new Set([...(state.timingIoWaveExpandedCoreKeys || [])]);
+  const ioWaveExpandedKeys = state.timingIoWaveExpandAll
+    ? new Set([...availableCoreKeys])
+    : new Set([...selectedIoKeys].filter((key) => availableCoreKeys.has(key)));
+  const rowStep = slotHeight + subLaneGap;
+  const laneData = [];
+  let yCursor = topPad;
+  for (let idx = 0; idx < timeline.lanes.length; idx += 1) {
+    const lane = timeline.lanes[idx];
+    const hasIoRows = ioWaveExpandedKeys.has(lane.coreKey);
+    const laneRows = baseLaneRows + (hasIoRows ? 2 : 0);
+    const laneHeight = laneRows * slotHeight + (laneRows - 1) * subLaneGap;
+    laneData.push({
+      ...lane,
+      idx,
+      hasIoRows,
+      laneRows,
+      yBase: yCursor,
+      yExpected: yCursor,
+      yStrict: yCursor + rowStep,
+      yComp: yCursor + rowStep * 2,
+      yIoIn: hasIoRows ? yCursor + rowStep * baseLaneRows : null,
+      yIoOut: hasIoRows ? yCursor + rowStep * (baseLaneRows + 1) : null,
+    });
+    yCursor += laneHeight + laneGap;
+  }
+  const laneCount = Math.max(1, laneData.length);
+  const plotH = Math.max(1, yCursor - topPad - laneGap);
   const wrapWidth = Math.max(860, Math.round(wrap.clientWidth || 0) - 2);
   const plotW = Math.max(620, wrapWidth - leftPad - rightPad);
   const width = leftPad + plotW + rightPad;
@@ -1142,15 +1232,6 @@ function renderTimelineSvg(_view, timeline) {
   const ticks = [];
   for (let t = windowStart; t <= windowEnd; t += 1) ticks.push(t);
 
-  const laneData = timeline.lanes.map((lane, idx) => ({
-    ...lane,
-    idx,
-    yBase: topPad + idx * laneStep,
-    yExpected: topPad + idx * laneStep,
-    yStrict: topPad + idx * laneStep + slotHeight + subLaneGap,
-    yComp: topPad + idx * laneStep + (slotHeight + subLaneGap) * 2,
-  }));
-
   // Cycle boundaries (X): dashed vertical lines only; no other grid
   const grid = svgEl.append("g").attr("class", "timeline-grid");
   for (const t of ticks) {
@@ -1173,7 +1254,7 @@ function renderTimelineSvg(_view, timeline) {
   // Core boundaries (Y): one dashed/dark line between each core for easier row matching
   const coreSep = svgEl.append("g").attr("class", "timeline-core-seps");
   for (let idx = 1; idx < laneCount; idx += 1) {
-    const y = topPad + idx * laneStep;
+    const y = laneData[idx].yBase;
     coreSep.append("line")
       .attr("x1", leftPad)
       .attr("x2", leftPad + plotW)
@@ -1197,10 +1278,11 @@ function renderTimelineSvg(_view, timeline) {
       .attr("class", [
         "timeline-core-label",
         lane.isBoundary ? "boundary" : "",
+        lane.hasIoRows ? "io-expanded" : "",
         state.timingFocusedCoreKey === lane.coreKey ? "focused" : "",
       ].filter(Boolean).join(" "))
       .attr("data-core-key", lane.coreKey)
-      .attr("title", `Focus core (${lane.x},${lane.y})`)
+      .attr("title", `Click: focus core (${lane.x},${lane.y}) | Double-click: toggle IO wave`)
       .text(`(${lane.x},${lane.y}) ${lane.boundaryLabel}${phaseText}`);
     lanesG.append("text")
       .attr("x", leftPad - 64)
@@ -1219,6 +1301,18 @@ function renderTimelineSvg(_view, timeline) {
         .attr("class", "timeline-lane-tag")
         .text("C");
     }
+    if (lane.hasIoRows) {
+      lanesG.append("text")
+        .attr("x", leftPad - 64)
+        .attr("y", lane.yIoIn + slotHeight - 1)
+        .attr("class", "timeline-lane-tag timeline-io-tag-in")
+        .text("IN");
+      lanesG.append("text")
+        .attr("x", leftPad - 64)
+        .attr("y", lane.yIoOut + slotHeight - 1)
+        .attr("class", "timeline-lane-tag timeline-io-tag-out")
+        .text("OUT");
+    }
   }
 
   const slotG = svgEl.append("g").attr("class", "timeline-rects");
@@ -1230,7 +1324,92 @@ function renderTimelineSvg(_view, timeline) {
     if (baselineView === "compensated") return compAnomaly;
     return strictAnomaly || compAnomaly;
   };
+  const applyStackLayout = (items, keyOf, tieBreakOf) => {
+    const buckets = new Map();
+    for (const item of items) {
+      const key = keyOf(item);
+      const arr = buckets.get(key) || [];
+      arr.push(item);
+      buckets.set(key, arr);
+    }
+    for (const group of buckets.values()) {
+      group.sort((a, b) => tieBreakOf(a) - tieBreakOf(b));
+      const total = group.length;
+      if (total <= 1) {
+        group[0].stackIndex = 0;
+        group[0].stackTotal = 1;
+        continue;
+      }
+      for (let i = 0; i < group.length; i += 1) {
+        group[i].stackIndex = i;
+        group[i].stackTotal = total;
+      }
+    }
+  };
+  const resolveStackGeometry = (baseY, baseH, stackIndex, stackTotal) => {
+    if (!Number.isFinite(stackTotal) || stackTotal <= 1) {
+      return { y: baseY, h: baseH };
+    }
+    // Keep all stacked blocks visible within one cycle slot row.
+    const gap = 1;
+    const innerH = Math.max(2, Math.floor((baseH - gap * (stackTotal - 1)) / stackTotal));
+    const y = baseY + stackIndex * (innerH + gap);
+    return { y, h: innerH };
+  };
+  const summarizeWaveValues = (values, maxItems = 2) => {
+    const arr = Array.isArray(values) ? values : [];
+    if (arr.length === 0) return "";
+    const shown = arr.slice(0, maxItems).map((v) => shortText(v, 7));
+    const remain = arr.length - shown.length;
+    if (remain > 0) shown.push(`+${remain}`);
+    return shown.join(",");
+  };
+  const ioBusPath = (xLeft, xRight, yTop, yBottom) => {
+    const yMid = (yTop + yBottom) / 2;
+    const w = Math.max(1, xRight - xLeft);
+    const edge = Math.min(5, Math.max(1, Math.round(w * 0.22)));
+    return [
+      `M${xLeft + edge},${yTop}`,
+      `L${xRight - edge},${yTop}`,
+      `L${xRight},${yMid}`,
+      `L${xRight - edge},${yBottom}`,
+      `L${xLeft + edge},${yBottom}`,
+      `L${xLeft},${yMid}`,
+      "Z",
+    ].join(" ");
+  };
+  const drawIoWaveRow = (lane, yPos, direction) => {
+    if (!Number.isFinite(yPos)) return;
+    const byTime = state.coreIoWaveByTime.get(lane.coreKey);
+    if (!byTime) return;
+    for (let t = windowStart; t <= windowEnd; t += 1) {
+      const entry = byTime.get(t);
+      const values = direction === "in" ? entry?.inVals : entry?.outVals;
+      if (!Array.isArray(values) || values.length === 0) continue;
+      const xLeft = xScale(t);
+      const xRight = xScale(t + 1);
+      const w = Math.max(1, xRight - xLeft);
+      slotG.append("path")
+        .attr("d", ioBusPath(xLeft, xRight, yPos, yPos + slotHeight))
+        .attr("class", `timeline-io-bus ${direction === "in" ? "timeline-io-bus-in" : "timeline-io-bus-out"}`)
+        .attr(
+          "title",
+          `${direction === "in" ? "Input" : "Output"} core=(${lane.x},${lane.y}) t=${t} values=${values.join(",")}`,
+        );
+      if (w >= labelMinWidth + 6) {
+        slotG.append("text")
+          .attr("x", xLeft + w / 2)
+          .attr("y", yPos + slotHeight / 2)
+          .attr("text-anchor", "middle")
+          .attr("dominant-baseline", "middle")
+          .attr("class", `timeline-io-bus-label ${direction === "in" ? "timeline-io-bus-label-in" : "timeline-io-bus-label-out"}`)
+          .attr("font-size", labelFontSize)
+          .text(summarizeWaveValues(values));
+      }
+    }
+  };
   const drawActualRow = (lane, yPos, rowMode) => {
+    const drawables = [];
     for (const slot of lane.expectedSlots) {
       if (!keepSlot(slot)) continue;
       const rowStatus = rowMode === "strict" ? slot.statusStrict : getCompStatusByModel(slot, compModel);
@@ -1249,25 +1428,35 @@ function renderTimelineSvg(_view, timeline) {
       }
       if (!Number.isFinite(drawTime)) continue;
       if (drawTime < windowStart || drawTime > windowEnd) continue;
+      drawables.push({ slot, rowStatus, drawTime, cls });
+    }
+    applyStackLayout(
+      drawables,
+      (d) => `${lane.coreKey}|${rowMode}|${d.drawTime}`,
+      (d) => (d.slot.opId * 10000) + (d.slot.sampleIndex || 0),
+    );
+    for (const d of drawables) {
+      const { slot, rowStatus, drawTime, cls, stackIndex = 0, stackTotal = 1 } = d;
       const x0 = xScale(drawTime);
       const x1 = xScale(drawTime + 1);
       const w = Math.max(1, Math.floor(x1 - x0 - 1));
       const selected = state.timingSelectedCell === slot.cellKey ? "selected" : "";
+      const geom = resolveStackGeometry(yPos, slotHeight, stackIndex, stackTotal);
       slotG.append("rect")
         .attr("x", x0 + 0.5)
-        .attr("y", yPos)
+        .attr("y", geom.y)
         .attr("width", w)
-        .attr("height", slotHeight)
+        .attr("height", geom.h)
         .attr("class", `timeline-rect ${cls} ${selected}`)
         .attr("data-timing-cell", slot.cellKey)
         .attr(
           "title",
           `${rowMode === "strict" ? "Strict" : `Comp(${compModel})`} #${slot.opId}[${slot.sampleIndex}/${slot.occurrenceTotal}] status=${rowStatus} t=${Number.isFinite(slot.actualTime) ? slot.actualTime : "N/A"} deltaS=${formatDelta(slot.deltaStrict)} deltaC=${formatDelta(getCompDeltaByModel(slot, compModel))}`,
         );
-      if (w >= labelMinWidth) {
+      if (w >= labelMinWidth && geom.h >= 8) {
         slotG.append("text")
           .attr("x", x0 + 0.5 + w / 2)
-          .attr("y", yPos + slotHeight / 2)
+          .attr("y", geom.y + geom.h / 2)
           .attr("text-anchor", "middle")
           .attr("dominant-baseline", "middle")
           .attr("class", "timeline-rect-label timeline-rect-label-actual")
@@ -1283,36 +1472,47 @@ function renderTimelineSvg(_view, timeline) {
           : (rowStatus === "on-time" ? "comp-ok" : "comp-bad");
         slotG.append("line")
           .attr("x1", xe).attr("y1", lane.yExpected + slotHeight)
-          .attr("x2", xa).attr("y2", yPos)
+          .attr("x2", xa).attr("y2", geom.y)
           .attr("class", `timeline-link ${linkClass}`);
       }
     }
   };
 
   for (const lane of laneData) {
+    const expectedDrawables = [];
     for (const slot of lane.expectedSlots) {
       if (!keepSlot(slot)) continue;
       if (!Number.isFinite(slot.expectedTime)) continue;
       if (slot.expectedTime < windowStart || slot.expectedTime > windowEnd) continue;
+      expectedDrawables.push({ slot, drawTime: slot.expectedTime });
+    }
+    applyStackLayout(
+      expectedDrawables,
+      (d) => `${lane.coreKey}|expected|${d.drawTime}`,
+      (d) => (d.slot.opId * 10000) + (d.slot.sampleIndex || 0),
+    );
+    for (const d of expectedDrawables) {
+      const { slot, stackIndex = 0, stackTotal = 1 } = d;
       const x0 = xScale(slot.expectedTime);
       const x1 = xScale(slot.expectedTime + 1);
       const w = Math.max(1, Math.floor(x1 - x0 - 1));
       const selected = state.timingSelectedCell === slot.cellKey ? "selected" : "";
+      const geom = resolveStackGeometry(lane.yExpected, slotHeight, stackIndex, stackTotal);
       slotG.append("rect")
         .attr("x", x0 + 0.5)
-        .attr("y", lane.yExpected)
+        .attr("y", geom.y)
         .attr("width", w)
-        .attr("height", slotHeight)
+        .attr("height", geom.h)
         .attr("class", `timeline-rect expected ${selected}`)
         .attr("data-timing-cell", slot.cellKey)
         .attr(
           "title",
           `Expected #${slot.opId}[${slot.sampleIndex}/${slot.occurrenceTotal}] (${slot.opcode || "N/A"}) t=${slot.expectedTime} deltaS=${formatDelta(slot.deltaStrict)} deltaC=${formatDelta(getCompDeltaByModel(slot, compModel))}`,
         );
-      if (w >= labelMinWidth) {
+      if (w >= labelMinWidth && geom.h >= 8) {
         slotG.append("text")
           .attr("x", x0 + 0.5 + w / 2)
-          .attr("y", lane.yExpected + slotHeight / 2)
+          .attr("y", geom.y + geom.h / 2)
           .attr("text-anchor", "middle")
           .attr("dominant-baseline", "middle")
           .attr("class", "timeline-rect-label timeline-rect-label-expected")
@@ -1327,6 +1527,10 @@ function renderTimelineSvg(_view, timeline) {
     } else {
       drawActualRow(lane, lane.yStrict, "strict");
       drawActualRow(lane, lane.yComp, "comp");
+    }
+    if (lane.hasIoRows) {
+      drawIoWaveRow(lane, lane.yIoIn, "in");
+      drawIoWaveRow(lane, lane.yIoOut, "out");
     }
   }
 
@@ -1354,6 +1558,10 @@ function renderTimelineSvg(_view, timeline) {
         [`Comp(${compModel}) mismatch`, "timeline-legend-comp-bad"],
         ["Missing", "timeline-legend-missing"],
       ]);
+  if (laneData.some((lane) => lane.hasIoRows)) {
+    legendItems.push(["IN bus", "timeline-legend-io-in"]);
+    legendItems.push(["OUT bus", "timeline-legend-io-out"]);
+  }
   const legendGap = 132;
   legendItems.forEach((it, i) => {
     const gx = i * legendGap;
@@ -1448,7 +1656,10 @@ function timelineExportCss() {
 .timeline-core-label { fill: #5a5347; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .timeline-core-label.boundary { font-weight: 700; }
 .timeline-core-label.focused { fill: #1f4eb5; font-weight: 700; text-decoration: underline; }
+.timeline-core-label.io-expanded { fill: #6a2b96; text-decoration: underline; text-decoration-style: dashed; }
 .timeline-lane-tag { fill: #7f7460; font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.timeline-io-tag-in { fill: #2d6cdf; font-weight: 700; }
+.timeline-io-tag-out { fill: #8f2ac7; font-weight: 700; }
 .timeline-rect.expected { fill: #f4f4f4; stroke: #8f8f8f; stroke-width: 0.8; }
 .timeline-rect.actual-ok { fill: #2a7f62; stroke: #1f604a; stroke-width: 0.7; }
 .timeline-rect.actual-bad { fill: #d62828; stroke: #8f1717; stroke-width: 0.7; }
@@ -1456,6 +1667,12 @@ function timelineExportCss() {
 .timeline-rect.actual-comp-bad { fill: #9b2ce0; stroke: #5d178a; stroke-width: 0.85; opacity: 0.9; }
 .timeline-rect.missing { fill: #f4f4f4; stroke: #7a7a7a; stroke-width: 1.1; stroke-dasharray: 2 1; }
 .timeline-rect.selected { stroke-width: 1.8; }
+.timeline-io-bus { stroke-width: 0.9; }
+.timeline-io-bus-in { fill: #deebff; stroke: #7da3ea; }
+.timeline-io-bus-out { fill: #f1e1ff; stroke: #b589dd; }
+.timeline-io-bus-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; pointer-events: none; font-size: 7px; }
+.timeline-io-bus-label-in { fill: #214a9c; }
+.timeline-io-bus-label-out { fill: #6d2094; }
 .timeline-missing { stroke: #7a7a7a; stroke-width: 1.2; }
 .timeline-link.ok { stroke: rgba(54, 132, 103, 0.45); stroke-width: 0.9; }
 .timeline-link.bad { stroke: rgba(214, 40, 40, 0.72); stroke-width: 1.2; }
@@ -1468,6 +1685,8 @@ function timelineExportCss() {
 .timeline-legend-missing { fill: #f4f4f4; stroke: #7a7a7a; stroke-dasharray: 2 1; }
 .timeline-legend-comp-ok { fill: #2d6cdf; }
 .timeline-legend-comp-bad { fill: #9b2ce0; }
+.timeline-legend-io-in { fill: #deebff; stroke: #7da3ea; }
+.timeline-legend-io-out { fill: #f1e1ff; stroke: #b589dd; }
 .timeline-rect-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 7px; }
 .timeline-rect-label-expected { fill: #444; }
 .timeline-rect-label-actual { fill: #fff; }`;
@@ -1535,6 +1754,36 @@ function splitCellKey(cellKey) {
   };
 }
 
+function buildCoreIoWaveByTime(events) {
+  const byCore = new Map();
+  const ensure = (coreKey, time) => {
+    if (!byCore.has(coreKey)) byCore.set(coreKey, new Map());
+    const byTime = byCore.get(coreKey);
+    if (!byTime.has(time)) byTime.set(time, { inVals: [], outVals: [] });
+    return byTime.get(time);
+  };
+  for (const e of events) {
+    if (e.msg !== "DataFlow") continue;
+    const time = Math.round(Number(e.Time));
+    if (!Number.isFinite(time)) continue;
+    const value = formatDataAsDecimal(e.Data);
+    if (e.Behavior === "FeedIn" || e.Behavior === "Recv") {
+      const dst = parseEndpoint(e.Behavior === "FeedIn" ? e.To : e.Dst);
+      if (dst?.kind !== "tilePort") continue;
+      const cell = ensure(tileKey(dst.x, dst.y), time);
+      if (value != null) cell.inVals.push(value);
+      continue;
+    }
+    if (e.Behavior === "Send" || e.Behavior === "Collect") {
+      const src = parseEndpoint(e.Behavior === "Collect" ? e.From : e.Src);
+      if (src?.kind !== "tilePort") continue;
+      const cell = ensure(tileKey(src.x, src.y), time);
+      if (value != null) cell.outVals.push(value);
+    }
+  }
+  return byCore;
+}
+
 function refreshCoreFocusControl(columns) {
   if (!controls.timingCoreFocus) return;
   const options = [
@@ -1547,6 +1796,31 @@ function refreshCoreFocusControl(columns) {
   const hasFocused = columns.some((c) => c.coreKey === state.timingFocusedCoreKey);
   if (!hasFocused) state.timingFocusedCoreKey = null;
   controls.timingCoreFocus.value = state.timingFocusedCoreKey || "";
+}
+
+function refreshIoWaveCoreControl(columns) {
+  if (!controls.timingIoWaveCore || !controls.timingIoWaveAll) return;
+  const validKeys = new Set(columns.map((c) => c.coreKey));
+  const expanded = new Set(
+    [...(state.timingIoWaveExpandedCoreKeys || [])].filter((key) => validKeys.has(key)),
+  );
+  state.timingIoWaveExpandedCoreKeys = expanded;
+
+  const options = columns.map((c) => ({ value: c.coreKey, label: `(${c.x},${c.y})` }));
+  controls.timingIoWaveCore.innerHTML = options
+    .map((opt) => `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.label)}</option>`)
+    .join("");
+  const shouldSelectAll = Boolean(state.timingIoWaveExpandAll && columns.length > 0);
+  if (state.timingIoWaveExpandAll && columns.length === 0) {
+    state.timingIoWaveExpandAll = false;
+  }
+  const selectedKeys = shouldSelectAll
+    ? new Set(columns.map((c) => c.coreKey))
+    : expanded;
+  for (const opt of controls.timingIoWaveCore.options) {
+    opt.selected = selectedKeys.has(opt.value);
+  }
+  controls.timingIoWaveAll.checked = shouldSelectAll;
 }
 
 function renderTimingDrilldown(view, heatmap, phaseExplain, compensation) {
@@ -1917,6 +2191,8 @@ function renderTimingView() {
     controls.timingSummary.textContent = "Load program YAML to enable strict timing comparison.";
     controls.timingGrid.innerHTML = "";
     if (controls.timingCoreFocus) controls.timingCoreFocus.innerHTML = "<option value=\"\">All cores</option>";
+    if (controls.timingIoWaveCore) controls.timingIoWaveCore.innerHTML = "";
+    if (controls.timingIoWaveAll) controls.timingIoWaveAll.checked = false;
     if (controls.timingDrilldown) {
       controls.timingDrilldown.innerHTML =
         "<div class=\"timing-drill-empty\">Load YAML and trace, then click a timeline mark for details.</div>";
@@ -1931,6 +2207,8 @@ function renderTimingView() {
     controls.timingSummary.textContent = "Load trace log to populate timing comparison.";
     controls.timingGrid.innerHTML = "";
     if (controls.timingCoreFocus) controls.timingCoreFocus.innerHTML = "<option value=\"\">All cores</option>";
+    if (controls.timingIoWaveCore) controls.timingIoWaveCore.innerHTML = "";
+    if (controls.timingIoWaveAll) controls.timingIoWaveAll.checked = false;
     if (controls.timingDrilldown) {
       controls.timingDrilldown.innerHTML =
         "<div class=\"timing-drill-empty\">Load YAML and trace, then click a timeline mark for details.</div>";
@@ -1947,6 +2225,7 @@ function renderTimingView() {
   state.timingColumns = view.slots;
   state.timingReady = true;
   refreshCoreFocusControl(view.columns);
+  refreshIoWaveCoreControl(view.columns);
   const heatmap = buildTimingHeatmap(view);
   const phaseExplain = buildPhaseExplain(view);
   const compensation = buildCompensationModels(view, phaseExplain, state.events);
@@ -2617,6 +2896,29 @@ function initControls() {
       renderTimingView();
     });
   }
+  if (controls.timingIoWaveAll) {
+    controls.timingIoWaveAll.addEventListener("change", (e) => {
+      const checked = Boolean(e.target.checked);
+      state.timingIoWaveExpandAll = checked;
+      if (checked) {
+        state.timingIoWaveExpandedCoreKeys = new Set((state.timingRows || []).map((c) => c.coreKey));
+      }
+      renderTimingView();
+    });
+  }
+  if (controls.timingIoWaveCore) {
+    controls.timingIoWaveCore.addEventListener("change", (e) => {
+      const selectedKeys = new Set(
+        [...e.target.selectedOptions]
+          .map((opt) => String(opt.value || ""))
+          .filter(Boolean),
+      );
+      state.timingIoWaveExpandedCoreKeys = selectedKeys;
+      const total = (state.timingRows || []).length;
+      state.timingIoWaveExpandAll = total > 0 && selectedKeys.size >= total;
+      renderTimingView();
+    });
+  }
   if (controls.timingBaselineView) {
     controls.timingBaselineView.value = state.timingBaselineView;
     controls.timingBaselineView.addEventListener("change", (e) => {
@@ -2677,15 +2979,39 @@ function initControls() {
     controls.timingGrid.addEventListener("click", (e) => {
       const label = e.target.closest("[data-core-key]");
       if (label) {
+        if (timingCoreLabelClickTimer) clearTimeout(timingCoreLabelClickTimer);
         const key = label.getAttribute("data-core-key");
-        state.timingFocusedCoreKey = state.timingFocusedCoreKey === key ? null : key;
-        state.timingSelectedCell = null;
-        renderTimingView();
+        timingCoreLabelClickTimer = setTimeout(() => {
+          timingCoreLabelClickTimer = null;
+          state.timingFocusedCoreKey = state.timingFocusedCoreKey === key ? null : key;
+          state.timingSelectedCell = null;
+          renderTimingView();
+        }, 220);
         return;
       }
       const btn = e.target.closest("[data-timing-cell]");
       if (!btn) return;
       state.timingSelectedCell = btn.getAttribute("data-timing-cell");
+      renderTimingView();
+    });
+    controls.timingGrid.addEventListener("dblclick", (e) => {
+      const label = e.target.closest("[data-core-key]");
+      if (!label) return;
+      if (timingCoreLabelClickTimer) {
+        clearTimeout(timingCoreLabelClickTimer);
+        timingCoreLabelClickTimer = null;
+      }
+      const key = label.getAttribute("data-core-key");
+      if (!key) return;
+      const expanded = new Set(state.timingIoWaveExpandedCoreKeys || []);
+      if (expanded.has(key)) {
+        expanded.delete(key);
+      } else {
+        expanded.add(key);
+      }
+      state.timingIoWaveExpandedCoreKeys = expanded;
+      const total = (state.timingRows || []).length;
+      state.timingIoWaveExpandAll = total > 0 && expanded.size >= total;
       renderTimingView();
     });
   }
@@ -2715,8 +3041,11 @@ function loadTrace(text) {
   stopPlayback();
   const events = parseJsonLines(text);
   state.events = events;
+  state.coreIoWaveByTime = buildCoreIoWaveByTime(events);
   state.timingSelectedCell = null;
   state.timingFocusedCoreKey = null;
+  state.timingIoWaveExpandAll = false;
+  state.timingIoWaveExpandedCoreKeys = new Set();
   state.timingWindowStart = 0;
   state.timingWindowSize = 120;
   state.timingZoomX = 1;
@@ -2748,6 +3077,8 @@ function loadProgramYaml(text) {
     state.yamlGridBounds = boundsFromProgramSpec(state.programSpec);
     state.timingSelectedCell = null;
     state.timingFocusedCoreKey = null;
+    state.timingIoWaveExpandAll = false;
+    state.timingIoWaveExpandedCoreKeys = new Set();
     state.timingWindowStart = 0;
     state.timingZoomX = 1;
     state.timingZoomY = 1;
@@ -2768,11 +3099,19 @@ function loadProgramYaml(text) {
     state.yamlGridBounds = null;
     state.timingReady = false;
     state.timingFocusedCoreKey = null;
+    state.timingIoWaveExpandAll = false;
+    state.timingIoWaveExpandedCoreKeys = new Set();
     controls.timingSummary.textContent = `Program YAML parse error: ${err.message}`;
     controls.timingGrid.innerHTML = "";
     if (controls.timingCoreFocus) {
       controls.timingCoreFocus.innerHTML = "<option value=\"\">All cores</option>";
       controls.timingCoreFocus.value = "";
+    }
+    if (controls.timingIoWaveCore) {
+      controls.timingIoWaveCore.innerHTML = "";
+    }
+    if (controls.timingIoWaveAll) {
+      controls.timingIoWaveAll.checked = false;
     }
     if (controls.timingDrilldown) {
       controls.timingDrilldown.innerHTML =
