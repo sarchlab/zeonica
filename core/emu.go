@@ -446,6 +446,18 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 		dstImpl := i.normalizeDirection(dst.Impl)
 		if state.Directions[dstImpl] {
 			if state.SendBufHeadBusy[i.getColorIndex(dst.Color)][i.getDirecIndex(dstImpl)] {
+				Trace(
+					"Backpressure",
+					"Time", state.CurrentTime,
+					"X", state.TileX,
+					"Y", state.TileY,
+					"OpCode", inst.OpCode,
+					"ID", inst.ID,
+					"Reason", "SendBufBusy",
+					"DstDir", dstImpl,
+					"Color", dst.Color,
+					"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
+				)
 				flag = false
 				break
 			}
