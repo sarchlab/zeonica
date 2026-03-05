@@ -1103,6 +1103,7 @@ func (i instEmulator) runMulAdd(inst Operation, state *coreState) map[Operand]cg
 	dstValSigned := s0Val*s1Val + s2Val
 	dstVal := uint32(dstValSigned)
 	//finalPred := s0.Pred && s1.Pred && s2.Pred
+	//Only for systolic array currently. if need for other cases, please modify the finalPred calculation.
 	finalPred := s0.Pred && s1.Pred
 	results := make(map[Operand]cgra.Data)
 	for _, dst := range inst.DstOperands.Operands {
