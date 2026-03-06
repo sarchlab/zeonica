@@ -145,14 +145,19 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 			panic("CGRA cannot handle the data rate")
 		}
 
-		core.Trace("DataFlow",
-			"Behavior", "FeedIn",
-			slog.Float64("Time", float64(d.Engine.CurrentTime()*1e9)),
-			"Data", task.data[dataIndex],
-			"Color", task.color,
-			"From", port.Name(),
-			"To", task.remotePorts[i],
-		)
+		timeValue := float64(d.Engine.CurrentTime() * 1e9)
+		if core.TraceEnabled() {
+			core.Trace("DataFlow",
+				"Behavior", "FeedIn",
+				slog.Float64("Time", timeValue),
+				"Data", task.data[dataIndex],
+				"Color", task.color,
+				"From", port.Name(),
+				"To", task.remotePorts[i],
+			)
+		} else {
+			core.ObserveDataFlow("FeedIn", timeValue, port.Name(), string(task.remotePorts[i]), "", "")
+		}
 		task.portRounds[i]++
 		madeProgress = true
 	}
@@ -202,15 +207,20 @@ func (d *driverImpl) doOneCollectTask(task *collectTask) bool {
 		}
 		task.data[dataIndex] = msg.Data.First()
 
-		core.Trace("DataFlow",
-			"Behavior", "Collect",
-			slog.Float64("Time", float64(d.Engine.CurrentTime()*1e9)),
-			"Data", msg.Data.First(),
-			"Pred", msg.Data.Pred,
-			"Color", task.color,
-			"From", task.ports[i].Name(),
-			"To", "None",
-		)
+		timeValue := float64(d.Engine.CurrentTime() * 1e9)
+		if core.TraceEnabled() {
+			core.Trace("DataFlow",
+				"Behavior", "Collect",
+				slog.Float64("Time", timeValue),
+				"Data", msg.Data.First(),
+				"Pred", msg.Data.Pred,
+				"Color", task.color,
+				"From", task.ports[i].Name(),
+				"To", "None",
+			)
+		} else {
+			core.ObserveDataFlow("Collect", timeValue, task.ports[i].Name(), "None", "", "")
+		}
 
 		task.portRounds[i]++
 		madeProgress = true

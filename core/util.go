@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
+	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 )
@@ -11,13 +13,220 @@ import (
 const (
 	// PrintToggle enables verbose state table printing in debugging.
 	PrintToggle = false
-	// LevelTrace is a custom trace level above info.
-	LevelTrace slog.Level = slog.LevelInfo + 1
+	// LevelTrace is a custom trace level below debug/info.
+	LevelTrace slog.Level = slog.LevelDebug - 4
 )
+
+// TraceObservation captures the subset of a trace event needed for report generation.
+type TraceObservation struct {
+	WallTime time.Time
+	Msg      string
+	Behavior string
+	Time     *float64
+	X        *int
+	Y        *int
+	Src      string
+	Dst      string
+	From     string
+	To       string
+}
+
+var traceEnabled atomic.Bool
+var traceObserver func(TraceObservation)
+
+func init() {
+	traceEnabled.Store(true)
+}
+
+// SetTraceEnabled controls whether trace events are written to the slog trace handler.
+func SetTraceEnabled(enabled bool) {
+	traceEnabled.Store(enabled)
+}
+
+// TraceEnabled reports whether trace output is enabled.
+func TraceEnabled() bool {
+	return traceEnabled.Load()
+}
+
+// DebugEnabled reports whether debug logging is enabled on the default logger.
+func DebugEnabled() bool {
+	return slog.Default().Enabled(context.Background(), slog.LevelDebug)
+}
+
+// SetTraceObserver registers a report observer for trace events.
+func SetTraceObserver(observer func(TraceObservation)) {
+	traceObserver = observer
+}
 
 // Trace writes a trace-level structured log record.
 func Trace(msg string, args ...any) {
+	if traceObserver != nil {
+		if observation, valid := buildTraceObservation(msg, args...); valid {
+			traceObserver(observation)
+		}
+	}
+	if !TraceEnabled() {
+		return
+	}
 	slog.Log(context.Background(), LevelTrace, msg, args...)
+}
+
+// ObserveDataFlow records a dataflow event for report generation without emitting trace output.
+func ObserveDataFlow(behavior string, timeValue float64, from, to, src, dst string) {
+	observeTrace(TraceObservation{
+		WallTime: time.Now(),
+		Msg:      "DataFlow",
+		Behavior: behavior,
+		Time:     float64Ptr(timeValue),
+		From:     from,
+		To:       to,
+		Src:      src,
+		Dst:      dst,
+	})
+}
+
+// ObserveMemory records a memory event for report generation without emitting trace output.
+func ObserveMemory(behavior string, timeValue float64, x, y int, src, dst string) {
+	observeTrace(TraceObservation{
+		WallTime: time.Now(),
+		Msg:      "Memory",
+		Behavior: behavior,
+		Time:     float64Ptr(timeValue),
+		X:        intPtr(x),
+		Y:        intPtr(y),
+		Src:      src,
+		Dst:      dst,
+	})
+}
+
+// ObserveInst records an instruction event for report generation without emitting trace output.
+func ObserveInst(timeValue float64, x, y int) {
+	observeTrace(TraceObservation{
+		WallTime: time.Now(),
+		Msg:      "Inst",
+		Time:     float64Ptr(timeValue),
+		X:        intPtr(x),
+		Y:        intPtr(y),
+	})
+}
+
+// ObserveBackpressure records a backpressure event for report generation without emitting trace output.
+func ObserveBackpressure(timeValue float64, x, y int) {
+	observeTrace(TraceObservation{
+		WallTime: time.Now(),
+		Msg:      "Backpressure",
+		Time:     float64Ptr(timeValue),
+		X:        intPtr(x),
+		Y:        intPtr(y),
+	})
+}
+
+func observeTrace(observation TraceObservation) {
+	if traceObserver != nil {
+		traceObserver(observation)
+	}
+}
+
+func buildTraceObservation(msg string, args ...any) (TraceObservation, bool) {
+	observation := TraceObservation{
+		WallTime: time.Now(),
+		Msg:      msg,
+	}
+	if msg != "Inst" && msg != "Memory" && msg != "DataFlow" && msg != "Backpressure" {
+		return observation, false
+	}
+
+	for i := 0; i < len(args); i++ {
+		switch value := args[i].(type) {
+		case slog.Attr:
+			assignObservationField(&observation, value.Key, value.Value.Any())
+		case string:
+			if i+1 >= len(args) {
+				continue
+			}
+			assignObservationField(&observation, value, args[i+1])
+			i++
+		}
+	}
+
+	return observation, true
+}
+
+func assignObservationField(observation *TraceObservation, key string, value any) {
+	switch key {
+	case "Behavior":
+		observation.Behavior = fmt.Sprint(value)
+	case "Time":
+		if converted, ok := toFloat64(value); ok {
+			observation.Time = float64Ptr(converted)
+		}
+	case "X":
+		if converted, ok := toInt(value); ok {
+			observation.X = intPtr(converted)
+		}
+	case "Y":
+		if converted, ok := toInt(value); ok {
+			observation.Y = intPtr(converted)
+		}
+	case "Src":
+		observation.Src = fmt.Sprint(value)
+	case "Dst":
+		observation.Dst = fmt.Sprint(value)
+	case "From":
+		observation.From = fmt.Sprint(value)
+	case "To":
+		observation.To = fmt.Sprint(value)
+	}
+}
+
+func toFloat64(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case float32:
+		return float64(typed), true
+	case int:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case int32:
+		return float64(typed), true
+	case uint32:
+		return float64(typed), true
+	case uint64:
+		return float64(typed), true
+	default:
+		return 0, false
+	}
+}
+
+func toInt(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int32:
+		return int(typed), true
+	case int64:
+		return int(typed), true
+	case uint32:
+		return int(typed), true
+	case uint64:
+		return int(typed), true
+	default:
+		return 0, false
+	}
+}
+
+func intPtr(value int) *int {
+	ptr := new(int)
+	*ptr = value
+	return ptr
+}
+
+func float64Ptr(value float64) *float64 {
+	ptr := new(float64)
+	*ptr = value
+	return ptr
 }
 
 // PrintState prints a formatted snapshot of core runtime state.

@@ -170,13 +170,9 @@ func main() {
 	}
 
 	passed := mismatch == 0
-	if rt.Config.LoggingEnabled {
-		reportPath, err := rt.GenerateSaveAndPrintReport(5, &passed, &mismatch)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Printf("report saved: %s\n", reportPath)
-	} else {
-		fmt.Println("logging disabled in arch spec, skipped report generation")
+	reportPath, err := rt.GenerateSaveAndPrintReport(5, &passed, &mismatch)
+	if err != nil {
+		panic(err)
 	}
+	fmt.Printf("report saved: %s\n", reportPath)
 }

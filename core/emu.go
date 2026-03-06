@@ -86,7 +86,7 @@ func (r *ReservationState) SetReservationMap(ig InstructionGroup, state *coreSta
 		r.ReservationMap[i] = true
 	}
 	r.OpToExec = len(ig.Operations)
-	print("SetReservationMap: ", r.OpToExec, "\n")
+	// print("SetReservationMap: ", r.OpToExec, "\n")
 }
 
 type coreState struct {
@@ -245,7 +245,9 @@ func (i instEmulator) SetUpInstructionGroup(index int32, state *coreState) {
 func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreState, time float64) bool {
 	// check the Return signal
 	if *state.exit && time > *state.requestExitTimestamp {
-		fmt.Println("Exit signal ( requested at", *state.requestExitTimestamp, ") received at time", time)
+		if DebugEnabled() {
+			slog.Debug("ExitSignal", "requestedAt", *state.requestExitTimestamp, "time", time)
+		}
 		return false
 	}
 	prevPC := state.PCInBlock
@@ -284,18 +286,18 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 	} else if state.Mode == SyncOp {
 		if progressSync {
 			if state.NextPCInBlock == -1 {
-				print("PC+4 for PC=", state.PCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
-				print("Instruction at PC=", state.PCInBlock, " is ", state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[0].OpCode, "\n")
+				// print("PC+4 for PC=", state.PCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
+				// print("Instruction at PC=", state.PCInBlock, " is ", state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[0].OpCode, "\n")
 				state.PCInBlock++
 			} else {
-				print("PC+Jump to ", state.NextPCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
+				// print("PC+Jump to ", state.NextPCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
 				state.PCInBlock = state.NextPCInBlock
 			}
 		}
 		if state.SelectedBlock != nil && state.PCInBlock >= int32(len(state.SelectedBlock.InstructionGroups)) {
 			state.PCInBlock = -1
 			state.SelectedBlock = nil
-			print("PCInBlock = -1 at (", state.TileX, ",", state.TileY, ")\n")
+			// print("PCInBlock = -1 at (", state.TileX, ",", state.TileY, ")\n")
 			slog.Info("Flow", "PCInBlock", "-1", "X", state.TileX, "Y", state.TileY)
 		}
 		state.NextPCInBlock = -1
@@ -334,7 +336,7 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 			operation := &state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[index]
 			// Decrement InvalidIterations before running if needed
 			if operation.InvalidIterations > 0 {
-				print("Invalid iteration for ", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")\n")
+				// print("Invalid iteration for ", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")\n")
 				operation.InvalidIterations--
 				continue
 			}
@@ -364,7 +366,7 @@ func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, st
 			state.CurrReservationState.OpToExec--
 			// Decrement InvalidIterations before running if needed
 			if operation.InvalidIterations > 0 {
-				print("Invalid iteration for ", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")\n")
+				// print("Invalid iteration for ", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")\n")
 				operation.InvalidIterations--
 				continue
 			}
@@ -425,7 +427,7 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 				}
 				if state.States[stateKey] == nil || state.States[stateKey] == false { // first execution
 					if len(inst.SrcOperands.Operands) > 1 {
-						fmt.Println("ID", inst.ID, "bypass check")
+						// fmt.Println("ID", inst.ID, "bypass check")
 						continue
 					} else {
 						panic("PHI_CONST or PHI_START must have two sources")
@@ -464,7 +466,7 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 		}
 	}
 	//fmt.Println("[CheckFlags] checking flags for inst", inst.OpCode, "@(", state.TileX, ",", state.TileY, "):", flag)
-	fmt.Println("Check", inst.OpCode, "ID", inst.ID, "@(", state.TileX, ",", state.TileY, "):", flag)
+	// fmt.Println("Check", inst.OpCode, "ID", inst.ID, "@(", state.TileX, ",", state.TileY, "):", flag)
 	return flag
 }
 
@@ -1050,7 +1052,7 @@ func (i instEmulator) runSub(inst Operation, state *coreState) map[Operand]cgra.
 	dstValSigned := src1Signed - src2Signed
 	dstVal := uint32(dstValSigned)
 
-	fmt.Printf("ISUB: Subtracting %d (src1) - %d (src2) = %d\n", src1Signed, src2Signed, dstValSigned)
+	// fmt.Printf("ISUB: Subtracting %d (src1) - %d (src2) = %d\n", src1Signed, src2Signed, dstValSigned)
 	finalPred := src1Struct.Pred && src2Struct.Pred
 
 	results := make(map[Operand]cgra.Data)
@@ -1331,9 +1333,9 @@ func (i instEmulator) runRetImm(inst Operation, state *coreState, time float64) 
 			*state.retVal = srcVal
 			*state.exit = true
 			*state.requestExitTimestamp = time
-			fmt.Println("++++++++++++ RETURN executed", srcVal, "T=", time)
-		} else {
-			fmt.Println("++++++++++++ RETURN bypassed")
+			// 	fmt.Println("++++++++++++ RETURN executed", srcVal, "T=", time)
+			// } else {
+			// 	fmt.Println("++++++++++++ RETURN bypassed")
 		}
 	} else {
 		panic("RETURN_VALUE requires a source operand")
@@ -1359,9 +1361,9 @@ func (i instEmulator) runRetDelay(inst Operation, state *coreState, time float64
 			*state.retVal = 0
 			*state.exit = true
 			*state.requestExitTimestamp = time + ExitDelay
-			fmt.Println("++++++++++++ RETURN executed", srcVal, "T=", time)
-		} else {
-			fmt.Println("++++++++++++ RETURN bypassed")
+			// 	fmt.Println("++++++++++++ RETURN executed", srcVal, "T=", time)
+			// } else {
+			// 	fmt.Println("++++++++++++ RETURN bypassed")
 		}
 	} else {
 		panic("RETURN_VOID requires a source operand")
@@ -1468,14 +1470,14 @@ func (i instEmulator) runCmpExport(inst Operation, state *coreState) map[Operand
 		for _, dst := range inst.DstOperands.Operands {
 			results[dst] = cgra.NewScalarWithPred(1, finalPred)
 		}
-		fmt.Println(">>>>>>>>>>>>>>> ICMP_EQ: ", src1Val.First(), src2Val.First(), "Yes")
+		// fmt.Println(">>>>>>>>>>>>>>> ICMP_EQ: ", src1Val.First(), src2Val.First(), "Yes")
 	} else {
 		finalPred = src1Val.Pred
 		resultVal = 0
 		for _, dst := range inst.DstOperands.Operands {
 			results[dst] = cgra.NewScalarWithPred(0, finalPred)
 		}
-		fmt.Println(">>>>>>>>>>>>>>> ICMP_EQ: ", src1Val.First(), src2Val.First(), "No")
+		// fmt.Println(">>>>>>>>>>>>>>> ICMP_EQ: ", src1Val.First(), src2Val.First(), "No")
 	}
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Src1", fmt.Sprintf("%d(%t)", src1Val.First(), src1Val.Pred), "Src2", fmt.Sprintf("%d(%t)", src2Val.First(), src2Val.Pred), "Result", fmt.Sprintf("%d(%t)", resultVal, finalPred))
 	return results
@@ -1691,7 +1693,7 @@ func (i instEmulator) runPhiStart(inst Operation, state *coreState) map[Operand]
 		result = src1Val
 		finalPred = src1Pred
 		state.States[stateKey] = true
-		fmt.Println("set state.States[", stateKey, "] to true")
+		// fmt.Println("set state.States[", stateKey, "] to true")
 		for _, dst := range inst.DstOperands.Operands {
 			results[dst] = cgra.NewScalarWithPred(result, finalPred)
 		}
@@ -1746,7 +1748,7 @@ func (i instEmulator) runGrantPred(inst Operation, state *coreState) map[Operand
 		results[dst] = cgra.NewScalarWithPred(srcVal, finalPred)
 	}
 
-	fmt.Println("<<<<<<<<<<<<<< GRANTPRED: ", srcVal, predVal, finalPred)
+	// fmt.Println("<<<<<<<<<<<<<< GRANTPRED: ", srcVal, predVal, finalPred)
 
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "SrcOperand", fmt.Sprintf("%d(%t)", srcVal, srcStruct.Pred), "PredOperand", fmt.Sprintf("%d(%t)", predVal, predStruct.Pred), "Pred", finalPred, "Result", fmt.Sprintf("%d(%t)", srcVal, finalPred))
 	// elect no next PC

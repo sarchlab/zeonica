@@ -36,9 +36,10 @@ type Simulator struct {
 
 // SimulatorLogging configures trace logging behavior.
 type SimulatorLogging struct {
-	Enabled *bool          `yaml:"enabled"`
-	File    string         `yaml:"file"`
-	Extra   map[string]any `yaml:",inline"`
+	Enabled     *bool          `yaml:"enabled"`
+	EnableTrace *bool          `yaml:"enableTrace"`
+	File        string         `yaml:"file"`
+	Extra       map[string]any `yaml:",inline"`
 }
 
 // NamedComponent contains shared component naming/frequency fields.
