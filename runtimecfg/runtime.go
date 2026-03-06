@@ -1,6 +1,7 @@
 package runtimecfg
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +13,8 @@ import (
 	"github.com/sarchlab/zeonica/api"
 	"github.com/sarchlab/zeonica/cgra"
 	"github.com/sarchlab/zeonica/config"
+	"github.com/sarchlab/zeonica/core"
+	"github.com/sarchlab/zeonica/report"
 )
 
 const (
@@ -39,6 +42,7 @@ type ResolvedConfig struct {
 	DeviceFreq         sim.Freq
 	BindToArchitecture bool
 	LoggingEnabled     bool
+	EnableTrace        bool
 	LogPath            string
 }
 
@@ -56,6 +60,7 @@ type Runtime struct {
 	Engine   sim.Engine
 	Driver   api.Driver
 	Device   cgra.Device
+	Observer *report.Observer
 }
 
 // LoadRuntime loads arch spec, resolves config, and builds runtime objects.
@@ -91,6 +96,7 @@ func Resolve(spec ArchSpec, testName string) (ResolvedConfig, error) {
 		DeviceName:         defaultOrString(spec.Simulator.Device.Name, defaultDeviceName),
 		BindToArchitecture: defaultOrBool(spec.Simulator.Device.BindToArchitecture, true),
 		LoggingEnabled:     defaultOrBool(spec.Simulator.Logging.Enabled, true),
+		EnableTrace:        defaultOrBool(spec.Simulator.Logging.EnableTrace, false),
 	}
 
 	normalizedPolicy, err := normalizeExecutionPolicy(resolved.ExecutionPolicy)
@@ -159,24 +165,38 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 		Engine: engine,
 		Driver: driver,
 		Device: device,
+		Observer: report.NewObserver(),
 	}, nil
 }
 
 // InitTraceLogger initializes the default slog JSON trace logger.
 func (r *Runtime) InitTraceLogger(level slog.Leveler) (*os.File, error) {
-	if !r.Config.LoggingEnabled {
-		return nil, nil
-	}
-
 	file, err := os.Create(r.Config.LogPath)
 	if err != nil {
 		return nil, fmt.Errorf("create trace log file: %w", err)
 	}
 
-	handler := slog.NewJSONHandler(file, &slog.HandlerOptions{
+	core.SetTraceObserver(nil)
+	if r.Observer != nil {
+		core.SetTraceObserver(r.Observer.Observe)
+	}
+	core.SetTraceEnabled(r.Config.EnableTrace)
+
+	if !r.Config.LoggingEnabled || !r.Config.EnableTrace {
+		stdoutHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelError,
+		})
+		slog.SetDefault(slog.New(stdoutHandler))
+		return file, nil
+	}
+
+	traceHandler := slog.NewJSONHandler(file, &slog.HandlerOptions{
 		Level: level,
 	})
-	slog.SetDefault(slog.New(handler))
+	stdoutHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelError,
+	})
+	slog.SetDefault(slog.New(newTeeHandler(stdoutHandler, traceHandler)))
 	return file, nil
 }
 
@@ -280,4 +300,55 @@ func normalizeExecutionPolicy(input string) (string, error) {
 			input,
 		)
 	}
+}
+
+type teeHandler struct {
+	handlers []slog.Handler
+}
+
+func newTeeHandler(handlers ...slog.Handler) slog.Handler {
+	cleaned := make([]slog.Handler, 0, len(handlers))
+	for _, handler := range handlers {
+		if handler != nil {
+			cleaned = append(cleaned, handler)
+		}
+	}
+	return &teeHandler{handlers: cleaned}
+}
+
+func (h *teeHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	for _, handler := range h.handlers {
+		if handler.Enabled(ctx, level) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *teeHandler) Handle(ctx context.Context, record slog.Record) error {
+	for _, handler := range h.handlers {
+		if !handler.Enabled(ctx, record.Level) {
+			continue
+		}
+		if err := handler.Handle(ctx, record.Clone()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *teeHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	next := make([]slog.Handler, 0, len(h.handlers))
+	for _, handler := range h.handlers {
+		next = append(next, handler.WithAttrs(attrs))
+	}
+	return &teeHandler{handlers: next}
+}
+
+func (h *teeHandler) WithGroup(name string) slog.Handler {
+	next := make([]slog.Handler, 0, len(h.handlers))
+	for _, handler := range h.handlers {
+		next = append(next, handler.WithGroup(name))
+	}
+	return &teeHandler{handlers: next}
 }
