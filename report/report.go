@@ -126,8 +126,8 @@ type collector struct {
 	maxX                     int
 	maxY                     int
 	globalBackpressureCount  int64
-	minWallTs                *time.Time
-	maxWallTs                *time.Time
+	minWallTS                *time.Time
+	maxWallTS                *time.Time
 }
 
 // Observer collects report statistics directly from runtime trace observations.
@@ -193,15 +193,16 @@ func (o *Observer) Build(opts GenerateOptions) Report {
 	return o.collector.build(opts)
 }
 
+//nolint:gocyclo
 func (c *collector) observe(event traceEvent) {
 	if ts, err := time.Parse(time.RFC3339Nano, event.Timestamp); err == nil {
-		if c.minWallTs == nil || ts.Before(*c.minWallTs) {
+		if c.minWallTS == nil || ts.Before(*c.minWallTS) {
 			t := ts
-			c.minWallTs = &t
+			c.minWallTS = &t
 		}
-		if c.maxWallTs == nil || ts.After(*c.maxWallTs) {
+		if c.maxWallTS == nil || ts.After(*c.maxWallTS) {
 			t := ts
-			c.maxWallTs = &t
+			c.maxWallTS = &t
 		}
 	}
 
@@ -244,6 +245,7 @@ func (c *collector) observe(event traceEvent) {
 	}
 }
 
+//nolint:gocyclo,funlen
 func (c *collector) build(opts GenerateOptions) Report {
 	topN := opts.TopN
 	if topN <= 0 {
@@ -323,8 +325,8 @@ func (c *collector) build(opts GenerateOptions) Report {
 	topHotTiles := buildTopHotTiles(tiles, topN)
 	topBackpressureTiles := buildTopBackpressureTiles(tiles, topN)
 	wallClockDurationSec := 0.0
-	if c.minWallTs != nil && c.maxWallTs != nil {
-		d := c.maxWallTs.Sub(*c.minWallTs).Seconds()
+	if c.minWallTS != nil && c.maxWallTS != nil {
+		d := c.maxWallTS.Sub(*c.minWallTS).Seconds()
 		if d > 0 {
 			wallClockDurationSec = d
 		}

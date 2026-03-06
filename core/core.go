@@ -110,6 +110,7 @@ func makeBytesFromUint32(data uint32) []byte {
 	return []byte{byte(data >> 24), byte(data >> 16), byte(data >> 8), byte(data)}
 }
 
+//nolint:gocyclo
 func (c *Core) doSend() bool {
 	madeProgress := false
 	for i := 0; i < 8; i++ { // only 8 directions
@@ -220,6 +221,7 @@ func convert4BytesToUint32(data []byte) uint32 {
 	return uint32(data[0])<<24 | uint32(data[1])<<16 | uint32(data[2])<<8 | uint32(data[3])
 }
 
+//nolint:gocyclo
 func (c *Core) doRecv() bool {
 	madeProgress := false
 	for i := 0; i < 8; i++ { //direction

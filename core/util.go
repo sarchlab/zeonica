@@ -152,6 +152,7 @@ func buildTraceObservation(msg string, args ...any) (TraceObservation, bool) {
 	return observation, true
 }
 
+//nolint:gocyclo
 func assignObservationField(observation *TraceObservation, key string, value any) {
 	switch key {
 	case "Behavior":
