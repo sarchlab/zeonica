@@ -30,6 +30,7 @@ body {
     radial-gradient(circle at 10% 90%, #8ecae644, transparent 38%),
     var(--bg);
   font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  scrollbar-gutter: stable both-edges;
 }
 
 .layout {
@@ -47,6 +48,7 @@ body {
   border-radius: 14px;
   padding: 0.9rem 1rem;
   box-shadow: var(--shadow);
+  min-width: 0;
 }
 
 .topbar {
@@ -168,7 +170,7 @@ button {
 }
 
 #eventDump {
-  max-height: 260px;
+  height: 260px;
   overflow: auto;
   background: #fbf7ea;
   border: 1px solid var(--line);
@@ -177,6 +179,9 @@ button {
   margin-top: 0.6rem;
   font-size: 0.82rem;
   line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .report-warning {

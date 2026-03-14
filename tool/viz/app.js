@@ -1,6 +1,7 @@
 const state = {
   events: [],
   byTime: new Map(),
+  timeKeys: [],
   minTime: 0,
   maxTime: 0,
   currentTime: 0,
@@ -38,6 +39,7 @@ const state = {
   timingViewport: null,
   firstHybridMismatchTime: null,
   coreIoWaveByTime: new Map(),
+  stepLock: false,
 };
 
 const layout = {
@@ -134,6 +136,36 @@ function tileKey(x, y) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function normalizeCycleTime(value, fallback = 0) {
+  const numeric = Math.round(Number(value));
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function nextIndexedTime(current, direction) {
+  const dir = direction >= 0 ? 1 : -1;
+  const keys = Array.isArray(state.timeKeys) ? state.timeKeys : [];
+  const cur = normalizeCycleTime(current, state.minTime);
+  if (keys.length === 0) {
+    const target = cur + dir;
+    return clamp(target, state.minTime, state.maxTime);
+  }
+  const exactIdx = keys.indexOf(cur);
+  if (exactIdx >= 0) {
+    const nextIdx = clamp(exactIdx + dir, 0, keys.length - 1);
+    return keys[nextIdx];
+  }
+  if (dir > 0) {
+    for (const t of keys) {
+      if (t > cur) return t;
+    }
+    return keys[keys.length - 1];
+  }
+  for (let i = keys.length - 1; i >= 0; i -= 1) {
+    if (keys[i] < cur) return keys[i];
+  }
+  return keys[0];
 }
 
 function resolveTargetViewport() {
@@ -359,7 +391,8 @@ function indexByTime(events) {
     minTime = 0;
     maxTime = 0;
   }
-  return { byTime, minTime, maxTime };
+  const sortedTimes = [...byTime.keys()].sort((a, b) => a - b);
+  return { byTime, minTime, maxTime, sortedTimes };
 }
 
 function normalizeSlot(value, ii) {
@@ -2332,6 +2365,9 @@ function summarizeEvent(e) {
   if (e.msg === "Memory") {
     return `Memory ${e.Behavior} tile=(${e.X},${e.Y}) value=${e.Value} addr=${e.Addr}`;
   }
+  if (e.msg === "Backpressure") {
+    return `Backpressure tile=(${e.X},${e.Y}) dir=${e.DstDir ?? "N/A"} reason=${e.Reason ?? "N/A"} op=${e.OpCode ?? "N/A"} id=${e.ID ?? "N/A"}`;
+  }
   return JSON.stringify(e);
 }
 
@@ -2734,12 +2770,13 @@ function renderCycleDetails(events, t) {
 }
 
 function renderTime(t) {
-  state.currentTime = t;
-  controls.timeLabel.textContent = `T=${t}`;
-  controls.timeSlider.value = String(t);
+  const cycle = clamp(normalizeCycleTime(t, state.currentTime), state.minTime, state.maxTime);
+  state.currentTime = cycle;
+  controls.timeLabel.textContent = `T=${cycle}`;
+  controls.timeSlider.value = String(cycle);
   dynamicLayer.selectAll("*").remove();
 
-  const events = state.byTime.get(t) || [];
+  const events = state.byTime.get(cycle) || [];
   const activeTiles = new Set();
   const linkLabelSeen = new Set();
 
@@ -2797,15 +2834,26 @@ function renderTime(t) {
   // Keep transfer data labels/pulses above tile cards for readability.
   dynamicLayer.selectAll(".flow-data-tag").raise();
   dynamicLayer.selectAll(".pulse").raise();
-  renderCycleDetails(events, t);
+  renderCycleDetails(events, cycle);
 }
 
 function stopPlayback() {
   if (state.timer) {
-    clearInterval(state.timer);
+    clearTimeout(state.timer);
     state.timer = null;
   }
   controls.playBtn.textContent = "Play";
+}
+
+function playbackTick() {
+  if (!state.timer) return;
+  const next = nextIndexedTime(state.currentTime, +1);
+  if (next <= state.currentTime) {
+    stopPlayback();
+    return;
+  }
+  renderTime(next);
+  state.timer = setTimeout(playbackTick, state.speedMs);
 }
 
 function playOrPause() {
@@ -2815,24 +2863,30 @@ function playOrPause() {
   }
   if (state.currentTime >= state.maxTime) renderTime(state.maxTime);
   controls.playBtn.textContent = "Pause";
-  state.timer = setInterval(() => {
-    if (state.currentTime >= state.maxTime) {
-      stopPlayback();
-      return;
-    }
-    renderTime(state.currentTime + 1);
-  }, state.speedMs);
+  state.timer = setTimeout(playbackTick, state.speedMs);
 }
 
 function initControls() {
   controls.playBtn.addEventListener("click", playOrPause);
   controls.stepBackBtn.addEventListener("click", () => {
+    if (state.stepLock) return;
+    state.stepLock = true;
     stopPlayback();
-    renderTime(Math.max(state.minTime, state.currentTime - 1));
+    try {
+      renderTime(nextIndexedTime(state.currentTime, -1));
+    } finally {
+      state.stepLock = false;
+    }
   });
   controls.stepFwdBtn.addEventListener("click", () => {
+    if (state.stepLock) return;
+    state.stepLock = true;
     stopPlayback();
-    renderTime(Math.min(state.maxTime, state.currentTime + 1));
+    try {
+      renderTime(nextIndexedTime(state.currentTime, +1));
+    } finally {
+      state.stepLock = false;
+    }
   });
   controls.timeSlider.addEventListener("input", (e) => {
     const wasPlaying = Boolean(state.timer);
@@ -3057,6 +3111,7 @@ function loadTrace(text) {
   state.maxY = bounds.maxY;
   const index = indexByTime(events);
   state.byTime = index.byTime;
+  state.timeKeys = index.sortedTimes;
   state.minTime = index.minTime;
   state.maxTime = index.maxTime;
 
