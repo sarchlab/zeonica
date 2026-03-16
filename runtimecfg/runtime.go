@@ -114,6 +114,8 @@ func LoadRuntime(specPath, testName string) (*Runtime, error) {
 }
 
 // Resolve resolves defaults and validates runtime values from ArchSpec.
+//
+//nolint:gocyclo,funlen
 func Resolve(spec ArchSpec, testName string) (ResolvedConfig, error) {
 	resolved := ResolvedConfig{
 		TestName:                      normalizeTestName(testName),

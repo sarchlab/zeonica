@@ -6,14 +6,6 @@ import (
 	"github.com/sarchlab/zeonica/cgra"
 )
 
-func newTwoPhaseTestState() coreState {
-	state := newFIFOTestState(4, 4)
-	state.Mode = SyncOp
-	state.EnableFIFOModel = true
-	state.Registers = make([]cgra.Data, 8)
-	return state
-}
-
 func TestSyncTwoPhaseNoPartialCommitOnStall(t *testing.T) {
 	emu := instEmulator{
 		CareFlags:       true,

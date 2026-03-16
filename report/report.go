@@ -500,6 +500,7 @@ func PrintSummaryToWriter(report Report, w io.Writer) {
 	}
 }
 
+//nolint:gocyclo
 func classifyAndCount(event traceEvent, acc *tileAccumulator, cycle int64, hasCycle bool) bool {
 	switch event.Msg {
 	case "Inst":

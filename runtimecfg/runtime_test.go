@@ -97,10 +97,18 @@ func TestResolveMicroarchitectureDefaults(t *testing.T) {
 	}
 
 	if cfg.DriverPortIncomingBufferDepth != 1 || cfg.DriverPortOutgoingBufferDepth != 1 {
-		t.Fatalf("unexpected driver port depth defaults: in=%d out=%d", cfg.DriverPortIncomingBufferDepth, cfg.DriverPortOutgoingBufferDepth)
+		t.Fatalf(
+			"unexpected driver port depth defaults: in=%d out=%d",
+			cfg.DriverPortIncomingBufferDepth,
+			cfg.DriverPortOutgoingBufferDepth,
+		)
 	}
 	if cfg.CorePortIncomingBufferDepth != 1 || cfg.CorePortOutgoingBufferDepth != 1 {
-		t.Fatalf("unexpected core port depth defaults: in=%d out=%d", cfg.CorePortIncomingBufferDepth, cfg.CorePortOutgoingBufferDepth)
+		t.Fatalf(
+			"unexpected core port depth defaults: in=%d out=%d",
+			cfg.CorePortIncomingBufferDepth,
+			cfg.CorePortOutgoingBufferDepth,
+		)
 	}
 	if cfg.NumRegisters != 64 || cfg.LocalMemoryWords != 1024 {
 		t.Fatalf("unexpected tile defaults: regs=%d mem=%d", cfg.NumRegisters, cfg.LocalMemoryWords)
@@ -145,10 +153,18 @@ func TestResolveMicroarchitectureOverrides(t *testing.T) {
 	}
 
 	if cfg.DriverPortIncomingBufferDepth != 4 || cfg.DriverPortOutgoingBufferDepth != 5 {
-		t.Fatalf("driver buffer depth override failed: in=%d out=%d", cfg.DriverPortIncomingBufferDepth, cfg.DriverPortOutgoingBufferDepth)
+		t.Fatalf(
+			"driver buffer depth override failed: in=%d out=%d",
+			cfg.DriverPortIncomingBufferDepth,
+			cfg.DriverPortOutgoingBufferDepth,
+		)
 	}
 	if cfg.CorePortIncomingBufferDepth != 6 || cfg.CorePortOutgoingBufferDepth != 7 {
-		t.Fatalf("core buffer depth override failed: in=%d out=%d", cfg.CorePortIncomingBufferDepth, cfg.CorePortOutgoingBufferDepth)
+		t.Fatalf(
+			"core buffer depth override failed: in=%d out=%d",
+			cfg.CorePortIncomingBufferDepth,
+			cfg.CorePortOutgoingBufferDepth,
+		)
 	}
 	if cfg.NumRegisters != 96 || cfg.LocalMemoryWords != 2048 {
 		t.Fatalf("tile override failed: regs=%d mem=%d", cfg.NumRegisters, cfg.LocalMemoryWords)
