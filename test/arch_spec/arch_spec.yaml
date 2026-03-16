@@ -15,6 +15,7 @@ cgra_defaults:
 
 tile_defaults:
   num_registers: 32
+  local_memory_words: 2048
   fu_types: ["add", "mul", "div", "fadd", "fmul", "fdiv", "logic", "cmp", "sel", "type_conv", "vfmul", "fadd_fadd", "fmul_fadd", "grant", "loop_control", "phi", "constant", "mem", "return", "mem_indexed", "alloca", "shift"]
 
 link_defaults:
@@ -50,13 +51,32 @@ simulator:
 
   logging:
     enabled: true
+    enableTrace: true
     file: "<test>.json.log"
 
   driver:
     name: "Driver"
     frequency: "1GHz"
+    port_incoming_buffer_depth: 4
+    port_outgoing_buffer_depth: 4
 
   device:
     name: "Device"
     frequency: "1GHz"
     bind_to_architecture: true
+    memory_mode: "local"
+    port_incoming_buffer_depth: 8
+    port_outgoing_buffer_depth: 8
+    memory_share:
+      - tile_x: 0
+        tile_y: 0
+        group: 0
+      - tile_x: 1
+        tile_y: 0
+        group: 0
+      - tile_x: 2
+        tile_y: 0
+        group: 1
+      - tile_x: 3
+        tile_y: 0
+        group: 1

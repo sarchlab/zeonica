@@ -22,28 +22,55 @@ const (
 	defaultColumns         = 4
 	defaultExecutionModel  = "serial"
 	defaultExecutionPolicy = "in_order_dataflow"
+	defaultStrictMaxSlip   = int64(4)
+	defaultStrictFail      = false
 	defaultDriverName      = "Driver"
 	defaultDeviceName      = "Device"
 	defaultLogTemplate     = "<test>.json.log"
+
+	defaultDriverPortIncomingBufferDepth = 1
+	defaultDriverPortOutgoingBufferDepth = 1
+	defaultCorePortIncomingBufferDepth   = 1
+	defaultCorePortOutgoingBufferDepth   = 1
+	defaultNumRegisters                  = 64
+	defaultLocalMemoryWords              = 1024
+	defaultMemoryMode                    = "simple"
+	defaultLinkLatency                   = 1
+	defaultLinkBandwidth                 = 32
+	linkTimingModelParseOnly             = "parse_only"
 )
 
 var freqPattern = regexp.MustCompile(`^([0-9]+)\s*(ghz|mhz|khz|hz)$`)
 
 // ResolvedConfig is the executable runtime configuration after defaults/resolution.
 type ResolvedConfig struct {
-	TestName           string
-	Rows               int
-	Columns            int
-	ExecutionModel     string
-	ExecutionPolicy    string
-	DriverName         string
-	DriverFreq         sim.Freq
-	DeviceName         string
-	DeviceFreq         sim.Freq
-	BindToArchitecture bool
-	LoggingEnabled     bool
-	EnableTrace        bool
-	LogPath            string
+	TestName              string
+	Rows                  int
+	Columns               int
+	ExecutionModel        string
+	ExecutionPolicy       string
+	StrictMaxSlip         int64
+	StrictFailOnViolation bool
+	DriverName            string
+	DriverFreq            sim.Freq
+	DeviceName            string
+	DeviceFreq            sim.Freq
+	BindToArchitecture    bool
+	LoggingEnabled        bool
+	EnableTrace           bool
+	LogPath               string
+
+	DriverPortIncomingBufferDepth int
+	DriverPortOutgoingBufferDepth int
+	CorePortIncomingBufferDepth   int
+	CorePortOutgoingBufferDepth   int
+	NumRegisters                  int
+	LocalMemoryWords              int
+	MemoryMode                    string
+	MemoryShare                   map[[2]int]int
+	LinkLatency                   int
+	LinkBandwidth                 int
+	LinkTimingModel               string
 }
 
 // BuildOverrides allows optional size override when not binding to architecture.
@@ -87,16 +114,28 @@ func LoadRuntime(specPath, testName string) (*Runtime, error) {
 // Resolve resolves defaults and validates runtime values from ArchSpec.
 func Resolve(spec ArchSpec, testName string) (ResolvedConfig, error) {
 	resolved := ResolvedConfig{
-		TestName:           normalizeTestName(testName),
-		Rows:               defaultOrPositive(spec.CGRADefaults.Rows, defaultRows),
-		Columns:            defaultOrPositive(spec.CGRADefaults.Columns, defaultColumns),
-		ExecutionModel:     defaultOrString(spec.Simulator.ExecutionModel, defaultExecutionModel),
-		ExecutionPolicy:    defaultOrString(spec.Simulator.ExecutionPolicy, defaultExecutionPolicy),
-		DriverName:         defaultOrString(spec.Simulator.Driver.Name, defaultDriverName),
-		DeviceName:         defaultOrString(spec.Simulator.Device.Name, defaultDeviceName),
-		BindToArchitecture: defaultOrBool(spec.Simulator.Device.BindToArchitecture, true),
-		LoggingEnabled:     defaultOrBool(spec.Simulator.Logging.Enabled, true),
-		EnableTrace:        defaultOrBool(spec.Simulator.Logging.EnableTrace, false),
+		TestName:                      normalizeTestName(testName),
+		Rows:                          defaultOrPositive(spec.CGRADefaults.Rows, defaultRows),
+		Columns:                       defaultOrPositive(spec.CGRADefaults.Columns, defaultColumns),
+		ExecutionModel:                defaultOrString(spec.Simulator.ExecutionModel, defaultExecutionModel),
+		ExecutionPolicy:               defaultOrString(spec.Simulator.ExecutionPolicy, defaultExecutionPolicy),
+		StrictMaxSlip:                 defaultOrInt64(spec.Simulator.StrictMaxSlip, defaultStrictMaxSlip),
+		StrictFailOnViolation:         defaultOrBool(spec.Simulator.StrictFailOnViolation, defaultStrictFail),
+		DriverName:                    defaultOrString(spec.Simulator.Driver.Name, defaultDriverName),
+		DeviceName:                    defaultOrString(spec.Simulator.Device.Name, defaultDeviceName),
+		BindToArchitecture:            defaultOrBool(spec.Simulator.Device.BindToArchitecture, true),
+		LoggingEnabled:                defaultOrBool(spec.Simulator.Logging.Enabled, true),
+		EnableTrace:                   defaultOrBool(spec.Simulator.Logging.EnableTrace, false),
+		LinkTimingModel:               linkTimingModelParseOnly,
+		DriverPortIncomingBufferDepth: defaultDriverPortIncomingBufferDepth,
+		DriverPortOutgoingBufferDepth: defaultDriverPortOutgoingBufferDepth,
+		CorePortIncomingBufferDepth:   defaultCorePortIncomingBufferDepth,
+		CorePortOutgoingBufferDepth:   defaultCorePortOutgoingBufferDepth,
+		NumRegisters:                  defaultNumRegisters,
+		LocalMemoryWords:              defaultLocalMemoryWords,
+		MemoryMode:                    defaultMemoryMode,
+		LinkLatency:                   defaultLinkLatency,
+		LinkBandwidth:                 defaultLinkBandwidth,
 	}
 
 	normalizedPolicy, err := normalizeExecutionPolicy(resolved.ExecutionPolicy)
@@ -104,6 +143,17 @@ func Resolve(spec ArchSpec, testName string) (ResolvedConfig, error) {
 		return ResolvedConfig{}, err
 	}
 	resolved.ExecutionPolicy = normalizedPolicy
+
+	if envSlip, ok, err := parseInt64Env("ZEONICA_STRICT_MAX_SLIP"); err != nil {
+		return ResolvedConfig{}, err
+	} else if ok {
+		resolved.StrictMaxSlip = envSlip
+	}
+	if envFail, ok, err := parseBoolEnv("ZEONICA_STRICT_FAIL_ON_VIOLATION"); err != nil {
+		return ResolvedConfig{}, err
+	} else if ok {
+		resolved.StrictFailOnViolation = envFail
+	}
 
 	driverFreq, err := parseFrequency(spec.Simulator.Driver.Frequency, 1*sim.GHz)
 	if err != nil {
@@ -119,6 +169,87 @@ func Resolve(spec ArchSpec, testName string) (ResolvedConfig, error) {
 
 	logTemplate := defaultOrString(spec.Simulator.Logging.File, defaultLogTemplate)
 	resolved.LogPath = resolveLogPath(logTemplate, resolved.TestName)
+
+	resolved.DriverPortIncomingBufferDepth, err = resolvePositivePtr(
+		spec.Simulator.Driver.PortIncomingBufferDepth,
+		defaultDriverPortIncomingBufferDepth,
+		"simulator.driver.port_incoming_buffer_depth",
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+	resolved.DriverPortOutgoingBufferDepth, err = resolvePositivePtr(
+		spec.Simulator.Driver.PortOutgoingBufferDepth,
+		defaultDriverPortOutgoingBufferDepth,
+		"simulator.driver.port_outgoing_buffer_depth",
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+	resolved.CorePortIncomingBufferDepth, err = resolvePositivePtr(
+		spec.Simulator.Device.PortIncomingBufferDepth,
+		defaultCorePortIncomingBufferDepth,
+		"simulator.device.port_incoming_buffer_depth",
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+	resolved.CorePortOutgoingBufferDepth, err = resolvePositivePtr(
+		spec.Simulator.Device.PortOutgoingBufferDepth,
+		defaultCorePortOutgoingBufferDepth,
+		"simulator.device.port_outgoing_buffer_depth",
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+
+	resolved.NumRegisters, err = resolvePositive(
+		spec.TileDefaults.NumRegisters,
+		defaultNumRegisters,
+		"tile_defaults.num_registers",
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+	resolved.LocalMemoryWords, err = resolvePositive(
+		spec.TileDefaults.LocalMemoryWords,
+		defaultLocalMemoryWords,
+		"tile_defaults.local_memory_words",
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+
+	resolved.MemoryMode, err = normalizeMemoryMode(defaultOrString(spec.Simulator.Device.MemoryMode, defaultMemoryMode))
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+	resolved.MemoryShare, err = resolveMemoryShare(
+		resolved.MemoryMode,
+		resolved.Rows,
+		resolved.Columns,
+		spec.Simulator.Device.MemoryShare,
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+
+	resolved.LinkLatency, err = resolveNonNegativePtr(
+		spec.LinkDefaults.Latency,
+		defaultLinkLatency,
+		"link_defaults.latency",
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+	resolved.LinkBandwidth, err = resolvePositivePtr(
+		spec.LinkDefaults.Bandwidth,
+		defaultLinkBandwidth,
+		"link_defaults.bandwidth",
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
 
 	return resolved, nil
 }
@@ -148,6 +279,7 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 	driver := api.DriverBuilder{}.
 		WithEngine(engine).
 		WithFreq(cfg.DriverFreq).
+		WithPortBufferDepth(cfg.DriverPortIncomingBufferDepth, cfg.DriverPortOutgoingBufferDepth).
 		Build(cfg.DriverName)
 
 	device := config.DeviceBuilder{}.
@@ -156,15 +288,29 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 		WithWidth(width).
 		WithHeight(height).
 		WithExecutionPolicy(cfg.ExecutionPolicy).
+		WithStrictTimingConfig(cfg.StrictMaxSlip, cfg.StrictFailOnViolation).
+		WithMemoryMode(cfg.MemoryMode).
+		WithMemoryShare(cfg.MemoryShare).
+		WithCorePortBufferDepth(cfg.CorePortIncomingBufferDepth, cfg.CorePortOutgoingBufferDepth).
+		WithRegisterCount(cfg.NumRegisters).
+		WithLocalMemoryWords(cfg.LocalMemoryWords).
 		Build(cfg.DeviceName)
+
+	if cfg.LinkTimingModel == linkTimingModelParseOnly {
+		slog.Info(
+			"link_defaults parsed in parse-only mode",
+			"latency", cfg.LinkLatency,
+			"bandwidth", cfg.LinkBandwidth,
+		)
+	}
 
 	driver.RegisterDevice(device)
 
 	return &Runtime{
-		Config: cfg,
-		Engine: engine,
-		Driver: driver,
-		Device: device,
+		Config:   cfg,
+		Engine:   engine,
+		Driver:   driver,
+		Device:   device,
 		Observer: report.NewObserver(),
 	}, nil
 }
@@ -236,6 +382,13 @@ func defaultOrBool(value *bool, fallback bool) bool {
 	return *value
 }
 
+func defaultOrInt64(value *int64, fallback int64) int64 {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}
+
 func normalizeTestName(testName string) string {
 	trimmed := strings.TrimSpace(testName)
 	if trimmed == "" {
@@ -285,6 +438,38 @@ func parseFrequency(input string, fallback sim.Freq) (sim.Freq, error) {
 	}
 }
 
+func parseInt64Env(name string) (int64, bool, error) {
+	raw, exists := os.LookupEnv(name)
+	if !exists {
+		return 0, false, nil
+	}
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return 0, false, nil
+	}
+	value, err := strconv.ParseInt(trimmed, 10, 64)
+	if err != nil {
+		return 0, false, fmt.Errorf("invalid %s=%q: %w", name, raw, err)
+	}
+	return value, true, nil
+}
+
+func parseBoolEnv(name string) (bool, bool, error) {
+	raw, exists := os.LookupEnv(name)
+	if !exists {
+		return false, false, nil
+	}
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return false, false, nil
+	}
+	value, err := strconv.ParseBool(trimmed)
+	if err != nil {
+		return false, false, fmt.Errorf("invalid %s=%q: %w", name, raw, err)
+	}
+	return value, true, nil
+}
+
 func normalizeExecutionPolicy(input string) (string, error) {
 	text := strings.ToLower(strings.TrimSpace(input))
 	switch text {
@@ -300,6 +485,80 @@ func normalizeExecutionPolicy(input string) (string, error) {
 			input,
 		)
 	}
+}
+
+func normalizeMemoryMode(input string) (string, error) {
+	text := strings.ToLower(strings.TrimSpace(input))
+	switch text {
+	case "", "simple":
+		return "simple", nil
+	case "shared":
+		return "shared", nil
+	case "local":
+		return "local", nil
+	default:
+		return "", fmt.Errorf("unsupported memory_mode %q (supported: simple, shared, local)", input)
+	}
+}
+
+func resolvePositive(value, fallback int, field string) (int, error) {
+	if value == 0 {
+		return fallback, nil
+	}
+	if value < 0 {
+		return 0, fmt.Errorf("%s must be > 0, got %d", field, value)
+	}
+	return value, nil
+}
+
+func resolvePositivePtr(value *int, fallback int, field string) (int, error) {
+	if value == nil {
+		return fallback, nil
+	}
+	if *value <= 0 {
+		return 0, fmt.Errorf("%s must be > 0, got %d", field, *value)
+	}
+	return *value, nil
+}
+
+func resolveNonNegativePtr(value *int, fallback int, field string) (int, error) {
+	if value == nil {
+		return fallback, nil
+	}
+	if *value < 0 {
+		return 0, fmt.Errorf("%s must be >= 0, got %d", field, *value)
+	}
+	return *value, nil
+}
+
+func resolveMemoryShare(mode string, rows, cols int, entries []MemoryShareEntry) (map[[2]int]int, error) {
+	if mode != "shared" {
+		return nil, nil
+	}
+
+	share := make(map[[2]int]int, rows*cols)
+	for y := 0; y < rows; y++ {
+		for x := 0; x < cols; x++ {
+			share[[2]int{x, y}] = 0
+		}
+	}
+
+	for _, entry := range entries {
+		if entry.TileX < 0 || entry.TileX >= cols || entry.TileY < 0 || entry.TileY >= rows {
+			return nil, fmt.Errorf(
+				"simulator.device.memory_share has out-of-range tile (%d,%d) for grid %dx%d",
+				entry.TileX,
+				entry.TileY,
+				cols,
+				rows,
+			)
+		}
+		if entry.Group < 0 {
+			return nil, fmt.Errorf("simulator.device.memory_share group must be >= 0, got %d", entry.Group)
+		}
+		share[[2]int{entry.TileX, entry.TileY}] = entry.Group
+	}
+	return share, nil
 }
 
 type teeHandler struct {

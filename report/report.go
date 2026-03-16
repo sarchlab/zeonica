@@ -28,26 +28,29 @@ type GenerateOptions struct {
 
 // Report is the aggregate execution summary derived from a trace log.
 type Report struct {
-	TestName             string                `json:"testName,omitempty"`
-	LogPath              string                `json:"logPath"`
-	Grid                 GridInfo              `json:"grid"`
-	TotalCycles          int64                 `json:"totalCycles"`
-	ActiveCycles         int64                 `json:"activeCyclesGlobal"`
-	IdleCycles           int64                 `json:"idleCyclesGlobal"`
-	Passed               *bool                 `json:"passed,omitempty"`
-	MismatchCount        *int                  `json:"mismatchCount,omitempty"`
-	InstCount            int64                 `json:"instCount"`
-	SendCount            int64                 `json:"sendCount"`
-	RecvCount            int64                 `json:"recvCount"`
-	MemoryCount          int64                 `json:"memoryCount"`
-	TotalEvents          int64                 `json:"totalEvents"`
-	WallClockDurationSec float64               `json:"wallClockDurationSec"`
-	BackpressureCount    int64                 `json:"backpressureCount"`
-	BackpressureCycles   int64                 `json:"backpressureCycles"`
-	ActiveTileCount      int                   `json:"activeTileCount"`
-	Tiles                []TileStats           `json:"tiles"`
-	TopHotTiles          []TopHotTile          `json:"topHotTiles"`
-	TopBackpressureTiles []TopBackpressureTile `json:"topBackpressureTiles"`
+	TestName                 string                `json:"testName,omitempty"`
+	LogPath                  string                `json:"logPath"`
+	Grid                     GridInfo              `json:"grid"`
+	TotalCycles              int64                 `json:"totalCycles"`
+	ActiveCycles             int64                 `json:"activeCyclesGlobal"`
+	IdleCycles               int64                 `json:"idleCyclesGlobal"`
+	Passed                   *bool                 `json:"passed,omitempty"`
+	MismatchCount            *int                  `json:"mismatchCount,omitempty"`
+	InstCount                int64                 `json:"instCount"`
+	SendCount                int64                 `json:"sendCount"`
+	RecvCount                int64                 `json:"recvCount"`
+	MemoryCount              int64                 `json:"memoryCount"`
+	TotalEvents              int64                 `json:"totalEvents"`
+	WallClockDurationSec     float64               `json:"wallClockDurationSec"`
+	BackpressureCount        int64                 `json:"backpressureCount"`
+	BackpressureCycles       int64                 `json:"backpressureCycles"`
+	ScheduleBubbleStallCount int64                 `json:"scheduleBubbleStallCount"`
+	OperandWaitStallCount    int64                 `json:"operandWaitStallCount"`
+	OutputBlockedStallCount  int64                 `json:"outputBlockedStallCount"`
+	ActiveTileCount          int                   `json:"activeTileCount"`
+	Tiles                    []TileStats           `json:"tiles"`
+	TopHotTiles              []TopHotTile          `json:"topHotTiles"`
+	TopBackpressureTiles     []TopBackpressureTile `json:"topBackpressureTiles"`
 }
 
 // GridInfo describes the grid size used by the workload.
@@ -58,17 +61,20 @@ type GridInfo struct {
 
 // TileStats stores per-tile metrics in the generated report.
 type TileStats struct {
-	X                 int     `json:"x"`
-	Y                 int     `json:"y"`
-	Coord             string  `json:"coord"`
-	ActiveCycles      int64   `json:"activeCycles"`
-	UtilizationPct    float64 `json:"utilizationPct"`
-	InstCount         int64   `json:"instCount"`
-	SendCount         int64   `json:"sendCount"`
-	RecvCount         int64   `json:"recvCount"`
-	MemoryCount       int64   `json:"memoryCount"`
-	TotalEvents       int64   `json:"totalEvents"`
-	BackpressureCount int64   `json:"backpressureCount"`
+	X                        int     `json:"x"`
+	Y                        int     `json:"y"`
+	Coord                    string  `json:"coord"`
+	ActiveCycles             int64   `json:"activeCycles"`
+	UtilizationPct           float64 `json:"utilizationPct"`
+	InstCount                int64   `json:"instCount"`
+	SendCount                int64   `json:"sendCount"`
+	RecvCount                int64   `json:"recvCount"`
+	MemoryCount              int64   `json:"memoryCount"`
+	TotalEvents              int64   `json:"totalEvents"`
+	BackpressureCount        int64   `json:"backpressureCount"`
+	ScheduleBubbleStallCount int64   `json:"scheduleBubbleStallCount"`
+	OperandWaitStallCount    int64   `json:"operandWaitStallCount"`
+	OutputBlockedStallCount  int64   `json:"outputBlockedStallCount"`
 }
 
 // TopHotTile is a ranked hot tile summary entry.
@@ -108,14 +114,17 @@ type tileCoord struct {
 }
 
 type tileAccumulator struct {
-	cycles             map[int64]struct{}
-	backpressureCycles map[int64]struct{}
-	instCount          int64
-	sendCount          int64
-	recvCount          int64
-	memoryCount        int64
-	totalEvents        int64
-	backpressureCount  int64
+	cycles                   map[int64]struct{}
+	backpressureCycles       map[int64]struct{}
+	instCount                int64
+	sendCount                int64
+	recvCount                int64
+	memoryCount              int64
+	totalEvents              int64
+	backpressureCount        int64
+	scheduleBubbleStallCount int64
+	operandWaitStallCount    int64
+	outputBlockedStallCount  int64
 }
 
 type collector struct {
@@ -287,17 +296,20 @@ func (c *collector) build(opts GenerateOptions) Report {
 		}
 
 		tiles = append(tiles, TileStats{
-			X:                 coord.x,
-			Y:                 coord.y,
-			Coord:             formatCoord(coord.x, coord.y),
-			ActiveCycles:      activeTileCycles,
-			UtilizationPct:    util,
-			InstCount:         acc.instCount,
-			SendCount:         acc.sendCount,
-			RecvCount:         acc.recvCount,
-			MemoryCount:       acc.memoryCount,
-			TotalEvents:       acc.totalEvents,
-			BackpressureCount: acc.backpressureCount,
+			X:                        coord.x,
+			Y:                        coord.y,
+			Coord:                    formatCoord(coord.x, coord.y),
+			ActiveCycles:             activeTileCycles,
+			UtilizationPct:           util,
+			InstCount:                acc.instCount,
+			SendCount:                acc.sendCount,
+			RecvCount:                acc.recvCount,
+			MemoryCount:              acc.memoryCount,
+			TotalEvents:              acc.totalEvents,
+			BackpressureCount:        acc.backpressureCount,
+			ScheduleBubbleStallCount: acc.scheduleBubbleStallCount,
+			OperandWaitStallCount:    acc.operandWaitStallCount,
+			OutputBlockedStallCount:  acc.outputBlockedStallCount,
 		})
 	}
 
@@ -313,6 +325,9 @@ func (c *collector) build(opts GenerateOptions) Report {
 	var recvTotal int64
 	var memoryTotal int64
 	var eventTotal int64
+	var scheduleBubbleStallTotal int64
+	var operandWaitStallTotal int64
+	var outputBlockedStallTotal int64
 
 	for _, tile := range tiles {
 		instTotal += tile.InstCount
@@ -320,6 +335,9 @@ func (c *collector) build(opts GenerateOptions) Report {
 		recvTotal += tile.RecvCount
 		memoryTotal += tile.MemoryCount
 		eventTotal += tile.TotalEvents
+		scheduleBubbleStallTotal += tile.ScheduleBubbleStallCount
+		operandWaitStallTotal += tile.OperandWaitStallCount
+		outputBlockedStallTotal += tile.OutputBlockedStallCount
 	}
 
 	topHotTiles := buildTopHotTiles(tiles, topN)
@@ -333,26 +351,29 @@ func (c *collector) build(opts GenerateOptions) Report {
 	}
 
 	return Report{
-		TestName:             opts.TestName,
-		LogPath:              opts.LogPath,
-		Grid:                 GridInfo{Width: width, Height: height},
-		TotalCycles:          totalCycles,
-		ActiveCycles:         activeCycles,
-		IdleCycles:           idleCycles,
-		Passed:               opts.Passed,
-		MismatchCount:        opts.MismatchCount,
-		InstCount:            instTotal,
-		SendCount:            sendTotal,
-		RecvCount:            recvTotal,
-		MemoryCount:          memoryTotal,
-		TotalEvents:          eventTotal,
-		WallClockDurationSec: wallClockDurationSec,
-		BackpressureCount:    c.globalBackpressureCount,
-		BackpressureCycles:   int64(len(c.globalBackpressureCycles)),
-		ActiveTileCount:      len(tiles),
-		Tiles:                tiles,
-		TopHotTiles:          topHotTiles,
-		TopBackpressureTiles: topBackpressureTiles,
+		TestName:                 opts.TestName,
+		LogPath:                  opts.LogPath,
+		Grid:                     GridInfo{Width: width, Height: height},
+		TotalCycles:              totalCycles,
+		ActiveCycles:             activeCycles,
+		IdleCycles:               idleCycles,
+		Passed:                   opts.Passed,
+		MismatchCount:            opts.MismatchCount,
+		InstCount:                instTotal,
+		SendCount:                sendTotal,
+		RecvCount:                recvTotal,
+		MemoryCount:              memoryTotal,
+		TotalEvents:              eventTotal,
+		WallClockDurationSec:     wallClockDurationSec,
+		BackpressureCount:        c.globalBackpressureCount,
+		BackpressureCycles:       int64(len(c.globalBackpressureCycles)),
+		ScheduleBubbleStallCount: scheduleBubbleStallTotal,
+		OperandWaitStallCount:    operandWaitStallTotal,
+		OutputBlockedStallCount:  outputBlockedStallTotal,
+		ActiveTileCount:          len(tiles),
+		Tiles:                    tiles,
+		TopHotTiles:              topHotTiles,
+		TopBackpressureTiles:     topBackpressureTiles,
 	}
 }
 
@@ -426,6 +447,13 @@ func PrintSummaryToWriter(report Report, w io.Writer) {
 		report.TotalEvents, report.InstCount, report.SendCount, report.RecvCount, report.MemoryCount)
 	fmt.Fprintf(w, "simulation time: wall=%.3fs\n", report.WallClockDurationSec)
 	fmt.Fprintf(w, "backpressure: count=%d cycles=%d\n", report.BackpressureCount, report.BackpressureCycles)
+	fmt.Fprintf(
+		w,
+		"stall breakdown: schedule_bubble=%d operand_wait=%d output_blocked=%d\n",
+		report.ScheduleBubbleStallCount,
+		report.OperandWaitStallCount,
+		report.OutputBlockedStallCount,
+	)
 	fmt.Fprintf(w, "active tiles: %d\n", report.ActiveTileCount)
 	if report.Passed != nil {
 		fmt.Fprintf(w, "passed: %t\n", *report.Passed)
@@ -471,6 +499,16 @@ func classifyAndCount(event traceEvent, acc *tileAccumulator, cycle int64, hasCy
 			acc.backpressureCycles[cycle] = struct{}{}
 		}
 		return true
+	case "Stall":
+		switch event.Behavior {
+		case "schedule_bubble":
+			acc.scheduleBubbleStallCount++
+		case "operand_wait":
+			acc.operandWaitStallCount++
+		case "output_blocked":
+			acc.outputBlockedStallCount++
+		}
+		acc.totalEvents++
 	}
 	return false
 }

@@ -132,7 +132,7 @@ func buildTraceObservation(msg string, args ...any) (TraceObservation, bool) {
 		WallTime: time.Now(),
 		Msg:      msg,
 	}
-	if msg != "Inst" && msg != "Memory" && msg != "DataFlow" && msg != "Backpressure" {
+	if msg != "Inst" && msg != "Memory" && msg != "DataFlow" && msg != "Backpressure" && msg != "Stall" {
 		return observation, false
 	}
 

@@ -44,3 +44,183 @@ func TestResolveExecutionPolicyInvalid(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestResolveStrictDefaults(t *testing.T) {
+	cfg, err := Resolve(ArchSpec{}, "strict-default")
+	if err != nil {
+		t.Fatalf("Resolve returned error: %v", err)
+	}
+	if cfg.StrictMaxSlip != 4 {
+		t.Fatalf("unexpected strict max slip: got %d want 4", cfg.StrictMaxSlip)
+	}
+	if cfg.StrictFailOnViolation {
+		t.Fatalf("unexpected strict fail flag: got true want false")
+	}
+}
+
+func TestResolveStrictEnvOverrides(t *testing.T) {
+	t.Setenv("ZEONICA_STRICT_MAX_SLIP", "8")
+	t.Setenv("ZEONICA_STRICT_FAIL_ON_VIOLATION", "true")
+
+	cfg, err := Resolve(ArchSpec{
+		Simulator: Simulator{
+			StrictMaxSlip:         int64Ptr(2),
+			StrictFailOnViolation: boolPtr(false),
+		},
+	}, "strict-env")
+	if err != nil {
+		t.Fatalf("Resolve returned error: %v", err)
+	}
+	if cfg.StrictMaxSlip != 8 {
+		t.Fatalf("unexpected strict max slip from env: got %d want 8", cfg.StrictMaxSlip)
+	}
+	if !cfg.StrictFailOnViolation {
+		t.Fatalf("unexpected strict fail flag from env: got false want true")
+	}
+}
+
+func TestResolveStrictInvalidEnv(t *testing.T) {
+	t.Setenv("ZEONICA_STRICT_MAX_SLIP", "bad")
+	_, err := Resolve(ArchSpec{}, "strict-invalid-env")
+	if err == nil {
+		t.Fatal("expected error for invalid strict env")
+	}
+	if !strings.Contains(err.Error(), "ZEONICA_STRICT_MAX_SLIP") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveMicroarchitectureDefaults(t *testing.T) {
+	cfg, err := Resolve(ArchSpec{}, "microarch-defaults")
+	if err != nil {
+		t.Fatalf("Resolve returned error: %v", err)
+	}
+
+	if cfg.DriverPortIncomingBufferDepth != 1 || cfg.DriverPortOutgoingBufferDepth != 1 {
+		t.Fatalf("unexpected driver port depth defaults: in=%d out=%d", cfg.DriverPortIncomingBufferDepth, cfg.DriverPortOutgoingBufferDepth)
+	}
+	if cfg.CorePortIncomingBufferDepth != 1 || cfg.CorePortOutgoingBufferDepth != 1 {
+		t.Fatalf("unexpected core port depth defaults: in=%d out=%d", cfg.CorePortIncomingBufferDepth, cfg.CorePortOutgoingBufferDepth)
+	}
+	if cfg.NumRegisters != 64 || cfg.LocalMemoryWords != 1024 {
+		t.Fatalf("unexpected tile defaults: regs=%d mem=%d", cfg.NumRegisters, cfg.LocalMemoryWords)
+	}
+	if cfg.MemoryMode != "simple" {
+		t.Fatalf("unexpected memory mode default: %q", cfg.MemoryMode)
+	}
+	if cfg.LinkLatency != 1 || cfg.LinkBandwidth != 32 {
+		t.Fatalf("unexpected link defaults: latency=%d bandwidth=%d", cfg.LinkLatency, cfg.LinkBandwidth)
+	}
+	if cfg.LinkTimingModel != "parse_only" {
+		t.Fatalf("unexpected link timing model: %q", cfg.LinkTimingModel)
+	}
+}
+
+func TestResolveMicroarchitectureOverrides(t *testing.T) {
+	spec := ArchSpec{
+		CGRADefaults: CGRADefaults{Rows: 2, Columns: 2},
+		TileDefaults: TileDefaults{NumRegisters: 96, LocalMemoryWords: 2048},
+		LinkDefaults: LinkDefaults{Latency: intPtr(3), Bandwidth: intPtr(128)},
+		Simulator: Simulator{
+			Driver: NamedComponent{
+				PortIncomingBufferDepth: intPtr(4),
+				PortOutgoingBufferDepth: intPtr(5),
+			},
+			Device: DeviceComponent{
+				MemoryMode:              "shared",
+				PortIncomingBufferDepth: intPtr(6),
+				PortOutgoingBufferDepth: intPtr(7),
+				MemoryShare:             []MemoryShareEntry{{TileX: 1, TileY: 1, Group: 9}},
+			},
+		},
+	}
+
+	cfg, err := Resolve(spec, "microarch-overrides")
+	if err != nil {
+		t.Fatalf("Resolve returned error: %v", err)
+	}
+
+	if cfg.DriverPortIncomingBufferDepth != 4 || cfg.DriverPortOutgoingBufferDepth != 5 {
+		t.Fatalf("driver buffer depth override failed: in=%d out=%d", cfg.DriverPortIncomingBufferDepth, cfg.DriverPortOutgoingBufferDepth)
+	}
+	if cfg.CorePortIncomingBufferDepth != 6 || cfg.CorePortOutgoingBufferDepth != 7 {
+		t.Fatalf("core buffer depth override failed: in=%d out=%d", cfg.CorePortIncomingBufferDepth, cfg.CorePortOutgoingBufferDepth)
+	}
+	if cfg.NumRegisters != 96 || cfg.LocalMemoryWords != 2048 {
+		t.Fatalf("tile override failed: regs=%d mem=%d", cfg.NumRegisters, cfg.LocalMemoryWords)
+	}
+	if cfg.MemoryMode != "shared" {
+		t.Fatalf("memory mode override failed: %q", cfg.MemoryMode)
+	}
+	if len(cfg.MemoryShare) != 4 {
+		t.Fatalf("shared mode should materialize full 2x2 map, got %d", len(cfg.MemoryShare))
+	}
+	if got := cfg.MemoryShare[[2]int{1, 1}]; got != 9 {
+		t.Fatalf("memory_share override for (1,1) failed: got %d want 9", got)
+	}
+	if cfg.LinkLatency != 3 || cfg.LinkBandwidth != 128 {
+		t.Fatalf("link override failed: latency=%d bandwidth=%d", cfg.LinkLatency, cfg.LinkBandwidth)
+	}
+}
+
+func TestResolveMicroarchitectureInvalidDepth(t *testing.T) {
+	spec := ArchSpec{
+		Simulator: Simulator{
+			Driver: NamedComponent{PortIncomingBufferDepth: intPtr(0)},
+		},
+	}
+	_, err := Resolve(spec, "microarch-invalid-depth")
+	if err == nil {
+		t.Fatal("expected invalid depth error")
+	}
+	if !strings.Contains(err.Error(), "port_incoming_buffer_depth") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveInvalidMemoryMode(t *testing.T) {
+	spec := ArchSpec{Simulator: Simulator{Device: DeviceComponent{MemoryMode: "foo"}}}
+	_, err := Resolve(spec, "memory-mode-invalid")
+	if err == nil {
+		t.Fatal("expected invalid memory mode error")
+	}
+	if !strings.Contains(err.Error(), "unsupported memory_mode") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveInvalidLinkLatency(t *testing.T) {
+	spec := ArchSpec{LinkDefaults: LinkDefaults{Latency: intPtr(-1)}}
+	_, err := Resolve(spec, "link-latency-invalid")
+	if err == nil {
+		t.Fatal("expected invalid link latency error")
+	}
+	if !strings.Contains(err.Error(), "link_defaults.latency") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveInvalidMemoryShareCoordinate(t *testing.T) {
+	spec := ArchSpec{
+		CGRADefaults: CGRADefaults{Rows: 2, Columns: 2},
+		Simulator: Simulator{
+			Device: DeviceComponent{
+				MemoryMode:  "shared",
+				MemoryShare: []MemoryShareEntry{{TileX: 3, TileY: 0, Group: 0}},
+			},
+		},
+	}
+	_, err := Resolve(spec, "memory-share-invalid")
+	if err == nil {
+		t.Fatal("expected invalid memory share coordinate error")
+	}
+	if !strings.Contains(err.Error(), "out-of-range tile") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func int64Ptr(v int64) *int64 { return &v }
+
+func boolPtr(v bool) *bool { return &v }
+
+func intPtr(v int) *int { return &v }

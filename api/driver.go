@@ -142,7 +142,8 @@ func (d *driverImpl) doOneFeedInTask(task *feedInTask) bool {
 		err := port.Send(msg)
 		//fmt.Println(msg)
 		if err != nil {
-			panic("CGRA cannot handle the data rate")
+			// Keep task pending when downstream is temporarily back-pressured.
+			continue
 		}
 
 		timeValue := float64(d.Engine.CurrentTime() * 1e9)

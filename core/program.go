@@ -64,8 +64,9 @@ type YAMLRoot struct {
 
 // Program is the internal executable representation for one core.
 type Program struct {
-	EntryBlocks []EntryBlock
-	CompiledII  int
+	EntryBlocks   []EntryBlock
+	CompiledII    int
+	DerivedTiming map[int][]int64
 }
 
 // EntryBlock is one entry block in a core program.
@@ -136,6 +137,11 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 	}
 
 	config := root.ArrayConfig
+
+	derivedTimingByCoord, err := loadDerivedTimingFromEnv()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load timing sidecar: %v", err))
+	}
 
 	if DebugEnabled() {
 		slog.Debug("ParsedProgramConfig", "rows", config.Rows, "cols", config.Cols, "cores", len(config.Cores))
@@ -212,8 +218,9 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 		}
 
 		program := Program{
-			EntryBlocks: entryBlocks,
-			CompiledII:  config.CompiledII,
+			EntryBlocks:   entryBlocks,
+			CompiledII:    config.CompiledII,
+			DerivedTiming: cloneDerivedTimingMap(derivedTimingByCoord[coordKey]),
 		}
 
 		programMap[coordKey] = program

@@ -20,10 +20,16 @@ type DeviceBuilder struct {
 	freq    sim.Freq
 	monitor *monitoring.Monitor
 	//portFactory   portFactory
-	width, height   int
-	memoryMode      string         // simple or shared or local
-	memoryShare     map[[2]int]int //map[[x, y]]GroupID
-	executionPolicy string
+	width, height         int
+	memoryMode            string         // simple or shared or local
+	memoryShare           map[[2]int]int //map[[x, y]]GroupID
+	executionPolicy       string
+	strictMaxSlip         int64
+	strictFailOnViolation bool
+	corePortIncomingCap   int
+	corePortOutgoingCap   int
+	numRegisters          int
+	localMemoryWords      int
 }
 
 // type portFactory interface {
@@ -78,6 +84,32 @@ func (d DeviceBuilder) WithMemoryShare(share map[[2]int]int) DeviceBuilder {
 // WithExecutionPolicy sets core execution policy.
 func (d DeviceBuilder) WithExecutionPolicy(policy string) DeviceBuilder {
 	d.executionPolicy = policy
+	return d
+}
+
+// WithStrictTimingConfig sets strict timing replay controls.
+func (d DeviceBuilder) WithStrictTimingConfig(maxSlip int64, failOnViolation bool) DeviceBuilder {
+	d.strictMaxSlip = maxSlip
+	d.strictFailOnViolation = failOnViolation
+	return d
+}
+
+// WithCorePortBufferDepth sets core port incoming/outgoing capacities.
+func (d DeviceBuilder) WithCorePortBufferDepth(incoming, outgoing int) DeviceBuilder {
+	d.corePortIncomingCap = incoming
+	d.corePortOutgoingCap = outgoing
+	return d
+}
+
+// WithRegisterCount sets register-file size per core.
+func (d DeviceBuilder) WithRegisterCount(num int) DeviceBuilder {
+	d.numRegisters = num
+	return d
+}
+
+// WithLocalMemoryWords sets local memory size (in words) per core.
+func (d DeviceBuilder) WithLocalMemoryWords(words int) DeviceBuilder {
+	d.localMemoryWords = words
 	return d
 }
 
@@ -196,6 +228,10 @@ func (d DeviceBuilder) createTiles(
 				WithRetValAddr(&retVal).
 				WithExitReqAddr(&exitReqTimestamp).
 				WithExecutionPolicy(d.executionPolicy).
+				WithStrictTimingConfig(d.strictMaxSlip, d.strictFailOnViolation).
+				WithPortBufferDepth(d.corePortIncomingCap, d.corePortOutgoingCap).
+				WithRegisterCount(d.numRegisters).
+				WithLocalMemoryWords(d.localMemoryWords).
 				Build(coreName)
 
 			if d.monitor != nil {

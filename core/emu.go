@@ -30,6 +30,12 @@ const (
 	ExecutionPolicyInOrderDataflow  = "in_order_dataflow"
 )
 
+const (
+	StallReasonScheduleBubble = "schedule_bubble"
+	StallReasonOperandWait    = "operand_wait"
+	StallReasonOutputBlocked  = "output_blocked"
+)
+
 type routingRule struct {
 	src   cgra.Side
 	dst   cgra.Side
@@ -108,22 +114,251 @@ type coreState struct {
 
 	Mode OpMode
 
-	RecvBufHead      [][]cgra.Data //[Color][Direction]
-	RecvBufHeadReady [][]bool
-	SendBufHead      [][]cgra.Data
-	SendBufHeadBusy  [][]bool
-	AddrBuf          uint32 // buffer for the address of the memory
-	IsToWriteMemory  bool
+	RecvBufHead       [][]cgra.Data //[Color][Direction]
+	RecvBufHeadReady  [][]bool
+	SendBufHead       [][]cgra.Data
+	SendBufHeadBusy   [][]bool
+	RecvBufQueue      [][][]cgra.Data // [Color][Direction]FIFO
+	SendBufQueue      [][][]cgra.Data // [Color][Direction]FIFO
+	RecvQueueCapacity int
+	SendQueueCapacity int
+	OpInputReadCache  map[string]cgra.Data
+	AddrBuf           uint32 // buffer for the address of the memory
+	IsToWriteMemory   bool
 
-	routingRules []*routingRule
-	triggers     []*Trigger
-	CurrentTime  float64 // current simulation time for logging
-	CurrentCycle int64
+	routingRules      []*routingRule
+	triggers          []*Trigger
+	CurrentTime       float64 // current simulation time for logging
+	CurrentCycle      int64
+	OpTimingCursor    map[int]int
+	OpTimingLate      map[int]bool
+	OpTimingRollCycle map[int]int64
+	TimingWaitBlocked bool
+	StallReason       string
+	StallOpID         int
+	StallOpCode       string
 }
 
 type instEmulator struct {
-	CareFlags       bool
-	ExecutionPolicy string
+	CareFlags             bool
+	ExecutionPolicy       string
+	StrictMaxSlip         int64
+	StrictFailOnViolation bool
+}
+
+func (s *coreState) recvFIFOEnabled() bool {
+	return len(s.RecvBufQueue) == 4 &&
+		len(s.RecvBufQueue[0]) > int(cgra.Router)
+}
+
+func (s *coreState) sendFIFOEnabled() bool {
+	return len(s.SendBufQueue) == 4 &&
+		len(s.SendBufQueue[0]) > int(cgra.Router)
+}
+
+func (s *coreState) recvQueueCap() int {
+	if s.RecvQueueCapacity > 0 {
+		return s.RecvQueueCapacity
+	}
+	return 1
+}
+
+func (s *coreState) sendQueueCap(color, direction int) int {
+	// Keep router-red as single outstanding request to preserve existing
+	// address/req-state coupling semantics.
+	if color == 0 && direction == int(cgra.Router) {
+		return 1
+	}
+	if s.SendQueueCapacity > 0 {
+		return s.SendQueueCapacity
+	}
+	return 1
+}
+
+func (s *coreState) syncRecvHead(color, direction int) {
+	if len(s.RecvBufHead) <= color || len(s.RecvBufHeadReady) <= color {
+		return
+	}
+	if len(s.RecvBufHead[color]) <= direction || len(s.RecvBufHeadReady[color]) <= direction {
+		return
+	}
+	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction && len(s.RecvBufQueue[color][direction]) > 0 {
+		s.RecvBufHead[color][direction] = s.RecvBufQueue[color][direction][0]
+		s.RecvBufHeadReady[color][direction] = true
+		return
+	}
+	s.RecvBufHeadReady[color][direction] = false
+}
+
+func (s *coreState) syncSendHead(color, direction int) {
+	if len(s.SendBufHead) <= color || len(s.SendBufHeadBusy) <= color {
+		return
+	}
+	if len(s.SendBufHead[color]) <= direction || len(s.SendBufHeadBusy[color]) <= direction {
+		return
+	}
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction && len(s.SendBufQueue[color][direction]) > 0 {
+		s.SendBufHead[color][direction] = s.SendBufQueue[color][direction][0]
+		s.SendBufHeadBusy[color][direction] = true
+		return
+	}
+	s.SendBufHeadBusy[color][direction] = false
+}
+
+func (s *coreState) recvQueueLen(color, direction int) int {
+	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction {
+		return len(s.RecvBufQueue[color][direction])
+	}
+	if s.RecvBufHeadReady[color][direction] {
+		return 1
+	}
+	return 0
+}
+
+func (s *coreState) recvQueueIsFull(color, direction int) bool {
+	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction {
+		return len(s.RecvBufQueue[color][direction]) >= s.recvQueueCap()
+	}
+	return s.RecvBufHeadReady[color][direction]
+}
+
+func (s *coreState) recvQueuePush(color, direction int, data cgra.Data) bool {
+	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction {
+		if len(s.RecvBufQueue[color][direction]) >= s.recvQueueCap() {
+			return false
+		}
+		s.RecvBufQueue[color][direction] = append(s.RecvBufQueue[color][direction], data)
+		s.syncRecvHead(color, direction)
+		return true
+	}
+	if s.RecvBufHeadReady[color][direction] {
+		return false
+	}
+	s.RecvBufHead[color][direction] = data
+	s.RecvBufHeadReady[color][direction] = true
+	return true
+}
+
+func (s *coreState) recvQueuePeek(color, direction int) (cgra.Data, bool) {
+	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction {
+		if len(s.RecvBufQueue[color][direction]) == 0 {
+			return cgra.Data{}, false
+		}
+		return s.RecvBufQueue[color][direction][0], true
+	}
+	if !s.RecvBufHeadReady[color][direction] {
+		return cgra.Data{}, false
+	}
+	return s.RecvBufHead[color][direction], true
+}
+
+func (s *coreState) recvQueueConsume(color, direction int) (cgra.Data, bool) {
+	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction {
+		if len(s.RecvBufQueue[color][direction]) == 0 {
+			return cgra.Data{}, false
+		}
+		value := s.RecvBufQueue[color][direction][0]
+		s.RecvBufQueue[color][direction] = s.RecvBufQueue[color][direction][1:]
+		s.syncRecvHead(color, direction)
+		return value, true
+	}
+	if !s.RecvBufHeadReady[color][direction] {
+		return cgra.Data{}, false
+	}
+	value := s.RecvBufHead[color][direction]
+	s.RecvBufHeadReady[color][direction] = false
+	return value, true
+}
+
+func (s *coreState) sendQueueHasData(color, direction int) bool {
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction {
+		return len(s.SendBufQueue[color][direction]) > 0
+	}
+	return s.SendBufHeadBusy[color][direction]
+}
+
+func (s *coreState) sendQueueIsFull(color, direction int) bool {
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction {
+		return len(s.SendBufQueue[color][direction]) >= s.sendQueueCap(color, direction)
+	}
+	return s.SendBufHeadBusy[color][direction]
+}
+
+func (s *coreState) sendQueuePush(color, direction int, data cgra.Data) bool {
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction {
+		if len(s.SendBufQueue[color][direction]) >= s.sendQueueCap(color, direction) {
+			return false
+		}
+		s.SendBufQueue[color][direction] = append(s.SendBufQueue[color][direction], data)
+		s.syncSendHead(color, direction)
+		return true
+	}
+	if s.SendBufHeadBusy[color][direction] {
+		return false
+	}
+	s.SendBufHeadBusy[color][direction] = true
+	s.SendBufHead[color][direction] = data
+	return true
+}
+
+func (s *coreState) sendQueuePeek(color, direction int) (cgra.Data, bool) {
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction {
+		if len(s.SendBufQueue[color][direction]) == 0 {
+			return cgra.Data{}, false
+		}
+		return s.SendBufQueue[color][direction][0], true
+	}
+	if !s.SendBufHeadBusy[color][direction] {
+		return cgra.Data{}, false
+	}
+	return s.SendBufHead[color][direction], true
+}
+
+func (s *coreState) sendQueueConsume(color, direction int) (cgra.Data, bool) {
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction {
+		if len(s.SendBufQueue[color][direction]) == 0 {
+			return cgra.Data{}, false
+		}
+		value := s.SendBufQueue[color][direction][0]
+		s.SendBufQueue[color][direction] = s.SendBufQueue[color][direction][1:]
+		s.syncSendHead(color, direction)
+		return value, true
+	}
+	if !s.SendBufHeadBusy[color][direction] {
+		return cgra.Data{}, false
+	}
+	value := s.SendBufHead[color][direction]
+	s.SendBufHeadBusy[color][direction] = false
+	return value, true
+}
+
+func (s *coreState) resetPortQueues() {
+	for color := range s.RecvBufHeadReady {
+		for direction := range s.RecvBufHeadReady[color] {
+			s.RecvBufHeadReady[color][direction] = false
+		}
+	}
+	for color := range s.SendBufHeadBusy {
+		for direction := range s.SendBufHeadBusy[color] {
+			s.SendBufHeadBusy[color][direction] = false
+		}
+	}
+	if s.recvFIFOEnabled() {
+		for color := range s.RecvBufQueue {
+			for direction := range s.RecvBufQueue[color] {
+				s.RecvBufQueue[color][direction] = s.RecvBufQueue[color][direction][:0]
+				s.syncRecvHead(color, direction)
+			}
+		}
+	}
+	if s.sendFIFOEnabled() {
+		for color := range s.SendBufQueue {
+			for direction := range s.SendBufQueue[color] {
+				s.SendBufQueue[color][direction] = s.SendBufQueue[color][direction][:0]
+				s.syncSendHead(color, direction)
+			}
+		}
+	}
 }
 
 func normalizeExecutionPolicyString(policy string) string {
@@ -138,6 +373,27 @@ func normalizeExecutionPolicyString(policy string) string {
 	default:
 		// Fall back to in-order dataflow for backward compatibility.
 		return ExecutionPolicyInOrderDataflow
+	}
+}
+
+func isStrictControlSensitiveOp(opCode string) bool {
+	normalized := strings.ToUpper(strings.TrimSpace(opCode))
+	switch {
+	case normalized == "SEL",
+		normalized == "JMP",
+		normalized == "RET",
+		normalized == "CTRL_MOV",
+		normalized == "CMP_EXPORT",
+		normalized == "LT_EX":
+		return true
+	case strings.HasPrefix(normalized, "PHI"),
+		strings.HasPrefix(normalized, "GRANT"),
+		strings.HasPrefix(normalized, "ICMP"),
+		strings.HasPrefix(normalized, "RETURN"),
+		strings.HasPrefix(normalized, "B"):
+		return true
+	default:
+		return false
 	}
 }
 
@@ -190,13 +446,170 @@ func (i instEmulator) resolveScheduleStep(operation Operation, state *coreState)
 	return currentStep, targetStep, ii
 }
 
+func (i instEmulator) resolveDerivedSchedule(operation Operation, state *coreState) ([]int64, int, bool) {
+	if state == nil || state.Code.DerivedTiming == nil {
+		return nil, 0, false
+	}
+
+	schedule, exists := state.Code.DerivedTiming[operation.ID]
+	if !exists || len(schedule) == 0 {
+		return nil, 0, false
+	}
+
+	cursor := state.OpTimingCursor[operation.ID]
+	return schedule, cursor, true
+}
+
+func (i instEmulator) advanceDerivedTimingCursor(operation Operation, state *coreState) {
+	if state == nil || state.Code.DerivedTiming == nil {
+		return
+	}
+	if _, exists := state.Code.DerivedTiming[operation.ID]; !exists {
+		return
+	}
+	state.OpTimingCursor[operation.ID] = state.OpTimingCursor[operation.ID] + 1
+	delete(state.OpTimingLate, operation.ID)
+	delete(state.OpTimingRollCycle, operation.ID)
+}
+
+func (i instEmulator) setStallReason(state *coreState, operation Operation, reason string) {
+	if state == nil || reason == "" {
+		return
+	}
+	state.StallReason = reason
+	state.StallOpID = operation.ID
+	state.StallOpCode = operation.OpCode
+}
+
+func (i instEmulator) rollStrictExpectedCycle(expectedCycle, currentCycle int64, compiledII int) int64 {
+	ii := int64(compiledII)
+	if ii <= 0 {
+		ii = 1
+	}
+	// Move to the next window start strictly after the current cycle.
+	nextExpected := expectedCycle + ii
+	if nextExpected > currentCycle {
+		return nextExpected
+	}
+	delta := currentCycle - expectedCycle
+	steps := delta/ii + 1
+	return expectedCycle + steps*ii
+}
+
 func (i instEmulator) canIssue(operation Operation, state *coreState) bool {
 	if !i.CareFlags || operation.InvalidIterations > 0 {
 		return true
 	}
 
-	ready := i.CheckFlags(operation, state)
+	policy := normalizeExecutionPolicyString(i.ExecutionPolicy)
+	if schedule, cursor, hasDerived := i.resolveDerivedSchedule(operation, state); hasDerived &&
+		(policy == ExecutionPolicyStrictTimed || policy == ExecutionPolicyElasticScheduled) {
+		if cursor >= len(schedule) {
+			// Once all derived firings are consumed for this op, suppress further
+			// issue attempts instead of falling back to static time_step gating.
+			return false
+		}
+
+		expectedCycle := schedule[cursor]
+		switch policy {
+		case ExecutionPolicyStrictTimed:
+			if rolledCycle, exists := state.OpTimingRollCycle[operation.ID]; exists {
+				expectedCycle = rolledCycle
+			}
+
+			// Control-sensitive ops keep strict lower-bound timing but avoid
+			// finite-W replay penalties to preserve control-token alignment.
+			if isStrictControlSensitiveOp(operation.OpCode) {
+				if state.CurrentCycle < expectedCycle {
+					state.TimingWaitBlocked = true
+					i.setStallReason(state, operation, StallReasonScheduleBubble)
+					return false
+				}
+
+				ready, waitReason := i.checkIssueReadiness(operation, state)
+				if ready {
+					if state.CurrentCycle > schedule[cursor] {
+						state.OpTimingLate[operation.ID] = true
+					}
+					return true
+				}
+				if state.CurrentCycle > schedule[cursor] {
+					state.OpTimingLate[operation.ID] = true
+				}
+				i.setStallReason(state, operation, waitReason)
+				return false
+			}
+
+			if state.CurrentCycle < expectedCycle {
+				state.TimingWaitBlocked = true
+				i.setStallReason(state, operation, StallReasonScheduleBubble)
+				return false
+			}
+
+			lateness := state.CurrentCycle - expectedCycle
+			if lateness > 0 && i.StrictMaxSlip >= 0 && lateness > i.StrictMaxSlip {
+				reason := fmt.Sprintf(
+					"strict slip window violation: lateness=%d exceeds max_slip=%d (expected=%d current=%d)",
+					lateness,
+					i.StrictMaxSlip,
+					expectedCycle,
+					state.CurrentCycle,
+				)
+				if i.StrictFailOnViolation {
+					i.panicSynchronizationViolation(operation, state, reason)
+				}
+
+				nextExpected := i.rollStrictExpectedCycle(expectedCycle, state.CurrentCycle, state.Code.CompiledII)
+				state.OpTimingRollCycle[operation.ID] = nextExpected
+				Trace(
+					"TimingViolation",
+					"Policy", policy,
+					"OpCode", operation.OpCode,
+					"ID", operation.ID,
+					"X", state.TileX,
+					"Y", state.TileY,
+					"ExpectedCycle", expectedCycle,
+					"NextExpectedCycle", nextExpected,
+					"CurrentCycle", state.CurrentCycle,
+					"Lateness", lateness,
+					"MaxSlip", i.StrictMaxSlip,
+				)
+				state.TimingWaitBlocked = true
+				i.setStallReason(state, operation, StallReasonScheduleBubble)
+				return false
+			}
+
+			ready, waitReason := i.checkIssueReadiness(operation, state)
+			if !ready {
+				if state.CurrentCycle > schedule[cursor] {
+					state.OpTimingLate[operation.ID] = true
+				}
+				i.setStallReason(state, operation, waitReason)
+				return false
+			}
+
+			if state.CurrentCycle > schedule[cursor] {
+				state.OpTimingLate[operation.ID] = true
+			}
+			return true
+		case ExecutionPolicyElasticScheduled:
+			if state.CurrentCycle < expectedCycle {
+				state.TimingWaitBlocked = true
+				i.setStallReason(state, operation, StallReasonScheduleBubble)
+				return false
+			}
+
+			ready, waitReason := i.checkIssueReadiness(operation, state)
+			if ready {
+				return true
+			}
+			i.setStallReason(state, operation, waitReason)
+			return false
+		}
+	}
+
 	currentStep, targetStep, ii := i.resolveScheduleStep(operation, state)
+	ready, waitReason := i.checkIssueReadiness(operation, state)
 
 	// No schedule (compiled_ii missing or 0): ignore time gating so existing workloads
 	// (e.g. histogram) that do not use II-based scheduling still run like in-order.
@@ -204,9 +617,11 @@ func (i instEmulator) canIssue(operation Operation, state *coreState) bool {
 		return ready
 	}
 
-	switch normalizeExecutionPolicyString(i.ExecutionPolicy) {
+	switch policy {
 	case ExecutionPolicyStrictTimed:
 		if currentStep < targetStep {
+			state.TimingWaitBlocked = true
+			i.setStallReason(state, operation, StallReasonScheduleBubble)
 			return false
 		}
 		if currentStep == targetStep {
@@ -219,13 +634,27 @@ func (i instEmulator) canIssue(operation Operation, state *coreState) bool {
 		return false
 	case ExecutionPolicyElasticScheduled:
 		if currentStep < targetStep {
+			state.TimingWaitBlocked = true
+			i.setStallReason(state, operation, StallReasonScheduleBubble)
 			return false
 		}
-		return ready
+		if ready {
+			return true
+		}
+		i.setStallReason(state, operation, waitReason)
+		return false
 	case ExecutionPolicyInOrderDataflow:
-		return ready
+		if ready {
+			return true
+		}
+		i.setStallReason(state, operation, waitReason)
+		return false
 	default:
-		return ready
+		if ready {
+			return true
+		}
+		i.setStallReason(state, operation, waitReason)
+		return false
 	}
 }
 
@@ -285,13 +714,17 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 		} // else, this group is not finished, PC stays the same
 	} else if state.Mode == SyncOp {
 		if progressSync {
-			if state.NextPCInBlock == -1 {
-				// print("PC+4 for PC=", state.PCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
-				// print("Instruction at PC=", state.PCInBlock, " is ", state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[0].OpCode, "\n")
-				state.PCInBlock++
-			} else {
-				// print("PC+Jump to ", state.NextPCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
-				state.PCInBlock = state.NextPCInBlock
+			// Timing wait means "advance cycle but keep the same instruction group",
+			// otherwise later groups may observe stale local registers.
+			if !state.TimingWaitBlocked {
+				if state.NextPCInBlock == -1 {
+					// print("PC+4 for PC=", state.PCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
+					// print("Instruction at PC=", state.PCInBlock, " is ", state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[0].OpCode, "\n")
+					state.PCInBlock++
+				} else {
+					// print("PC+Jump to ", state.NextPCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
+					state.PCInBlock = state.NextPCInBlock
+				}
 			}
 		}
 		if state.SelectedBlock != nil && state.PCInBlock >= int32(len(state.SelectedBlock.InstructionGroups)) {
@@ -321,6 +754,11 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 }
 
 func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, state *coreState, time float64) bool {
+	state.TimingWaitBlocked = false
+	state.StallReason = ""
+	state.StallOpID = 0
+	state.StallOpCode = ""
+	state.OpInputReadCache = make(map[string]cgra.Data)
 	run := true
 	for _, operation := range cinst.Operations {
 		if i.canIssue(operation, state) {
@@ -341,12 +779,42 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 				continue
 			}
 			results := i.RunOperation(*operation, state, time)
+			i.advanceDerivedTimingCursor(*operation, state)
 			// In Sync mode, apply each op result immediately so later ops in the
 			// same instruction group can observe updated registers/ports.
 			for operand, value := range results {
 				i.writeOperand(operand, value, state)
 			}
 		}
+	}
+	if state.TimingWaitBlocked {
+		if !run && state.StallReason != "" {
+			Trace(
+				"Stall",
+				"Behavior", state.StallReason,
+				"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
+				"Time", float64(state.CurrentCycle),
+				"X", state.TileX,
+				"Y", state.TileY,
+				"ID", state.StallOpID,
+				"OpCode", state.StallOpCode,
+			)
+		}
+		// Keep ticking while waiting for future schedule slots, otherwise the
+		// simulator may stop before reaching those future cycles.
+		return true
+	}
+	if !run && state.StallReason != "" {
+		Trace(
+			"Stall",
+			"Behavior", state.StallReason,
+			"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
+			"Time", float64(state.CurrentCycle),
+			"X", state.TileX,
+			"Y", state.TileY,
+			"ID", state.StallOpID,
+			"OpCode", state.StallOpCode,
+		)
 	}
 	return run
 }
@@ -371,6 +839,7 @@ func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, st
 				continue
 			}
 			results := i.RunOperation(*operation, state, time)
+			i.advanceDerivedTimingCursor(*operation, state)
 			// Merge results into allResults
 			for operand, value := range results {
 				allResults[operand] = value
@@ -412,9 +881,8 @@ func (i instEmulator) normalizeDirection(s string) string {
 	}
 }
 
-func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
+func (i instEmulator) checkIssueReadiness(inst Operation, state *coreState) (bool, string) {
 	//PrintState(state)
-	flag := true
 	for index, src := range inst.SrcOperands.Operands {
 		if index == 1 {
 			if inst.OpCode == "PHI_CONST" || inst.OpCode == "PHI_START" {
@@ -437,9 +905,8 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 		}
 		srcImpl := i.normalizeDirection(src.Impl)
 		if state.Directions[srcImpl] {
-			if !state.RecvBufHeadReady[i.getColorIndex(src.Color)][i.getDirecIndex(srcImpl)] {
-				flag = false
-				break
+			if state.recvQueueLen(i.getColorIndex(src.Color), i.getDirecIndex(srcImpl)) == 0 {
+				return false, StallReasonOperandWait
 			}
 		}
 	}
@@ -447,10 +914,10 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 	for _, dst := range inst.DstOperands.Operands {
 		dstImpl := i.normalizeDirection(dst.Impl)
 		if state.Directions[dstImpl] {
-			if state.SendBufHeadBusy[i.getColorIndex(dst.Color)][i.getDirecIndex(dstImpl)] {
+			if state.sendQueueIsFull(i.getColorIndex(dst.Color), i.getDirecIndex(dstImpl)) {
 				Trace(
 					"Backpressure",
-					"Time", state.CurrentTime,
+					"Time", float64(state.CurrentCycle),
 					"X", state.TileX,
 					"Y", state.TileY,
 					"OpCode", inst.OpCode,
@@ -460,14 +927,18 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 					"Color", dst.Color,
 					"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
 				)
-				flag = false
-				break
+				return false, StallReasonOutputBlocked
 			}
 		}
 	}
 	//fmt.Println("[CheckFlags] checking flags for inst", inst.OpCode, "@(", state.TileX, ",", state.TileY, "):", flag)
 	// fmt.Println("Check", inst.OpCode, "ID", inst.ID, "@(", state.TileX, ",", state.TileY, "):", flag)
-	return flag
+	return true, ""
+}
+
+func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
+	ready, _ := i.checkIssueReadiness(inst, state)
+	return ready
 }
 
 func (i instEmulator) RunOperation(inst Operation, state *coreState, time float64) map[Operand]cgra.Data {
@@ -586,13 +1057,36 @@ func (i instEmulator) readOperand(operand Operand, state *coreState) (value cgra
 			//fmt.Println("operand.Impl", operand.Impl)
 			// must first check it is ready
 			color, direction := i.getColorIndex(operand.Color), i.getDirecIndex(normalizedImpl)
-			value = state.RecvBufHead[color][direction]
-			// set the ready flag to false
+			cacheKey := fmt.Sprintf("%d:%d", color, direction)
 			if state.Mode == SyncOp {
-				state.RecvBufHeadReady[color][direction] = false
+				if cached, ok := state.OpInputReadCache[cacheKey]; ok {
+					return cached
+				}
+			}
+			peek, ok := state.recvQueuePeek(color, direction)
+			if !ok {
+				// In sync mode, all ops in the same instruction group share one
+				// snapshot of input heads. If a previous op consumed this queue
+				// head earlier in the same tick, keep returning the snapshot.
+				fallback := state.RecvBufHead[color][direction]
+				state.OpInputReadCache[cacheKey] = fallback
+				return fallback
+			}
+			value = peek
+			// consume queue head according to existing sync/async rules
+			if state.Mode == SyncOp {
+				consumed, ok := state.recvQueueConsume(color, direction)
+				if !ok {
+					panic(fmt.Sprintf("operand queue consume failed in sync mode: %v", operand))
+				}
+				value = consumed
+				state.OpInputReadCache[cacheKey] = value
 			} else {
 				if !state.CurrReservationState.DecrementRefCount(operand, state) {
-					state.RecvBufHeadReady[color][direction] = false // no longer used, closed
+					// no longer used, pop queue head
+					if _, ok := state.recvQueueConsume(color, direction); !ok {
+						panic(fmt.Sprintf("operand queue consume failed in async mode: %v", operand))
+					}
 					//fmt.Println("Reduce {", operand.Impl, "} to zero")
 				} else {
 					//fmt.Println("Reduce {", operand.Impl, "} to ", state.CurrReservationState.RefCountRuntime[operand.Impl], "@(", state.TileX, ",", state.TileY, ")")
@@ -642,12 +1136,13 @@ func (i instEmulator) writeOperand(operand Operand, value cgra.Data, state *core
 	} else {
 		normalizedImpl := i.normalizeDirection(operand.Impl)
 		if state.Directions[normalizedImpl] {
-			if state.SendBufHeadBusy[i.getColorIndex(operand.Color)][i.getDirecIndex(normalizedImpl)] {
+			color := i.getColorIndex(operand.Color)
+			direction := i.getDirecIndex(normalizedImpl)
+			if state.sendQueueIsFull(color, direction) {
 				//fmt.Printf("sendbufhead busy\n")
 				return
 			}
-			state.SendBufHeadBusy[i.getColorIndex(operand.Color)][i.getDirecIndex(normalizedImpl)] = true
-			state.SendBufHead[i.getColorIndex(operand.Color)][i.getDirecIndex(normalizedImpl)] = value
+			state.sendQueuePush(color, direction, value)
 		} else {
 			panic(fmt.Sprintf("Invalid operand %v in writeOperand; expected register", operand))
 		}
