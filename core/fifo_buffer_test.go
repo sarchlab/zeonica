@@ -20,6 +20,7 @@ func newFIFOTestState(recvCap, sendCap int) coreState {
 			"Router":    true,
 		},
 		Mode:              SyncOp,
+		EnableFIFOModel:   true,
 		RecvQueueCapacity: recvCap,
 		SendQueueCapacity: sendCap,
 		RecvBufHead:       make([][]cgra.Data, 4),
@@ -138,5 +139,28 @@ func TestRouterRedKeepsSingleOutstanding(t *testing.T) {
 	}
 	if state.sendQueuePush(0, router, cgra.NewScalar(8)) {
 		t.Fatal("expected router-red second enqueue to fail (single outstanding)")
+	}
+}
+
+func TestEnableFIFOModelSwitchControlsQueueDepth(t *testing.T) {
+	emu := instEmulator{}
+	north := emu.getDirecIndex("North")
+
+	legacy := newFIFOTestState(4, 4)
+	legacy.EnableFIFOModel = false
+	if !legacy.recvQueuePush(0, north, cgra.NewScalar(1)) {
+		t.Fatal("legacy path first recv push should succeed")
+	}
+	if legacy.recvQueuePush(0, north, cgra.NewScalar(2)) {
+		t.Fatal("legacy path should stay single-slot regardless of configured depth")
+	}
+
+	fifo := newFIFOTestState(4, 4)
+	fifo.EnableFIFOModel = true
+	if !fifo.recvQueuePush(0, north, cgra.NewScalar(1)) {
+		t.Fatal("fifo path first recv push should succeed")
+	}
+	if !fifo.recvQueuePush(0, north, cgra.NewScalar(2)) {
+		t.Fatal("fifo path second recv push should succeed when depth > 1")
 	}
 }

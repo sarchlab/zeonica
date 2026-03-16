@@ -28,6 +28,7 @@ type DeviceBuilder struct {
 	strictFailOnViolation bool
 	corePortIncomingCap   int
 	corePortOutgoingCap   int
+	enableFIFOModel       bool
 	numRegisters          int
 	localMemoryWords      int
 }
@@ -98,6 +99,12 @@ func (d DeviceBuilder) WithStrictTimingConfig(maxSlip int64, failOnViolation boo
 func (d DeviceBuilder) WithCorePortBufferDepth(incoming, outgoing int) DeviceBuilder {
 	d.corePortIncomingCap = incoming
 	d.corePortOutgoingCap = outgoing
+	return d
+}
+
+// WithEnableFIFOModel toggles FIFO-based core execution model.
+func (d DeviceBuilder) WithEnableFIFOModel(enabled bool) DeviceBuilder {
+	d.enableFIFOModel = enabled
 	return d
 }
 
@@ -230,6 +237,7 @@ func (d DeviceBuilder) createTiles(
 				WithExecutionPolicy(d.executionPolicy).
 				WithStrictTimingConfig(d.strictMaxSlip, d.strictFailOnViolation).
 				WithPortBufferDepth(d.corePortIncomingCap, d.corePortOutgoingCap).
+				WithEnableFIFOModel(d.enableFIFOModel).
 				WithRegisterCount(d.numRegisters).
 				WithLocalMemoryWords(d.localMemoryWords).
 				Build(coreName)

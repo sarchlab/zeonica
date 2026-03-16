@@ -11,6 +11,7 @@ func TestCoreBuilderResourceSizing(t *testing.T) {
 	c := Builder{}.
 		WithEngine(engine).
 		WithFreq(1*sim.GHz).
+		WithEnableFIFOModel(true).
 		WithRegisterCount(96).
 		WithLocalMemoryWords(2048).
 		WithPortBufferDepth(4, 6).
@@ -24,5 +25,8 @@ func TestCoreBuilderResourceSizing(t *testing.T) {
 	}
 	if c.GetPortByName("North") == nil {
 		t.Fatal("expected North port to be initialized")
+	}
+	if !c.state.EnableFIFOModel {
+		t.Fatal("expected EnableFIFOModel to propagate to core state")
 	}
 }

@@ -17,6 +17,7 @@ type Builder struct {
 	strictFailOnViolation bool
 	portIncomingBufferCap int
 	portOutgoingBufferCap int
+	enableFIFOModel       bool
 	numRegisters          int
 	localMemoryWords      int
 }
@@ -67,6 +68,12 @@ func (b Builder) WithStrictTimingConfig(maxSlip int64, failOnViolation bool) Bui
 func (b Builder) WithPortBufferDepth(incoming, outgoing int) Builder {
 	b.portIncomingBufferCap = incoming
 	b.portOutgoingBufferCap = outgoing
+	return b
+}
+
+// WithEnableFIFOModel toggles FIFO-based execution behavior.
+func (b Builder) WithEnableFIFOModel(enabled bool) Builder {
+	b.enableFIFOModel = enabled
 	return b
 }
 
@@ -139,6 +146,7 @@ func (b Builder) Build(name string) *Core {
 		SendBufQueue:      make([][][]cgra.Data, 4),
 		RecvQueueCapacity: incomingBufCap,
 		SendQueueCapacity: outgoingBufCap,
+		EnableFIFOModel:   b.enableFIFOModel,
 		OpInputReadCache:  make(map[string]cgra.Data),
 		AddrBuf:           0,
 		IsToWriteMemory:   false,

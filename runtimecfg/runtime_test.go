@@ -114,6 +114,9 @@ func TestResolveMicroarchitectureDefaults(t *testing.T) {
 	if cfg.LinkTimingModel != "parse_only" {
 		t.Fatalf("unexpected link timing model: %q", cfg.LinkTimingModel)
 	}
+	if cfg.EnableFIFOModel {
+		t.Fatalf("unexpected fifo model default: got true want false")
+	}
 }
 
 func TestResolveMicroarchitectureOverrides(t *testing.T) {
@@ -122,6 +125,7 @@ func TestResolveMicroarchitectureOverrides(t *testing.T) {
 		TileDefaults: TileDefaults{NumRegisters: 96, LocalMemoryWords: 2048},
 		LinkDefaults: LinkDefaults{Latency: intPtr(3), Bandwidth: intPtr(128)},
 		Simulator: Simulator{
+			EnableFIFOModel: boolPtr(true),
 			Driver: NamedComponent{
 				PortIncomingBufferDepth: intPtr(4),
 				PortOutgoingBufferDepth: intPtr(5),
@@ -160,6 +164,9 @@ func TestResolveMicroarchitectureOverrides(t *testing.T) {
 	}
 	if cfg.LinkLatency != 3 || cfg.LinkBandwidth != 128 {
 		t.Fatalf("link override failed: latency=%d bandwidth=%d", cfg.LinkLatency, cfg.LinkBandwidth)
+	}
+	if !cfg.EnableFIFOModel {
+		t.Fatalf("fifo model override failed: got false want true")
 	}
 }
 

@@ -122,6 +122,7 @@ type coreState struct {
 	SendBufQueue      [][][]cgra.Data // [Color][Direction]FIFO
 	RecvQueueCapacity int
 	SendQueueCapacity int
+	EnableFIFOModel   bool
 	OpInputReadCache  map[string]cgra.Data
 	AddrBuf           uint32 // buffer for the address of the memory
 	IsToWriteMemory   bool
@@ -147,12 +148,14 @@ type instEmulator struct {
 }
 
 func (s *coreState) recvFIFOEnabled() bool {
-	return len(s.RecvBufQueue) == 4 &&
+	return s.EnableFIFOModel &&
+		len(s.RecvBufQueue) == 4 &&
 		len(s.RecvBufQueue[0]) > int(cgra.Router)
 }
 
 func (s *coreState) sendFIFOEnabled() bool {
-	return len(s.SendBufQueue) == 4 &&
+	return s.EnableFIFOModel &&
+		len(s.SendBufQueue) == 4 &&
 		len(s.SendBufQueue[0]) > int(cgra.Router)
 }
 
@@ -359,6 +362,144 @@ func (s *coreState) resetPortQueues() {
 			}
 		}
 	}
+}
+
+func clone2DData(input [][]cgra.Data) [][]cgra.Data {
+	if input == nil {
+		return nil
+	}
+	out := make([][]cgra.Data, len(input))
+	for i := range input {
+		if input[i] == nil {
+			continue
+		}
+		out[i] = append([]cgra.Data(nil), input[i]...)
+	}
+	return out
+}
+
+func clone2DBool(input [][]bool) [][]bool {
+	if input == nil {
+		return nil
+	}
+	out := make([][]bool, len(input))
+	for i := range input {
+		if input[i] == nil {
+			continue
+		}
+		out[i] = append([]bool(nil), input[i]...)
+	}
+	return out
+}
+
+func clone3DData(input [][][]cgra.Data) [][][]cgra.Data {
+	if input == nil {
+		return nil
+	}
+	out := make([][][]cgra.Data, len(input))
+	for i := range input {
+		if input[i] == nil {
+			continue
+		}
+		out[i] = make([][]cgra.Data, len(input[i]))
+		for j := range input[i] {
+			if input[i][j] == nil {
+				continue
+			}
+			out[i][j] = append([]cgra.Data(nil), input[i][j]...)
+		}
+	}
+	return out
+}
+
+func cloneStringBoolMap(input map[string]bool) map[string]bool {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]bool, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneStringIntMap(input map[string]int) map[string]int {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]int, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneIntBoolMap(input map[int]bool) map[int]bool {
+	if input == nil {
+		return nil
+	}
+	out := make(map[int]bool, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneIntIntMap(input map[int]int) map[int]int {
+	if input == nil {
+		return nil
+	}
+	out := make(map[int]int, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneIntInt64Map(input map[int]int64) map[int]int64 {
+	if input == nil {
+		return nil
+	}
+	out := make(map[int]int64, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneIntAnyMap(input map[string]interface{}) map[string]interface{} {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]interface{}, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func (s *coreState) cloneForEval() *coreState {
+	clone := *s
+	clone.Registers = append([]cgra.Data(nil), s.Registers...)
+	clone.Memory = append([]uint32(nil), s.Memory...)
+	clone.States = cloneIntAnyMap(s.States)
+	clone.Directions = cloneStringBoolMap(s.Directions)
+	clone.RecvBufHead = clone2DData(s.RecvBufHead)
+	clone.RecvBufHeadReady = clone2DBool(s.RecvBufHeadReady)
+	clone.SendBufHead = clone2DData(s.SendBufHead)
+	clone.SendBufHeadBusy = clone2DBool(s.SendBufHeadBusy)
+	clone.RecvBufQueue = clone3DData(s.RecvBufQueue)
+	clone.SendBufQueue = clone3DData(s.SendBufQueue)
+	clone.OpInputReadCache = make(map[string]cgra.Data)
+	clone.OpTimingCursor = cloneIntIntMap(s.OpTimingCursor)
+	clone.OpTimingLate = cloneIntBoolMap(s.OpTimingLate)
+	clone.OpTimingRollCycle = cloneIntInt64Map(s.OpTimingRollCycle)
+	clone.CurrReservationState = ReservationState{
+		ReservationMap:  cloneIntBoolMap(s.CurrReservationState.ReservationMap),
+		OpToExec:        s.CurrReservationState.OpToExec,
+		RefCountRuntime: cloneStringIntMap(s.CurrReservationState.RefCountRuntime),
+	}
+	return &clone
 }
 
 func normalizeExecutionPolicyString(policy string) string {
@@ -759,6 +900,13 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 	state.StallOpID = 0
 	state.StallOpCode = ""
 	state.OpInputReadCache = make(map[string]cgra.Data)
+	if state.EnableFIFOModel {
+		return i.runInstructionGroupWithSyncOpsTwoPhase(cinst, state, time)
+	}
+	return i.runInstructionGroupWithSyncOpsLegacy(cinst, state, time)
+}
+
+func (i instEmulator) runInstructionGroupWithSyncOpsLegacy(cinst InstructionGroup, state *coreState, time float64) bool {
 	run := true
 	for _, operation := range cinst.Operations {
 		if i.canIssue(operation, state) {
@@ -820,6 +968,14 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 }
 
 func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, state *coreState, time float64) {
+	if state.EnableFIFOModel {
+		i.runInstructionGroupWithAsyncOpsTwoPhase(cinst, state, time)
+		return
+	}
+	i.runInstructionGroupWithAsyncOpsLegacy(cinst, state, time)
+}
+
+func (i instEmulator) runInstructionGroupWithAsyncOpsLegacy(cinst InstructionGroup, state *coreState, time float64) {
 	// Collect all results first
 	allResults := make(map[Operand]cgra.Data)
 	for index := range cinst.Operations {
@@ -852,6 +1008,116 @@ func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, st
 	// Write all results at once
 	for operand, value := range allResults {
 		i.writeOperand(operand, value, state)
+	}
+}
+
+func (i instEmulator) runInstructionGroupWithSyncOpsTwoPhase(cinst InstructionGroup, state *coreState, time float64) bool {
+	workState := state.cloneForEval()
+	run := true
+	for _, operation := range cinst.Operations {
+		if i.canIssue(operation, workState) {
+			continue
+		}
+		run = false
+		break
+	}
+
+	if !run {
+		state.TimingWaitBlocked = workState.TimingWaitBlocked
+		state.StallReason = workState.StallReason
+		state.StallOpID = workState.StallOpID
+		state.StallOpCode = workState.StallOpCode
+		if state.TimingWaitBlocked {
+			if state.StallReason != "" {
+				Trace(
+					"Stall",
+					"Behavior", state.StallReason,
+					"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
+					"Time", float64(state.CurrentCycle),
+					"X", state.TileX,
+					"Y", state.TileY,
+					"ID", state.StallOpID,
+					"OpCode", state.StallOpCode,
+				)
+			}
+			return true
+		}
+		if state.StallReason != "" {
+			Trace(
+				"Stall",
+				"Behavior", state.StallReason,
+				"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
+				"Time", float64(state.CurrentCycle),
+				"X", state.TileX,
+				"Y", state.TileY,
+				"ID", state.StallOpID,
+				"OpCode", state.StallOpCode,
+			)
+		}
+		return false
+	}
+
+	invalidDecrements := make([]int, 0)
+	for index, operation := range cinst.Operations {
+		if operation.InvalidIterations > 0 {
+			invalidDecrements = append(invalidDecrements, index)
+			continue
+		}
+		results := i.RunOperation(operation, workState, time)
+		i.advanceDerivedTimingCursor(operation, workState)
+		for operand, value := range results {
+			i.writeOperand(operand, value, workState)
+		}
+	}
+	*state = *workState
+	i.applyInvalidIterationDecrements(state, invalidDecrements)
+	return true
+}
+
+func (i instEmulator) runInstructionGroupWithAsyncOpsTwoPhase(cinst InstructionGroup, state *coreState, time float64) {
+	workState := state.cloneForEval()
+	allResults := make(map[Operand]cgra.Data)
+	invalidDecrements := make([]int, 0)
+	for index, operation := range cinst.Operations {
+		if !workState.CurrReservationState.ReservationMap[index] {
+			continue
+		}
+		if i.canIssue(operation, workState) {
+			workState.CurrReservationState.ReservationMap[index] = false
+			workState.CurrReservationState.OpToExec--
+			if operation.InvalidIterations > 0 {
+				invalidDecrements = append(invalidDecrements, index)
+				continue
+			}
+			results := i.RunOperation(operation, workState, time)
+			i.advanceDerivedTimingCursor(operation, workState)
+			for operand, value := range results {
+				allResults[operand] = value
+			}
+		}
+	}
+	for operand, value := range allResults {
+		i.writeOperand(operand, value, workState)
+	}
+	*state = *workState
+	i.applyInvalidIterationDecrements(state, invalidDecrements)
+}
+
+func (i instEmulator) applyInvalidIterationDecrements(state *coreState, indices []int) {
+	if len(indices) == 0 || state == nil || state.SelectedBlock == nil {
+		return
+	}
+	if state.PCInBlock < 0 || int(state.PCInBlock) >= len(state.SelectedBlock.InstructionGroups) {
+		return
+	}
+	operations := state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations
+	for _, idx := range indices {
+		if idx < 0 || idx >= len(operations) {
+			continue
+		}
+		if operations[idx].InvalidIterations > 0 {
+			operations[idx].InvalidIterations--
+		}
 	}
 }
 
@@ -1065,12 +1331,15 @@ func (i instEmulator) readOperand(operand Operand, state *coreState) (value cgra
 			}
 			peek, ok := state.recvQueuePeek(color, direction)
 			if !ok {
-				// In sync mode, all ops in the same instruction group share one
-				// snapshot of input heads. If a previous op consumed this queue
-				// head earlier in the same tick, keep returning the snapshot.
-				fallback := state.RecvBufHead[color][direction]
-				state.OpInputReadCache[cacheKey] = fallback
-				return fallback
+				if state.Mode == SyncOp {
+					// In sync mode, all ops in the same instruction group share one
+					// snapshot of input heads. If a previous op consumed this queue
+					// head earlier in the same tick, keep returning the snapshot.
+					fallback := state.RecvBufHead[color][direction]
+					state.OpInputReadCache[cacheKey] = fallback
+					return fallback
+				}
+				panic(fmt.Sprintf("operand queue unexpectedly empty in async mode: %v", operand))
 			}
 			value = peek
 			// consume queue head according to existing sync/async rules

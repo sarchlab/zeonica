@@ -45,6 +45,7 @@ type LinkDefaults struct {
 type Simulator struct {
 	ExecutionModel        string           `yaml:"execution_model"`
 	ExecutionPolicy       string           `yaml:"execution_policy"`
+	EnableFIFOModel       *bool            `yaml:"enable_fifo_model"`
 	StrictMaxSlip         *int64           `yaml:"strict_max_slip"`
 	StrictFailOnViolation *bool            `yaml:"strict_fail_on_violation"`
 	Logging               SimulatorLogging `yaml:"logging"`

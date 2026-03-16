@@ -1,6 +1,6 @@
 {
   "testName": "disable-trace",
-  "logPath": "/tmp/TestInitTraceLoggerDisableTraceCreatesEmptyLogAndReport2255213150/001/trace.log",
+  "logPath": "/tmp/TestInitTraceLoggerDisableTraceCreatesEmptyLogAndReport404064358/001/trace.log",
   "grid": {
     "width": 1,
     "height": 1
@@ -16,6 +16,9 @@
   "memoryCount": 0,
   "totalEvents": 1,
   "wallClockDurationSec": 0,
+  "instThroughputPerCycle": 1,
+  "eventThroughputPerCycle": 1,
+  "instThroughputPerSec": 0,
   "backpressureCount": 0,
   "backpressureCycles": 0,
   "scheduleBubbleStallCount": 0,

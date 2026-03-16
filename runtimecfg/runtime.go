@@ -24,6 +24,7 @@ const (
 	defaultExecutionPolicy = "in_order_dataflow"
 	defaultStrictMaxSlip   = int64(4)
 	defaultStrictFail      = false
+	defaultEnableFIFOModel = false
 	defaultDriverName      = "Driver"
 	defaultDeviceName      = "Device"
 	defaultLogTemplate     = "<test>.json.log"
@@ -51,6 +52,7 @@ type ResolvedConfig struct {
 	ExecutionPolicy       string
 	StrictMaxSlip         int64
 	StrictFailOnViolation bool
+	EnableFIFOModel       bool
 	DriverName            string
 	DriverFreq            sim.Freq
 	DeviceName            string
@@ -119,6 +121,7 @@ func Resolve(spec ArchSpec, testName string) (ResolvedConfig, error) {
 		Columns:                       defaultOrPositive(spec.CGRADefaults.Columns, defaultColumns),
 		ExecutionModel:                defaultOrString(spec.Simulator.ExecutionModel, defaultExecutionModel),
 		ExecutionPolicy:               defaultOrString(spec.Simulator.ExecutionPolicy, defaultExecutionPolicy),
+		EnableFIFOModel:               defaultOrBool(spec.Simulator.EnableFIFOModel, defaultEnableFIFOModel),
 		StrictMaxSlip:                 defaultOrInt64(spec.Simulator.StrictMaxSlip, defaultStrictMaxSlip),
 		StrictFailOnViolation:         defaultOrBool(spec.Simulator.StrictFailOnViolation, defaultStrictFail),
 		DriverName:                    defaultOrString(spec.Simulator.Driver.Name, defaultDriverName),
@@ -292,6 +295,7 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 		WithMemoryMode(cfg.MemoryMode).
 		WithMemoryShare(cfg.MemoryShare).
 		WithCorePortBufferDepth(cfg.CorePortIncomingBufferDepth, cfg.CorePortOutgoingBufferDepth).
+		WithEnableFIFOModel(cfg.EnableFIFOModel).
 		WithRegisterCount(cfg.NumRegisters).
 		WithLocalMemoryWords(cfg.LocalMemoryWords).
 		Build(cfg.DeviceName)

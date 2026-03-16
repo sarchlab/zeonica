@@ -42,6 +42,9 @@ type Report struct {
 	MemoryCount              int64                 `json:"memoryCount"`
 	TotalEvents              int64                 `json:"totalEvents"`
 	WallClockDurationSec     float64               `json:"wallClockDurationSec"`
+	InstThroughputPerCycle   float64               `json:"instThroughputPerCycle"`
+	EventThroughputPerCycle  float64               `json:"eventThroughputPerCycle"`
+	InstThroughputPerSec     float64               `json:"instThroughputPerSec"`
 	BackpressureCount        int64                 `json:"backpressureCount"`
 	BackpressureCycles       int64                 `json:"backpressureCycles"`
 	ScheduleBubbleStallCount int64                 `json:"scheduleBubbleStallCount"`
@@ -349,6 +352,16 @@ func (c *collector) build(opts GenerateOptions) Report {
 			wallClockDurationSec = d
 		}
 	}
+	instThroughputPerCycle := 0.0
+	eventThroughputPerCycle := 0.0
+	if totalCycles > 0 {
+		instThroughputPerCycle = float64(instTotal) / float64(totalCycles)
+		eventThroughputPerCycle = float64(eventTotal) / float64(totalCycles)
+	}
+	instThroughputPerSec := 0.0
+	if wallClockDurationSec > 0 {
+		instThroughputPerSec = float64(instTotal) / wallClockDurationSec
+	}
 
 	return Report{
 		TestName:                 opts.TestName,
@@ -365,6 +378,9 @@ func (c *collector) build(opts GenerateOptions) Report {
 		MemoryCount:              memoryTotal,
 		TotalEvents:              eventTotal,
 		WallClockDurationSec:     wallClockDurationSec,
+		InstThroughputPerCycle:   instThroughputPerCycle,
+		EventThroughputPerCycle:  eventThroughputPerCycle,
+		InstThroughputPerSec:     instThroughputPerSec,
 		BackpressureCount:        c.globalBackpressureCount,
 		BackpressureCycles:       int64(len(c.globalBackpressureCycles)),
 		ScheduleBubbleStallCount: scheduleBubbleStallTotal,
@@ -446,6 +462,13 @@ func PrintSummaryToWriter(report Report, w io.Writer) {
 	fmt.Fprintf(w, "events: total=%d inst=%d send=%d recv=%d memory=%d\n",
 		report.TotalEvents, report.InstCount, report.SendCount, report.RecvCount, report.MemoryCount)
 	fmt.Fprintf(w, "simulation time: wall=%.3fs\n", report.WallClockDurationSec)
+	fmt.Fprintf(
+		w,
+		"throughput: inst/cycle=%.4f events/cycle=%.4f inst/s=%.2f\n",
+		report.InstThroughputPerCycle,
+		report.EventThroughputPerCycle,
+		report.InstThroughputPerSec,
+	)
 	fmt.Fprintf(w, "backpressure: count=%d cycles=%d\n", report.BackpressureCount, report.BackpressureCycles)
 	fmt.Fprintf(
 		w,
