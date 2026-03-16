@@ -10,6 +10,9 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"time"
+
+	"github.com/sarchlab/zeonica/core"
 )
 
 // GenerateOptions controls report generation behavior from a trace log.
@@ -25,22 +28,26 @@ type GenerateOptions struct {
 
 // Report is the aggregate execution summary derived from a trace log.
 type Report struct {
-	TestName        string       `json:"testName,omitempty"`
-	LogPath         string       `json:"logPath"`
-	Grid            GridInfo     `json:"grid"`
-	TotalCycles     int64        `json:"totalCycles"`
-	ActiveCycles    int64        `json:"activeCyclesGlobal"`
-	IdleCycles      int64        `json:"idleCyclesGlobal"`
-	Passed          *bool        `json:"passed,omitempty"`
-	MismatchCount   *int         `json:"mismatchCount,omitempty"`
-	InstCount       int64        `json:"instCount"`
-	SendCount       int64        `json:"sendCount"`
-	RecvCount       int64        `json:"recvCount"`
-	MemoryCount     int64        `json:"memoryCount"`
-	TotalEvents     int64        `json:"totalEvents"`
-	ActiveTileCount int          `json:"activeTileCount"`
-	Tiles           []TileStats  `json:"tiles"`
-	TopHotTiles     []TopHotTile `json:"topHotTiles"`
+	TestName             string                `json:"testName,omitempty"`
+	LogPath              string                `json:"logPath"`
+	Grid                 GridInfo              `json:"grid"`
+	TotalCycles          int64                 `json:"totalCycles"`
+	ActiveCycles         int64                 `json:"activeCyclesGlobal"`
+	IdleCycles           int64                 `json:"idleCyclesGlobal"`
+	Passed               *bool                 `json:"passed,omitempty"`
+	MismatchCount        *int                  `json:"mismatchCount,omitempty"`
+	InstCount            int64                 `json:"instCount"`
+	SendCount            int64                 `json:"sendCount"`
+	RecvCount            int64                 `json:"recvCount"`
+	MemoryCount          int64                 `json:"memoryCount"`
+	TotalEvents          int64                 `json:"totalEvents"`
+	WallClockDurationSec float64               `json:"wallClockDurationSec"`
+	BackpressureCount    int64                 `json:"backpressureCount"`
+	BackpressureCycles   int64                 `json:"backpressureCycles"`
+	ActiveTileCount      int                   `json:"activeTileCount"`
+	Tiles                []TileStats           `json:"tiles"`
+	TopHotTiles          []TopHotTile          `json:"topHotTiles"`
+	TopBackpressureTiles []TopBackpressureTile `json:"topBackpressureTiles"`
 }
 
 // GridInfo describes the grid size used by the workload.
@@ -51,16 +58,17 @@ type GridInfo struct {
 
 // TileStats stores per-tile metrics in the generated report.
 type TileStats struct {
-	X              int     `json:"x"`
-	Y              int     `json:"y"`
-	Coord          string  `json:"coord"`
-	ActiveCycles   int64   `json:"activeCycles"`
-	UtilizationPct float64 `json:"utilizationPct"`
-	InstCount      int64   `json:"instCount"`
-	SendCount      int64   `json:"sendCount"`
-	RecvCount      int64   `json:"recvCount"`
-	MemoryCount    int64   `json:"memoryCount"`
-	TotalEvents    int64   `json:"totalEvents"`
+	X                 int     `json:"x"`
+	Y                 int     `json:"y"`
+	Coord             string  `json:"coord"`
+	ActiveCycles      int64   `json:"activeCycles"`
+	UtilizationPct    float64 `json:"utilizationPct"`
+	InstCount         int64   `json:"instCount"`
+	SendCount         int64   `json:"sendCount"`
+	RecvCount         int64   `json:"recvCount"`
+	MemoryCount       int64   `json:"memoryCount"`
+	TotalEvents       int64   `json:"totalEvents"`
+	BackpressureCount int64   `json:"backpressureCount"`
 }
 
 // TopHotTile is a ranked hot tile summary entry.
@@ -71,6 +79,14 @@ type TopHotTile struct {
 	UtilizationPct float64 `json:"utilizationPct"`
 	ActiveCycles   int64   `json:"activeCycles"`
 	TotalEvents    int64   `json:"totalEvents"`
+}
+
+// TopBackpressureTile is a ranked backpressure hot tile entry.
+type TopBackpressureTile struct {
+	X                 int    `json:"x"`
+	Y                 int    `json:"y"`
+	Coord             string `json:"coord"`
+	BackpressureCount int64  `json:"backpressureCount"`
 }
 
 type traceEvent struct {
@@ -92,95 +108,156 @@ type tileCoord struct {
 }
 
 type tileAccumulator struct {
-	cycles      map[int64]struct{}
-	instCount   int64
-	sendCount   int64
-	recvCount   int64
-	memoryCount int64
-	totalEvents int64
+	cycles             map[int64]struct{}
+	backpressureCycles map[int64]struct{}
+	instCount          int64
+	sendCount          int64
+	recvCount          int64
+	memoryCount        int64
+	totalEvents        int64
+	backpressureCount  int64
+}
+
+type collector struct {
+	tileData                 map[tileCoord]*tileAccumulator
+	globalCycleSet           map[int64]struct{}
+	globalBackpressureCycles map[int64]struct{}
+	maxCycle                 int64
+	maxX                     int
+	maxY                     int
+	globalBackpressureCount  int64
+	minWallTS                *time.Time
+	maxWallTS                *time.Time
+}
+
+// Observer collects report statistics directly from runtime trace observations.
+type Observer struct {
+	collector *collector
 }
 
 var tileEndpointPattern = regexp.MustCompile(`Device\.Tile\[(\d+)\]\[(\d+)\]\.Core\.`)
 
-// GenerateFromLog builds a report by parsing a JSON trace log.
-//
-//nolint:gocyclo,funlen
-func GenerateFromLog(opts GenerateOptions) (Report, error) {
-	if opts.LogPath == "" {
-		return Report{}, fmt.Errorf("log path is required")
+// NewObserver creates a report observer for runtime trace events.
+func NewObserver() *Observer {
+	return &Observer{
+		collector: newCollector(),
+	}
+}
+
+func newCollector() *collector {
+	return &collector{
+		tileData:                 make(map[tileCoord]*tileAccumulator),
+		globalCycleSet:           make(map[int64]struct{}),
+		globalBackpressureCycles: make(map[int64]struct{}),
+		maxCycle:                 -1,
+		maxX:                     -1,
+		maxY:                     -1,
+	}
+}
+
+// Observe records a runtime trace observation into the in-memory report collector.
+func (o *Observer) Observe(observation core.TraceObservation) {
+	if o == nil || o.collector == nil {
+		return
 	}
 
+	event := traceEvent{
+		Timestamp: observation.WallTime.Format(time.RFC3339Nano),
+		Msg:       observation.Msg,
+		Behavior:  observation.Behavior,
+		Time:      observation.Time,
+		X:         observation.X,
+		Y:         observation.Y,
+		Src:       observation.Src,
+		Dst:       observation.Dst,
+		From:      observation.From,
+		To:        observation.To,
+	}
+	o.collector.observe(event)
+}
+
+// Build materializes a Report using the collected runtime events.
+func (o *Observer) Build(opts GenerateOptions) Report {
+	if o == nil || o.collector == nil {
+		return Report{
+			TestName: opts.TestName,
+			LogPath:  opts.LogPath,
+			Grid: GridInfo{
+				Width:  opts.GridWidth,
+				Height: opts.GridHeight,
+			},
+			Passed:        opts.Passed,
+			MismatchCount: opts.MismatchCount,
+		}
+	}
+	return o.collector.build(opts)
+}
+
+//nolint:gocyclo
+func (c *collector) observe(event traceEvent) {
+	if ts, err := time.Parse(time.RFC3339Nano, event.Timestamp); err == nil {
+		if c.minWallTS == nil || ts.Before(*c.minWallTS) {
+			t := ts
+			c.minWallTS = &t
+		}
+		if c.maxWallTS == nil || ts.After(*c.maxWallTS) {
+			t := ts
+			c.maxWallTS = &t
+		}
+	}
+
+	coord, ok := resolveTileCoord(event)
+	if !ok {
+		return
+	}
+
+	if coord.x > c.maxX {
+		c.maxX = coord.x
+	}
+	if coord.y > c.maxY {
+		c.maxY = coord.y
+	}
+
+	acc, exists := c.tileData[coord]
+	if !exists {
+		acc = &tileAccumulator{
+			cycles:             make(map[int64]struct{}),
+			backpressureCycles: make(map[int64]struct{}),
+		}
+		c.tileData[coord] = acc
+	}
+
+	isBackpressureEvent := event.Msg == "Backpressure"
+	cycle, hasCycle := parseCycle(event.Time)
+	if hasCycle && !isBackpressureEvent {
+		acc.cycles[cycle] = struct{}{}
+		c.globalCycleSet[cycle] = struct{}{}
+		if cycle > c.maxCycle {
+			c.maxCycle = cycle
+		}
+	}
+
+	if classifyAndCount(event, acc, cycle, hasCycle) {
+		c.globalBackpressureCount++
+		if hasCycle {
+			c.globalBackpressureCycles[cycle] = struct{}{}
+		}
+	}
+}
+
+//nolint:gocyclo,funlen
+func (c *collector) build(opts GenerateOptions) Report {
 	topN := opts.TopN
 	if topN <= 0 {
 		topN = 5
 	}
 
-	file, err := os.Open(opts.LogPath)
-	if err != nil {
-		return Report{}, fmt.Errorf("open log file: %w", err)
-	}
-	defer func() { _ = file.Close() }()
-
-	tileData := make(map[tileCoord]*tileAccumulator)
-	globalCycleSet := make(map[int64]struct{})
-
-	var maxCycle int64 = -1
-	maxX, maxY := -1, -1
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-
-		var event traceEvent
-		if err := json.Unmarshal(line, &event); err != nil {
-			continue
-		}
-
-		coord, ok := resolveTileCoord(event)
-		if !ok {
-			continue
-		}
-
-		if coord.x > maxX {
-			maxX = coord.x
-		}
-		if coord.y > maxY {
-			maxY = coord.y
-		}
-
-		acc, exists := tileData[coord]
-		if !exists {
-			acc = &tileAccumulator{
-				cycles: make(map[int64]struct{}),
-			}
-			tileData[coord] = acc
-		}
-
-		cycle, hasCycle := parseCycle(event.Time)
-		if hasCycle {
-			acc.cycles[cycle] = struct{}{}
-			globalCycleSet[cycle] = struct{}{}
-			if cycle > maxCycle {
-				maxCycle = cycle
-			}
-		}
-
-		classifyAndCount(event, acc)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return Report{}, fmt.Errorf("scan log file: %w", err)
-	}
-
 	totalCycles := int64(0)
-	if maxCycle >= 0 {
-		totalCycles = maxCycle + 1
+	if c.maxCycle >= 0 {
+		totalCycles = c.maxCycle + 1
 	}
 
-	activeCycles := int64(len(globalCycleSet))
+	activeCycles := int64(len(c.globalCycleSet))
 	idleCycles := totalCycles - activeCycles
 	if idleCycles < 0 {
 		idleCycles = 0
@@ -188,11 +265,11 @@ func GenerateFromLog(opts GenerateOptions) (Report, error) {
 
 	width := opts.GridWidth
 	if width <= 0 {
-		width = maxX + 1
+		width = c.maxX + 1
 	}
 	height := opts.GridHeight
 	if height <= 0 {
-		height = maxY + 1
+		height = c.maxY + 1
 	}
 	if width < 0 {
 		width = 0
@@ -201,8 +278,8 @@ func GenerateFromLog(opts GenerateOptions) (Report, error) {
 		height = 0
 	}
 
-	tiles := make([]TileStats, 0, len(tileData))
-	for coord, acc := range tileData {
+	tiles := make([]TileStats, 0, len(c.tileData))
+	for coord, acc := range c.tileData {
 		activeTileCycles := int64(len(acc.cycles))
 		util := 0.0
 		if totalCycles > 0 {
@@ -210,16 +287,17 @@ func GenerateFromLog(opts GenerateOptions) (Report, error) {
 		}
 
 		tiles = append(tiles, TileStats{
-			X:              coord.x,
-			Y:              coord.y,
-			Coord:          formatCoord(coord.x, coord.y),
-			ActiveCycles:   activeTileCycles,
-			UtilizationPct: util,
-			InstCount:      acc.instCount,
-			SendCount:      acc.sendCount,
-			RecvCount:      acc.recvCount,
-			MemoryCount:    acc.memoryCount,
-			TotalEvents:    acc.totalEvents,
+			X:                 coord.x,
+			Y:                 coord.y,
+			Coord:             formatCoord(coord.x, coord.y),
+			ActiveCycles:      activeTileCycles,
+			UtilizationPct:    util,
+			InstCount:         acc.instCount,
+			SendCount:         acc.sendCount,
+			RecvCount:         acc.recvCount,
+			MemoryCount:       acc.memoryCount,
+			TotalEvents:       acc.totalEvents,
+			BackpressureCount: acc.backpressureCount,
 		})
 	}
 
@@ -245,27 +323,75 @@ func GenerateFromLog(opts GenerateOptions) (Report, error) {
 	}
 
 	topHotTiles := buildTopHotTiles(tiles, topN)
-
-	report := Report{
-		TestName:        opts.TestName,
-		LogPath:         opts.LogPath,
-		Grid:            GridInfo{Width: width, Height: height},
-		TotalCycles:     totalCycles,
-		ActiveCycles:    activeCycles,
-		IdleCycles:      idleCycles,
-		Passed:          opts.Passed,
-		MismatchCount:   opts.MismatchCount,
-		InstCount:       instTotal,
-		SendCount:       sendTotal,
-		RecvCount:       recvTotal,
-		MemoryCount:     memoryTotal,
-		TotalEvents:     eventTotal,
-		ActiveTileCount: len(tiles),
-		Tiles:           tiles,
-		TopHotTiles:     topHotTiles,
+	topBackpressureTiles := buildTopBackpressureTiles(tiles, topN)
+	wallClockDurationSec := 0.0
+	if c.minWallTS != nil && c.maxWallTS != nil {
+		d := c.maxWallTS.Sub(*c.minWallTS).Seconds()
+		if d > 0 {
+			wallClockDurationSec = d
+		}
 	}
 
-	return report, nil
+	return Report{
+		TestName:             opts.TestName,
+		LogPath:              opts.LogPath,
+		Grid:                 GridInfo{Width: width, Height: height},
+		TotalCycles:          totalCycles,
+		ActiveCycles:         activeCycles,
+		IdleCycles:           idleCycles,
+		Passed:               opts.Passed,
+		MismatchCount:        opts.MismatchCount,
+		InstCount:            instTotal,
+		SendCount:            sendTotal,
+		RecvCount:            recvTotal,
+		MemoryCount:          memoryTotal,
+		TotalEvents:          eventTotal,
+		WallClockDurationSec: wallClockDurationSec,
+		BackpressureCount:    c.globalBackpressureCount,
+		BackpressureCycles:   int64(len(c.globalBackpressureCycles)),
+		ActiveTileCount:      len(tiles),
+		Tiles:                tiles,
+		TopHotTiles:          topHotTiles,
+		TopBackpressureTiles: topBackpressureTiles,
+	}
+}
+
+// GenerateFromLog builds a report by parsing a JSON trace log.
+//
+//nolint:gocyclo,funlen
+func GenerateFromLog(opts GenerateOptions) (Report, error) {
+	if opts.LogPath == "" {
+		return Report{}, fmt.Errorf("log path is required")
+	}
+
+	file, err := os.Open(opts.LogPath)
+	if err != nil {
+		return Report{}, fmt.Errorf("open log file: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	collector := newCollector()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var event traceEvent
+		if err := json.Unmarshal(line, &event); err != nil {
+			continue
+		}
+
+		collector.observe(event)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return Report{}, fmt.Errorf("scan log file: %w", err)
+	}
+
+	return collector.build(opts), nil
 }
 
 // SaveJSON writes a report as pretty-printed JSON.
@@ -298,6 +424,8 @@ func PrintSummaryToWriter(report Report, w io.Writer) {
 	fmt.Fprintf(w, "cycles: total=%d active=%d idle=%d\n", report.TotalCycles, report.ActiveCycles, report.IdleCycles)
 	fmt.Fprintf(w, "events: total=%d inst=%d send=%d recv=%d memory=%d\n",
 		report.TotalEvents, report.InstCount, report.SendCount, report.RecvCount, report.MemoryCount)
+	fmt.Fprintf(w, "simulation time: wall=%.3fs\n", report.WallClockDurationSec)
+	fmt.Fprintf(w, "backpressure: count=%d cycles=%d\n", report.BackpressureCount, report.BackpressureCycles)
 	fmt.Fprintf(w, "active tiles: %d\n", report.ActiveTileCount)
 	if report.Passed != nil {
 		fmt.Fprintf(w, "passed: %t\n", *report.Passed)
@@ -313,9 +441,15 @@ func PrintSummaryToWriter(report Report, w io.Writer) {
 				idx+1, tile.Coord, tile.UtilizationPct, tile.ActiveCycles, tile.TotalEvents)
 		}
 	}
+	if len(report.TopBackpressureTiles) > 0 {
+		fmt.Fprintln(w, "top backpressure tiles:")
+		for idx, tile := range report.TopBackpressureTiles {
+			fmt.Fprintf(w, "  %d) %s bp=%d\n", idx+1, tile.Coord, tile.BackpressureCount)
+		}
+	}
 }
 
-func classifyAndCount(event traceEvent, acc *tileAccumulator) {
+func classifyAndCount(event traceEvent, acc *tileAccumulator, cycle int64, hasCycle bool) bool {
 	switch event.Msg {
 	case "Inst":
 		acc.instCount++
@@ -331,7 +465,14 @@ func classifyAndCount(event traceEvent, acc *tileAccumulator) {
 			acc.recvCount++
 		}
 		acc.totalEvents++
+	case "Backpressure":
+		acc.backpressureCount++
+		if hasCycle {
+			acc.backpressureCycles[cycle] = struct{}{}
+		}
+		return true
 	}
+	return false
 }
 
 func resolveTileCoord(event traceEvent) (tileCoord, bool) {
@@ -379,13 +520,14 @@ func parseTileFromEndpoint(endpoint string) (tileCoord, bool) {
 		return tileCoord{}, false
 	}
 
-	var x int
-	var y int
-	if _, err := fmt.Sscanf(matches[0], "Device.Tile[%d][%d].Core.", &x, &y); err != nil {
+	var row int
+	var col int
+	if _, err := fmt.Sscanf(matches[0], "Device.Tile[%d][%d].Core.", &row, &col); err != nil {
 		return tileCoord{}, false
 	}
 
-	return tileCoord{x: x, y: y}, true
+	// Endpoint naming is Tile[row][col], while report coordinates are (x=col, y=row).
+	return tileCoord{x: col, y: row}, true
 }
 
 func parseCycle(timeValue *float64) (int64, bool) {
@@ -435,6 +577,39 @@ func buildTopHotTiles(tiles []TileStats, topN int) []TopHotTile {
 		})
 	}
 
+	return out
+}
+
+func buildTopBackpressureTiles(tiles []TileStats, topN int) []TopBackpressureTile {
+	if len(tiles) == 0 || topN <= 0 {
+		return nil
+	}
+	tmp := make([]TileStats, len(tiles))
+	copy(tmp, tiles)
+	sort.Slice(tmp, func(i, j int) bool {
+		if tmp[i].BackpressureCount != tmp[j].BackpressureCount {
+			return tmp[i].BackpressureCount > tmp[j].BackpressureCount
+		}
+		if tmp[i].Y != tmp[j].Y {
+			return tmp[i].Y < tmp[j].Y
+		}
+		return tmp[i].X < tmp[j].X
+	})
+	if topN > len(tmp) {
+		topN = len(tmp)
+	}
+	out := make([]TopBackpressureTile, 0, topN)
+	for i := 0; i < topN; i++ {
+		if tmp[i].BackpressureCount <= 0 {
+			continue
+		}
+		out = append(out, TopBackpressureTile{
+			X:                 tmp[i].X,
+			Y:                 tmp[i].Y,
+			Coord:             tmp[i].Coord,
+			BackpressureCount: tmp[i].BackpressureCount,
+		})
+	}
 	return out
 }
 

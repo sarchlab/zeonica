@@ -10,9 +10,6 @@ const defaultTopN = 5
 
 // BuildReportOptions builds report options from resolved runtime configuration.
 func (r *Runtime) BuildReportOptions(topN int, passed *bool, mismatchCount *int) (report.GenerateOptions, error) {
-	if !r.Config.LoggingEnabled {
-		return report.GenerateOptions{}, fmt.Errorf("logging is disabled, cannot build report options from trace log")
-	}
 	if r.Config.LogPath == "" {
 		return report.GenerateOptions{}, fmt.Errorf("log path is empty, cannot build report options")
 	}
@@ -43,9 +40,14 @@ func (r *Runtime) GenerateAndSaveReport(topN int, passed *bool, mismatchCount *i
 		return report.Report{}, "", err
 	}
 
-	result, err := report.GenerateFromLog(opts)
-	if err != nil {
-		return report.Report{}, "", fmt.Errorf("generate report from log: %w", err)
+	var result report.Report
+	if r.Observer != nil {
+		result = r.Observer.Build(opts)
+	} else {
+		result, err = report.GenerateFromLog(opts)
+		if err != nil {
+			return report.Report{}, "", fmt.Errorf("generate report from log: %w", err)
+		}
 	}
 
 	reportPath := r.DefaultReportPath()

@@ -3,6 +3,7 @@ package core
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"regexp"
 	"strconv"
@@ -104,6 +105,7 @@ type Operation struct {
 	SrcOperands       OperandList
 	ID                int // ID from YAML file
 	InvalidIterations int // Invalid iterations from YAML file
+	TimeStep          int // Time step from YAML file
 }
 
 // OperandList wraps source or destination operands for an operation.
@@ -135,8 +137,9 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 
 	config := root.ArrayConfig
 
-	// Debug: Print the parsed config
-	fmt.Printf("Debug: Parsed config - Rows: %d, Cols: %d, Cores: %d\n", config.Rows, config.Cols, len(config.Cores))
+	if DebugEnabled() {
+		slog.Debug("ParsedProgramConfig", "rows", config.Rows, "cols", config.Cols, "cores", len(config.Cores))
+	}
 
 	// Convert to map[(x,y)]Program
 	programMap := make(map[string]Program)
@@ -144,7 +147,9 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 	for _, core := range config.Cores {
 		// Create coordinate key
 		coordKey := fmt.Sprintf("(%d,%d)", core.Column, core.Row)
-		fmt.Printf("Debug: Processing core at %s with %d entries\n", coordKey, len(core.Entries))
+		if DebugEnabled() {
+			slog.Debug("ProcessingProgramCore", "coord", coordKey, "entries", len(core.Entries))
+		}
 
 		// Convert core entries to Program structure
 		var entryBlocks []EntryBlock
@@ -192,6 +197,7 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 						DstOperands:       OperandList{Operands: dstOperands},
 						ID:                yamlOp.ID,
 						InvalidIterations: yamlOp.InvalidIterations,
+						TimeStep:          yamlOp.TimeStep,
 					}
 
 					operations = append(operations, operation)

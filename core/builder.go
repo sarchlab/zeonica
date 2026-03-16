@@ -7,11 +7,12 @@ import (
 
 // Builder can create new cores.
 type Builder struct {
-	engine      sim.Engine
-	freq        sim.Freq
-	exitAddr    *bool
-	retValAddr  *uint32
-	exitReqAddr *float64
+	engine          sim.Engine
+	freq            sim.Freq
+	exitAddr        *bool
+	retValAddr      *uint32
+	exitReqAddr     *float64
+	executionPolicy string
 }
 
 // WithEngine sets the engine.
@@ -43,6 +44,12 @@ func (b Builder) WithExitReqAddr(exitReqAddr *float64) Builder {
 	return b
 }
 
+// WithExecutionPolicy sets the execution policy for issue-time gating.
+func (b Builder) WithExecutionPolicy(policy string) Builder {
+	b.executionPolicy = policy
+	return b
+}
+
 // Build creates a core.
 //
 //nolint:funlen
@@ -51,7 +58,8 @@ func (b Builder) Build(name string) *Core {
 
 	c.TickingComponent = sim.NewTickingComponent(name, b.engine, b.freq, c)
 	c.emu = instEmulator{
-		CareFlags: true,
+		CareFlags:       true,
+		ExecutionPolicy: normalizeExecutionPolicyString(b.executionPolicy),
 	}
 	c.state = coreState{
 		exit:                 b.exitAddr,
@@ -80,6 +88,7 @@ func (b Builder) Build(name string) *Core {
 		IsToWriteMemory:  false,
 		States:           make(map[string]interface{}),
 		Mode:             SyncOp,
+		CurrentCycle:     0,
 		CurrReservationState: ReservationState{
 			ReservationMap:  make(map[int]bool),
 			OpToExec:        0,

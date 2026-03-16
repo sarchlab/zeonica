@@ -26,18 +26,20 @@ type CGRADefaults struct {
 
 // Simulator contains simulator runtime settings from arch spec.
 type Simulator struct {
-	ExecutionModel string           `yaml:"execution_model"`
-	Logging        SimulatorLogging `yaml:"logging"`
-	Driver         NamedComponent   `yaml:"driver"`
-	Device         DeviceComponent  `yaml:"device"`
-	Extra          map[string]any   `yaml:",inline"`
+	ExecutionModel  string           `yaml:"execution_model"`
+	ExecutionPolicy string           `yaml:"execution_policy"`
+	Logging         SimulatorLogging `yaml:"logging"`
+	Driver          NamedComponent   `yaml:"driver"`
+	Device          DeviceComponent  `yaml:"device"`
+	Extra           map[string]any   `yaml:",inline"`
 }
 
 // SimulatorLogging configures trace logging behavior.
 type SimulatorLogging struct {
-	Enabled *bool          `yaml:"enabled"`
-	File    string         `yaml:"file"`
-	Extra   map[string]any `yaml:",inline"`
+	Enabled     *bool          `yaml:"enabled"`
+	EnableTrace *bool          `yaml:"enableTrace"`
+	File        string         `yaml:"file"`
+	Extra       map[string]any `yaml:",inline"`
 }
 
 // NamedComponent contains shared component naming/frequency fields.

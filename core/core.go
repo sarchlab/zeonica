@@ -59,14 +59,19 @@ func (c *Core) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
 	if x == int(c.state.TileX) && y == int(c.state.TileY) {
 		c.state.Memory[baseAddr] = data
 		//fmt.Printf("Core [%d][%d] write memory[%d] = %d\n", c.state.TileX, c.state.TileY, baseAddr, c.state.Memory[baseAddr])
-		Trace("Memory",
-			"Behavior", "WriteMemory",
-			"Time", float64(c.Engine.CurrentTime()*1e9),
-			"Data", data,
-			"X", x,
-			"Y", y,
-			"Addr", baseAddr,
-		)
+		timeValue := float64(c.Engine.CurrentTime() * 1e9)
+		if TraceEnabled() {
+			Trace("Memory",
+				"Behavior", "WriteMemory",
+				"Time", timeValue,
+				"Data", data,
+				"X", x,
+				"Y", y,
+				"Addr", baseAddr,
+			)
+		} else {
+			ObserveMemory("WriteMemory", timeValue, x, y, "", "")
+		}
 	} else {
 		panic(fmt.Sprintf("Invalid Tile: Expect (%d, %d)，but get (%d, %d)", c.state.TileX, c.state.TileY, x, y))
 	}
@@ -85,6 +90,7 @@ func (c *Core) MapProgram(program interface{}, x int, y int) {
 		panic("MapProgram expects core.Program type")
 	}
 	c.state.PCInBlock = -1
+	c.state.CurrentCycle = 0
 	c.state.TileX = uint32(x)
 	c.state.TileY = uint32(y)
 }
@@ -96,6 +102,7 @@ func (c *Core) Tick() (madeProgress bool) {
 	// madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
 	madeProgress = c.runProgram() || madeProgress
 	madeProgress = c.doSend() || madeProgress
+	c.state.CurrentCycle++
 	return madeProgress
 }
 
@@ -103,6 +110,7 @@ func makeBytesFromUint32(data uint32) []byte {
 	return []byte{byte(data >> 24), byte(data >> 16), byte(data >> 8), byte(data)}
 }
 
+//nolint:gocyclo
 func (c *Core) doSend() bool {
 	madeProgress := false
 	for i := 0; i < 8; i++ { // only 8 directions
@@ -127,15 +135,20 @@ func (c *Core) doSend() bool {
 				continue
 			}
 
-			Trace("DataFlow",
-				"Behavior", "Send",
-				slog.Float64("Time", float64(c.Engine.CurrentTime()*1e9)),
-				"Data", msg.Data.First(),
-				"Pred", c.state.SendBufHead[color][i].Pred,
-				"Color", color,
-				"Src", msg.Src,
-				"Dst", msg.Dst,
-			)
+			timeValue := float64(c.Engine.CurrentTime() * 1e9)
+			if TraceEnabled() {
+				Trace("DataFlow",
+					"Behavior", "Send",
+					slog.Float64("Time", timeValue),
+					"Data", msg.Data.First(),
+					"Pred", c.state.SendBufHead[color][i].Pred,
+					"Color", color,
+					"Src", msg.Src,
+					"Dst", msg.Dst,
+				)
+			} else {
+				ObserveDataFlow("Send", timeValue, "", "", string(msg.Src), string(msg.Dst))
+			}
 			c.state.SendBufHeadBusy[color][i] = false
 		}
 	}
@@ -156,15 +169,20 @@ func (c *Core) doSend() bool {
 				return madeProgress
 			}
 
-			Trace("Memory",
-				"Behavior", "Send",
-				slog.Float64("Time", float64(c.Engine.CurrentTime()*1e9)),
-				"Data", c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router].First(),
-				"Pred", c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router].Pred,
-				"Color", "R",
-				"Src", msg.Src,
-				"Dst", msg.Dst,
-			)
+			timeValue := float64(c.Engine.CurrentTime() * 1e9)
+			if TraceEnabled() {
+				Trace("Memory",
+					"Behavior", "Send",
+					slog.Float64("Time", timeValue),
+					"Data", c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router].First(),
+					"Pred", c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router].Pred,
+					"Color", "R",
+					"Src", msg.Src,
+					"Dst", msg.Dst,
+				)
+			} else {
+				ObserveMemory("Send", timeValue, int(c.state.TileX), int(c.state.TileY), string(msg.Src), string(msg.Dst))
+			}
 			c.state.SendBufHeadBusy[c.emu.getColorIndex("R")][cgra.Router] = false
 		} else {
 			msg := mem.ReadReqBuilder{}.
@@ -179,14 +197,19 @@ func (c *Core) doSend() bool {
 				return madeProgress
 			}
 
-			Trace("Memory",
-				"Behavior", "Send",
-				slog.Float64("Time", float64(c.Engine.CurrentTime()*1e9)),
-				"Data", c.state.AddrBuf,
-				"Color", "R",
-				"Src", msg.Src,
-				"Dst", msg.Dst,
-			)
+			timeValue := float64(c.Engine.CurrentTime() * 1e9)
+			if TraceEnabled() {
+				Trace("Memory",
+					"Behavior", "Send",
+					slog.Float64("Time", timeValue),
+					"Data", c.state.AddrBuf,
+					"Color", "R",
+					"Src", msg.Src,
+					"Dst", msg.Dst,
+				)
+			} else {
+				ObserveMemory("Send", timeValue, int(c.state.TileX), int(c.state.TileY), string(msg.Src), string(msg.Dst))
+			}
 			c.state.SendBufHeadBusy[c.emu.getColorIndex("R")][cgra.Router] = false
 		}
 	}
@@ -198,6 +221,7 @@ func convert4BytesToUint32(data []byte) uint32 {
 	return uint32(data[0])<<24 | uint32(data[1])<<16 | uint32(data[2])<<8 | uint32(data[3])
 }
 
+//nolint:gocyclo
 func (c *Core) doRecv() bool {
 	madeProgress := false
 	for i := 0; i < 8; i++ { //direction
@@ -226,15 +250,20 @@ func (c *Core) doRecv() bool {
 			c.state.RecvBufHeadReady[color][i] = true
 			c.state.RecvBufHead[color][i] = msg.Data
 
-			Trace("DataFlow",
-				"Behavior", "Recv",
-				"Time", float64(c.Engine.CurrentTime()*1e9),
-				"Data", msg.Data.First(),
-				"Pred", c.state.RecvBufHead[color][i].Pred,
-				"Src", msg.Src,
-				"Dst", msg.Dst,
-				"Color", color,
-			)
+			timeValue := float64(c.Engine.CurrentTime() * 1e9)
+			if TraceEnabled() {
+				Trace("DataFlow",
+					"Behavior", "Recv",
+					"Time", timeValue,
+					"Data", msg.Data.First(),
+					"Pred", c.state.RecvBufHead[color][i].Pred,
+					"Src", msg.Src,
+					"Dst", msg.Dst,
+					"Color", color,
+				)
+			} else {
+				ObserveDataFlow("Recv", timeValue, "", "", string(msg.Src), string(msg.Dst))
+			}
 
 			c.ports[cgra.Side(i)].local.RetrieveIncoming()
 			madeProgress = true
@@ -254,15 +283,20 @@ func (c *Core) doRecv() bool {
 		c.state.RecvBufHeadReady[c.emu.getColorIndex("R")][cgra.Router] = true
 		c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router] = cgra.NewScalar(convert4BytesToUint32(msg.Data))
 
-		Trace("Memory",
-			"Behavior", "Recv",
-			"Time", float64(c.Engine.CurrentTime()*1e9),
-			"Data", msg.Data,
-			"Src", msg.Src,
-			"Dst", msg.Dst,
-			"Pred", c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router].Pred,
-			"Color", "R",
-		)
+		timeValue := float64(c.Engine.CurrentTime() * 1e9)
+		if TraceEnabled() {
+			Trace("Memory",
+				"Behavior", "Recv",
+				"Time", timeValue,
+				"Data", msg.Data,
+				"Src", msg.Src,
+				"Dst", msg.Dst,
+				"Pred", c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router].Pred,
+				"Color", "R",
+			)
+		} else {
+			ObserveMemory("Recv", timeValue, int(c.state.TileX), int(c.state.TileY), string(msg.Src), string(msg.Dst))
+		}
 
 		c.ports[cgra.Router].local.RetrieveIncoming()
 		madeProgress = true
@@ -270,14 +304,19 @@ func (c *Core) doRecv() bool {
 		c.state.RecvBufHeadReady[c.emu.getColorIndex("R")][cgra.Router] = true
 		c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router] = cgra.NewScalar(0)
 
-		Trace("Memory",
-			"Behavior", "Recv",
-			"Time", float64(c.Engine.CurrentTime()*1e9),
-			"Src", msg.Src,
-			"Dst", msg.Dst,
-			"Pred", c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router].Pred,
-			"Color", "R",
-		)
+		timeValue := float64(c.Engine.CurrentTime() * 1e9)
+		if TraceEnabled() {
+			Trace("Memory",
+				"Behavior", "Recv",
+				"Time", timeValue,
+				"Src", msg.Src,
+				"Dst", msg.Dst,
+				"Pred", c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router].Pred,
+				"Color", "R",
+			)
+		} else {
+			ObserveMemory("Recv", timeValue, int(c.state.TileX), int(c.state.TileY), string(msg.Src), string(msg.Dst))
+		}
 
 		c.ports[cgra.Router].local.RetrieveIncoming()
 		madeProgress = true

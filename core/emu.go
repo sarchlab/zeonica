@@ -24,6 +24,12 @@ const (
 	AsyncOp
 )
 
+const (
+	ExecutionPolicyStrictTimed      = "strict_timed"
+	ExecutionPolicyElasticScheduled = "elastic_scheduled"
+	ExecutionPolicyInOrderDataflow  = "in_order_dataflow"
+)
+
 type routingRule struct {
 	src   cgra.Side
 	dst   cgra.Side
@@ -80,7 +86,7 @@ func (r *ReservationState) SetReservationMap(ig InstructionGroup, state *coreSta
 		r.ReservationMap[i] = true
 	}
 	r.OpToExec = len(ig.Operations)
-	print("SetReservationMap: ", r.OpToExec, "\n")
+	// print("SetReservationMap: ", r.OpToExec, "\n")
 }
 
 type coreState struct {
@@ -112,10 +118,115 @@ type coreState struct {
 	routingRules []*routingRule
 	triggers     []*Trigger
 	CurrentTime  float64 // current simulation time for logging
+	CurrentCycle int64
 }
 
 type instEmulator struct {
-	CareFlags bool
+	CareFlags       bool
+	ExecutionPolicy string
+}
+
+func normalizeExecutionPolicyString(policy string) string {
+	text := strings.ToLower(strings.TrimSpace(policy))
+	switch text {
+	case ExecutionPolicyStrictTimed, "strict-timed", "static":
+		return ExecutionPolicyStrictTimed
+	case ExecutionPolicyElasticScheduled, "elastic-scheduled", "hybrid":
+		return ExecutionPolicyElasticScheduled
+	case "", ExecutionPolicyInOrderDataflow, "in-order-dataflow", "dynamic":
+		return ExecutionPolicyInOrderDataflow
+	default:
+		// Fall back to in-order dataflow for backward compatibility.
+		return ExecutionPolicyInOrderDataflow
+	}
+}
+
+func (i instEmulator) panicSynchronizationViolation(operation Operation, state *coreState, reason string) {
+	currentStep, targetStep, ii := i.resolveScheduleStep(operation, state)
+	panic(fmt.Sprintf(
+		"synchronization violation under %s: op=%s id=%d cycle=%d schedule_step=%d target_step=%d ii=%d raw_timestep=%d tile=(%d,%d): %s",
+		normalizeExecutionPolicyString(i.ExecutionPolicy),
+		operation.OpCode,
+		operation.ID,
+		state.CurrentCycle,
+		currentStep,
+		targetStep,
+		ii,
+		operation.TimeStep,
+		state.TileX,
+		state.TileY,
+		reason,
+	))
+}
+
+func (i instEmulator) resolveScheduleStep(operation Operation, state *coreState) (currentStep int64, targetStep int64, ii int64) {
+	ii = int64(state.Code.CompiledII)
+	if ii <= 0 {
+		return state.CurrentCycle, int64(operation.TimeStep), 0
+	}
+
+	currentStep = state.CurrentCycle % ii
+	if currentStep < 0 {
+		currentStep += ii
+	}
+
+	targetStep = int64(operation.TimeStep)
+	if targetStep < 0 {
+		panic(fmt.Sprintf(
+			"invalid time_step=%d for compiled_ii=%d at op=%s id=%d tile=(%d,%d)",
+			operation.TimeStep,
+			state.Code.CompiledII,
+			operation.OpCode,
+			operation.ID,
+			state.TileX,
+			state.TileY,
+		))
+	}
+	// Normalize to phase within II: compiler may emit time_step >= ii (e.g. 4 when ii=4 → step 0).
+	if targetStep >= ii {
+		targetStep = targetStep % ii
+	}
+
+	return currentStep, targetStep, ii
+}
+
+func (i instEmulator) canIssue(operation Operation, state *coreState) bool {
+	if !i.CareFlags || operation.InvalidIterations > 0 {
+		return true
+	}
+
+	ready := i.CheckFlags(operation, state)
+	currentStep, targetStep, ii := i.resolveScheduleStep(operation, state)
+
+	// No schedule (compiled_ii missing or 0): ignore time gating so existing workloads
+	// (e.g. histogram) that do not use II-based scheduling still run like in-order.
+	if ii <= 0 {
+		return ready
+	}
+
+	switch normalizeExecutionPolicyString(i.ExecutionPolicy) {
+	case ExecutionPolicyStrictTimed:
+		if currentStep < targetStep {
+			return false
+		}
+		if currentStep == targetStep {
+			if ready {
+				return true
+			}
+			i.panicSynchronizationViolation(operation, state, "operand/credit not ready at scheduled step")
+		}
+		i.panicSynchronizationViolation(operation, state, "operation missed its exact scheduled step")
+		return false
+	case ExecutionPolicyElasticScheduled:
+		if currentStep < targetStep {
+			return false
+		}
+		return ready
+	case ExecutionPolicyInOrderDataflow:
+		return ready
+	default:
+		return ready
+	}
 }
 
 // set up the necessary state for the instruction group
@@ -134,7 +245,9 @@ func (i instEmulator) SetUpInstructionGroup(index int32, state *coreState) {
 func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreState, time float64) bool {
 	// check the Return signal
 	if *state.exit && time > *state.requestExitTimestamp {
-		fmt.Println("Exit signal ( requested at", *state.requestExitTimestamp, ") received at time", time)
+		if DebugEnabled() {
+			slog.Debug("ExitSignal", "requestedAt", *state.requestExitTimestamp, "time", time)
+		}
 		return false
 	}
 	prevPC := state.PCInBlock
@@ -173,18 +286,18 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 	} else if state.Mode == SyncOp {
 		if progressSync {
 			if state.NextPCInBlock == -1 {
-				print("PC+4 for PC=", state.PCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
-				print("Instruction at PC=", state.PCInBlock, " is ", state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[0].OpCode, "\n")
+				// print("PC+4 for PC=", state.PCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
+				// print("Instruction at PC=", state.PCInBlock, " is ", state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[0].OpCode, "\n")
 				state.PCInBlock++
 			} else {
-				print("PC+Jump to ", state.NextPCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
+				// print("PC+Jump to ", state.NextPCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
 				state.PCInBlock = state.NextPCInBlock
 			}
 		}
 		if state.SelectedBlock != nil && state.PCInBlock >= int32(len(state.SelectedBlock.InstructionGroups)) {
 			state.PCInBlock = -1
 			state.SelectedBlock = nil
-			print("PCInBlock = -1 at (", state.TileX, ",", state.TileY, ")\n")
+			// print("PCInBlock = -1 at (", state.TileX, ",", state.TileY, ")\n")
 			slog.Info("Flow", "PCInBlock", "-1", "X", state.TileX, "Y", state.TileY)
 		}
 		state.NextPCInBlock = -1
@@ -210,7 +323,7 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, state *coreState, time float64) bool {
 	run := true
 	for _, operation := range cinst.Operations {
-		if (!i.CareFlags) || operation.InvalidIterations > 0 || i.CheckFlags(operation, state) {
+		if i.canIssue(operation, state) {
 			continue
 		} else {
 			run = false
@@ -218,27 +331,21 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 		}
 	}
 	if run {
-		// Collect all results first
-		allResults := make(map[Operand]cgra.Data)
 		for index := range cinst.Operations {
 			// Get reference to the original operation in state.SelectedBlock
 			operation := &state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[index]
 			// Decrement InvalidIterations before running if needed
 			if operation.InvalidIterations > 0 {
-				print("Invalid iteration for ", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")\n")
+				// print("Invalid iteration for ", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")\n")
 				operation.InvalidIterations--
 				continue
 			}
 			results := i.RunOperation(*operation, state, time)
-			// Merge results into allResults
+			// In Sync mode, apply each op result immediately so later ops in the
+			// same instruction group can observe updated registers/ports.
 			for operand, value := range results {
-				allResults[operand] = value
+				i.writeOperand(operand, value, state)
 			}
-			//print("RunOperation", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")", time, ":", "YES", "\n")
-		}
-		// Write all results at once
-		for operand, value := range allResults {
-			i.writeOperand(operand, value, state)
 		}
 	}
 	return run
@@ -254,12 +361,12 @@ func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, st
 		}
 		// Get reference to the original operation in state.SelectedBlock
 		operation := &state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[index]
-		if (!i.CareFlags) || operation.InvalidIterations > 0 || i.CheckFlags(*operation, state) { // can also only choose one (another pattern)
+		if i.canIssue(*operation, state) { // can also only choose one (another pattern)
 			state.CurrReservationState.ReservationMap[index] = false
 			state.CurrReservationState.OpToExec--
 			// Decrement InvalidIterations before running if needed
 			if operation.InvalidIterations > 0 {
-				print("Invalid iteration for ", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")\n")
+				// print("Invalid iteration for ", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")\n")
 				operation.InvalidIterations--
 				continue
 			}
@@ -320,7 +427,7 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 				}
 				if state.States[stateKey] == nil || state.States[stateKey] == false { // first execution
 					if len(inst.SrcOperands.Operands) > 1 {
-						fmt.Println("ID", inst.ID, "bypass check")
+						// fmt.Println("ID", inst.ID, "bypass check")
 						continue
 					} else {
 						panic("PHI_CONST or PHI_START must have two sources")
@@ -341,13 +448,25 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 		dstImpl := i.normalizeDirection(dst.Impl)
 		if state.Directions[dstImpl] {
 			if state.SendBufHeadBusy[i.getColorIndex(dst.Color)][i.getDirecIndex(dstImpl)] {
+				Trace(
+					"Backpressure",
+					"Time", state.CurrentTime,
+					"X", state.TileX,
+					"Y", state.TileY,
+					"OpCode", inst.OpCode,
+					"ID", inst.ID,
+					"Reason", "SendBufBusy",
+					"DstDir", dstImpl,
+					"Color", dst.Color,
+					"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
+				)
 				flag = false
 				break
 			}
 		}
 	}
 	//fmt.Println("[CheckFlags] checking flags for inst", inst.OpCode, "@(", state.TileX, ",", state.TileY, "):", flag)
-	fmt.Println("Check", inst.OpCode, "ID", inst.ID, "@(", state.TileX, ",", state.TileY, "):", flag)
+	// fmt.Println("Check", inst.OpCode, "ID", inst.ID, "@(", state.TileX, ",", state.TileY, "):", flag)
 	return flag
 }
 
@@ -682,9 +801,19 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) map[Operan
 	src1 := inst.SrcOperands.Operands[0]
 	addrStruct := i.readOperand(src1, state)
 	addr := addrStruct.First()
+	finalPred := addrStruct.Pred
+	results := make(map[Operand]cgra.Data)
+
+	// Predicated-off load should not touch memory or trigger bounds checks.
+	if !finalPred {
+		for _, dst := range inst.DstOperands.Operands {
+			results[dst] = cgra.NewScalarWithPred(0, false)
+		}
+		return results
+	}
 
 	if addr >= uint32(len(state.Memory)) {
-		panic("memory address out of bounds")
+		panic("memory address out of bounds, addr: " + strconv.Itoa(int(addr)) + ", len(state.Memory): " + strconv.Itoa(len(state.Memory)))
 	}
 	value := state.Memory[addr]
 	slog.Warn("Memory",
@@ -695,8 +824,6 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) map[Operan
 		"X", state.TileX,
 		"Y", state.TileY,
 	)
-	finalPred := addrStruct.Pred
-	results := make(map[Operand]cgra.Data)
 	for _, dst := range inst.DstOperands.Operands {
 		results[dst] = cgra.NewScalarWithPred(value, finalPred)
 	}
@@ -754,6 +881,11 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) map[Opera
 	src2 := inst.SrcOperands.Operands[1]
 	addrStruct := i.readOperand(src2, state)
 	addr := addrStruct.First()
+	finalPred := addrStruct.Pred && valueStruct.Pred
+	if !finalPred {
+		Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+		return make(map[Operand]cgra.Data)
+	}
 	if addr >= uint32(len(state.Memory)) {
 		panic("memory address out of bounds, addr: " + strconv.Itoa(int(addr)) + ", len(state.Memory): " + strconv.Itoa(len(state.Memory)))
 	}
@@ -765,7 +897,6 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) map[Opera
 		"Y", state.TileY,
 	)
 	state.Memory[addr] = value
-	finalPred := addrStruct.Pred && valueStruct.Pred
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 	// elect no next PC
 	return make(map[Operand]cgra.Data)
@@ -921,7 +1052,7 @@ func (i instEmulator) runSub(inst Operation, state *coreState) map[Operand]cgra.
 	dstValSigned := src1Signed - src2Signed
 	dstVal := uint32(dstValSigned)
 
-	fmt.Printf("ISUB: Subtracting %d (src1) - %d (src2) = %d\n", src1Signed, src2Signed, dstValSigned)
+	// fmt.Printf("ISUB: Subtracting %d (src1) - %d (src2) = %d\n", src1Signed, src2Signed, dstValSigned)
 	finalPred := src1Struct.Pred && src2Struct.Pred
 
 	results := make(map[Operand]cgra.Data)
@@ -973,8 +1104,9 @@ func (i instEmulator) runMulAdd(inst Operation, state *coreState) map[Operand]cg
 	s2Val := int32(s2.First())
 	dstValSigned := s0Val*s1Val + s2Val
 	dstVal := uint32(dstValSigned)
-	finalPred := s0.Pred && s1.Pred && s2.Pred
-
+	//finalPred := s0.Pred && s1.Pred && s2.Pred
+	//Only for systolic array currently. if need for other cases, please modify the finalPred calculation.
+	finalPred := s0.Pred && s1.Pred
 	results := make(map[Operand]cgra.Data)
 	for _, dst := range inst.DstOperands.Operands {
 		results[dst] = cgra.NewScalarWithPred(dstVal, finalPred)
@@ -1201,9 +1333,9 @@ func (i instEmulator) runRetImm(inst Operation, state *coreState, time float64) 
 			*state.retVal = srcVal
 			*state.exit = true
 			*state.requestExitTimestamp = time
-			fmt.Println("++++++++++++ RETURN executed", srcVal, "T=", time)
-		} else {
-			fmt.Println("++++++++++++ RETURN bypassed")
+			// 	fmt.Println("++++++++++++ RETURN executed", srcVal, "T=", time)
+			// } else {
+			// 	fmt.Println("++++++++++++ RETURN bypassed")
 		}
 	} else {
 		panic("RETURN_VALUE requires a source operand")
@@ -1229,9 +1361,9 @@ func (i instEmulator) runRetDelay(inst Operation, state *coreState, time float64
 			*state.retVal = 0
 			*state.exit = true
 			*state.requestExitTimestamp = time + ExitDelay
-			fmt.Println("++++++++++++ RETURN executed", srcVal, "T=", time)
-		} else {
-			fmt.Println("++++++++++++ RETURN bypassed")
+			// 	fmt.Println("++++++++++++ RETURN executed", srcVal, "T=", time)
+			// } else {
+			// 	fmt.Println("++++++++++++ RETURN bypassed")
 		}
 	} else {
 		panic("RETURN_VOID requires a source operand")
@@ -1338,14 +1470,14 @@ func (i instEmulator) runCmpExport(inst Operation, state *coreState) map[Operand
 		for _, dst := range inst.DstOperands.Operands {
 			results[dst] = cgra.NewScalarWithPred(1, finalPred)
 		}
-		fmt.Println(">>>>>>>>>>>>>>> ICMP_EQ: ", src1Val.First(), src2Val.First(), "Yes")
+		// fmt.Println(">>>>>>>>>>>>>>> ICMP_EQ: ", src1Val.First(), src2Val.First(), "Yes")
 	} else {
 		finalPred = src1Val.Pred
 		resultVal = 0
 		for _, dst := range inst.DstOperands.Operands {
 			results[dst] = cgra.NewScalarWithPred(0, finalPred)
 		}
-		fmt.Println(">>>>>>>>>>>>>>> ICMP_EQ: ", src1Val.First(), src2Val.First(), "No")
+		// fmt.Println(">>>>>>>>>>>>>>> ICMP_EQ: ", src1Val.First(), src2Val.First(), "No")
 	}
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Src1", fmt.Sprintf("%d(%t)", src1Val.First(), src1Val.Pred), "Src2", fmt.Sprintf("%d(%t)", src2Val.First(), src2Val.Pred), "Result", fmt.Sprintf("%d(%t)", resultVal, finalPred))
 	return results
@@ -1561,7 +1693,7 @@ func (i instEmulator) runPhiStart(inst Operation, state *coreState) map[Operand]
 		result = src1Val
 		finalPred = src1Pred
 		state.States[stateKey] = true
-		fmt.Println("set state.States[", stateKey, "] to true")
+		// fmt.Println("set state.States[", stateKey, "] to true")
 		for _, dst := range inst.DstOperands.Operands {
 			results[dst] = cgra.NewScalarWithPred(result, finalPred)
 		}
@@ -1616,7 +1748,7 @@ func (i instEmulator) runGrantPred(inst Operation, state *coreState) map[Operand
 		results[dst] = cgra.NewScalarWithPred(srcVal, finalPred)
 	}
 
-	fmt.Println("<<<<<<<<<<<<<< GRANTPRED: ", srcVal, predVal, finalPred)
+	// fmt.Println("<<<<<<<<<<<<<< GRANTPRED: ", srcVal, predVal, finalPred)
 
 	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "SrcOperand", fmt.Sprintf("%d(%t)", srcVal, srcStruct.Pred), "PredOperand", fmt.Sprintf("%d(%t)", predVal, predStruct.Pred), "Pred", finalPred, "Result", fmt.Sprintf("%d(%t)", srcVal, finalPred))
 	// elect no next PC
