@@ -1,8 +1,11 @@
 package runtimecfg
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sarchlab/zeonica/core"
 )
 
 func TestResolveExecutionPolicyDefaultsToInOrder(t *testing.T) {
@@ -125,6 +128,15 @@ func TestResolveMicroarchitectureDefaults(t *testing.T) {
 	if cfg.EnableFIFOModel {
 		t.Fatalf("unexpected fifo model default: got true want false")
 	}
+	if cfg.ProgramYAML != "" || cfg.ReportName != "" || len(cfg.QueueWatches) != 0 || len(cfg.BufferSweepDepths) != 0 {
+		t.Fatalf(
+			"unexpected experiment defaults: program=%q report=%q watches=%d depths=%d",
+			cfg.ProgramYAML,
+			cfg.ReportName,
+			len(cfg.QueueWatches),
+			len(cfg.BufferSweepDepths),
+		)
+	}
 }
 
 func TestResolveMicroarchitectureOverrides(t *testing.T) {
@@ -238,6 +250,61 @@ func TestResolveInvalidMemoryShareCoordinate(t *testing.T) {
 		t.Fatal("expected invalid memory share coordinate error")
 	}
 	if !strings.Contains(err.Error(), "out-of-range tile") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveWithSpecPathExperimentConfig(t *testing.T) {
+	specPath := filepath.Join(t.TempDir(), "base_arch_spec.yaml")
+	spec := ArchSpec{
+		Simulator: Simulator{
+			ProgramYAML:       "fir+histogram/tmp-generated-instructions.yaml",
+			ReportName:        "fir_histogram",
+			BufferSweepDepths: []int{1, 2, 4, 8, 16},
+			QueueWatches: []core.QueueWatchSpec{
+				{Label: "hist_upstream", X: 1, Y: 1, Kind: "recv", Direction: "West", Color: "RED"},
+				{Label: "hist_downstream", X: 2, Y: 1, Kind: "recv", Direction: "West", Color: "RED"},
+			},
+		},
+	}
+
+	cfg, err := ResolveWithSpecPath(spec, specPath, "")
+	if err != nil {
+		t.Fatalf("ResolveWithSpecPath returned error: %v", err)
+	}
+
+	expectedProgram := filepath.Join(filepath.Dir(specPath), "fir+histogram", "tmp-generated-instructions.yaml")
+	if cfg.ProgramYAML != expectedProgram {
+		t.Fatalf("unexpected resolved program path: got %q want %q", cfg.ProgramYAML, expectedProgram)
+	}
+	if cfg.ReportName != "fir_histogram" {
+		t.Fatalf("unexpected report name: %q", cfg.ReportName)
+	}
+	if cfg.TestName != "fir_histogram" {
+		t.Fatalf("expected report_name to seed test name, got %q", cfg.TestName)
+	}
+	if len(cfg.QueueWatches) != 2 {
+		t.Fatalf("unexpected queue watch count: %d", len(cfg.QueueWatches))
+	}
+	if len(cfg.BufferSweepDepths) != 5 {
+		t.Fatalf("unexpected buffer sweep depth count: %d", len(cfg.BufferSweepDepths))
+	}
+}
+
+func TestResolveWithSpecPathRejectsInvalidQueueWatch(t *testing.T) {
+	spec := ArchSpec{
+		Simulator: Simulator{
+			QueueWatches: []core.QueueWatchSpec{
+				{Label: "bad", X: 0, Y: 0, Kind: "recv", Direction: "Bogus", Color: "RED"},
+			},
+		},
+	}
+
+	_, err := ResolveWithSpecPath(spec, "", "invalid-watch")
+	if err == nil {
+		t.Fatal("expected invalid queue watch error")
+	}
+	if !strings.Contains(err.Error(), "simulator.queue_watches") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

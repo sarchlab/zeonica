@@ -54,6 +54,7 @@ type Report struct {
 	Tiles                    []TileStats           `json:"tiles"`
 	TopHotTiles              []TopHotTile          `json:"topHotTiles"`
 	TopBackpressureTiles     []TopBackpressureTile `json:"topBackpressureTiles"`
+	WatchedQueues            []QueueStats          `json:"watchedQueues,omitempty"`
 }
 
 // GridInfo describes the grid size used by the workload.
@@ -98,6 +99,22 @@ type TopBackpressureTile struct {
 	BackpressureCount int64  `json:"backpressureCount"`
 }
 
+// QueueStats stores aggregated occupancy metrics for one watched queue.
+type QueueStats struct {
+	Label             string  `json:"label"`
+	Kind              string  `json:"kind"`
+	X                 int     `json:"x"`
+	Y                 int     `json:"y"`
+	Coord             string  `json:"coord"`
+	Direction         string  `json:"direction"`
+	Color             string  `json:"color"`
+	Capacity          int     `json:"capacity"`
+	SampleCount       int64   `json:"sampleCount"`
+	AvgOccupancy      float64 `json:"avgOccupancy"`
+	PeakOccupancy     int     `json:"peakOccupancy"`
+	AvgUtilizationPct float64 `json:"avgUtilizationPct"`
+}
+
 type traceEvent struct {
 	Timestamp string   `json:"time"`
 	Msg       string   `json:"msg"`
@@ -109,6 +126,12 @@ type traceEvent struct {
 	Dst       string   `json:"Dst"`
 	From      string   `json:"From"`
 	To        string   `json:"To"`
+	Label     string   `json:"Label"`
+	Kind      string   `json:"Kind"`
+	Direction string   `json:"Direction"`
+	Color     string   `json:"Color"`
+	Occupancy *int     `json:"Occupancy"`
+	Capacity  *int     `json:"Capacity"`
 }
 
 type tileCoord struct {
@@ -130,8 +153,25 @@ type tileAccumulator struct {
 	outputBlockedStallCount  int64
 }
 
+type queueKey struct {
+	label     string
+	x         int
+	y         int
+	kind      string
+	direction string
+	color     string
+}
+
+type queueAccumulator struct {
+	capacity      int
+	sampleCount   int64
+	occupancySum  int64
+	peakOccupancy int
+}
+
 type collector struct {
 	tileData                 map[tileCoord]*tileAccumulator
+	queueData                map[queueKey]*queueAccumulator
 	globalCycleSet           map[int64]struct{}
 	globalBackpressureCycles map[int64]struct{}
 	maxCycle                 int64
@@ -159,6 +199,7 @@ func NewObserver() *Observer {
 func newCollector() *collector {
 	return &collector{
 		tileData:                 make(map[tileCoord]*tileAccumulator),
+		queueData:                make(map[queueKey]*queueAccumulator),
 		globalCycleSet:           make(map[int64]struct{}),
 		globalBackpressureCycles: make(map[int64]struct{}),
 		maxCycle:                 -1,
@@ -184,6 +225,12 @@ func (o *Observer) Observe(observation core.TraceObservation) {
 		Dst:       observation.Dst,
 		From:      observation.From,
 		To:        observation.To,
+		Label:     observation.Label,
+		Kind:      observation.Kind,
+		Direction: observation.Direction,
+		Color:     observation.Color,
+		Occupancy: observation.Occupancy,
+		Capacity:  observation.Capacity,
 	}
 	o.collector.observe(event)
 }
@@ -218,6 +265,16 @@ func (c *collector) observe(event traceEvent) {
 		}
 	}
 
+	cycle, hasCycle := parseCycle(event.Time)
+	if hasCycle && cycle > c.maxCycle {
+		c.maxCycle = cycle
+	}
+
+	if event.Msg == "Queue" {
+		c.observeQueue(event)
+		return
+	}
+
 	coord, ok := resolveTileCoord(event)
 	if !ok {
 		return
@@ -240,7 +297,6 @@ func (c *collector) observe(event traceEvent) {
 	}
 
 	isBackpressureEvent := event.Msg == "Backpressure"
-	cycle, hasCycle := parseCycle(event.Time)
 	if hasCycle && !isBackpressureEvent {
 		acc.cycles[cycle] = struct{}{}
 		c.globalCycleSet[cycle] = struct{}{}
@@ -254,6 +310,35 @@ func (c *collector) observe(event traceEvent) {
 		if hasCycle {
 			c.globalBackpressureCycles[cycle] = struct{}{}
 		}
+	}
+}
+
+func (c *collector) observeQueue(event traceEvent) {
+	if event.X == nil || event.Y == nil || event.Occupancy == nil {
+		return
+	}
+
+	key := queueKey{
+		label:     event.Label,
+		x:         *event.X,
+		y:         *event.Y,
+		kind:      event.Kind,
+		direction: event.Direction,
+		color:     event.Color,
+	}
+
+	acc, exists := c.queueData[key]
+	if !exists {
+		acc = &queueAccumulator{}
+		c.queueData[key] = acc
+	}
+	if event.Capacity != nil && *event.Capacity > 0 {
+		acc.capacity = *event.Capacity
+	}
+	acc.sampleCount++
+	acc.occupancySum += int64(*event.Occupancy)
+	if *event.Occupancy > acc.peakOccupancy {
+		acc.peakOccupancy = *event.Occupancy
 	}
 }
 
@@ -345,6 +430,7 @@ func (c *collector) build(opts GenerateOptions) Report {
 
 	topHotTiles := buildTopHotTiles(tiles, topN)
 	topBackpressureTiles := buildTopBackpressureTiles(tiles, topN)
+	watchedQueues := buildQueueStats(c.queueData)
 	wallClockDurationSec := 0.0
 	if c.minWallTS != nil && c.maxWallTS != nil {
 		d := c.maxWallTS.Sub(*c.minWallTS).Seconds()
@@ -390,6 +476,7 @@ func (c *collector) build(opts GenerateOptions) Report {
 		Tiles:                    tiles,
 		TopHotTiles:              topHotTiles,
 		TopBackpressureTiles:     topBackpressureTiles,
+		WatchedQueues:            watchedQueues,
 	}
 }
 
@@ -498,6 +585,25 @@ func PrintSummaryToWriter(report Report, w io.Writer) {
 			fmt.Fprintf(w, "  %d) %s bp=%d\n", idx+1, tile.Coord, tile.BackpressureCount)
 		}
 	}
+	if len(report.WatchedQueues) > 0 {
+		fmt.Fprintln(w, "watched queues:")
+		for idx, queue := range report.WatchedQueues {
+			fmt.Fprintf(
+				w,
+				"  %d) %s %s %s/%s avg=%.2f peak=%d cap=%d util=%.2f%% samples=%d\n",
+				idx+1,
+				queue.Coord,
+				queue.Label,
+				queue.Direction,
+				queue.Color,
+				queue.AvgOccupancy,
+				queue.PeakOccupancy,
+				queue.Capacity,
+				queue.AvgUtilizationPct,
+				queue.SampleCount,
+			)
+		}
+	}
 }
 
 //nolint:gocyclo
@@ -533,6 +639,9 @@ func classifyAndCount(event traceEvent, acc *tileAccumulator, cycle int64, hasCy
 			acc.outputBlockedStallCount++
 		}
 		acc.totalEvents++
+	case "Queue":
+		// Queue samples are aggregated separately in watchedQueues and should not
+		// inflate existing event throughput counters.
 	}
 	return false
 }
@@ -640,6 +749,53 @@ func buildTopHotTiles(tiles []TileStats, topN int) []TopHotTile {
 	}
 
 	return out
+}
+
+func buildQueueStats(queueData map[queueKey]*queueAccumulator) []QueueStats {
+	if len(queueData) == 0 {
+		return nil
+	}
+
+	stats := make([]QueueStats, 0, len(queueData))
+	for key, acc := range queueData {
+		avgOccupancy := 0.0
+		if acc.sampleCount > 0 {
+			avgOccupancy = float64(acc.occupancySum) / float64(acc.sampleCount)
+		}
+		avgUtilizationPct := 0.0
+		if acc.capacity > 0 {
+			avgUtilizationPct = avgOccupancy * 100.0 / float64(acc.capacity)
+		}
+		stats = append(stats, QueueStats{
+			Label:             key.label,
+			Kind:              key.kind,
+			X:                 key.x,
+			Y:                 key.y,
+			Coord:             formatCoord(key.x, key.y),
+			Direction:         key.direction,
+			Color:             key.color,
+			Capacity:          acc.capacity,
+			SampleCount:       acc.sampleCount,
+			AvgOccupancy:      avgOccupancy,
+			PeakOccupancy:     acc.peakOccupancy,
+			AvgUtilizationPct: avgUtilizationPct,
+		})
+	}
+
+	sort.Slice(stats, func(i, j int) bool {
+		if stats[i].Y != stats[j].Y {
+			return stats[i].Y < stats[j].Y
+		}
+		if stats[i].X != stats[j].X {
+			return stats[i].X < stats[j].X
+		}
+		if stats[i].Direction != stats[j].Direction {
+			return stats[i].Direction < stats[j].Direction
+		}
+		return stats[i].Label < stats[j].Label
+	})
+
+	return stats
 }
 
 func buildTopBackpressureTiles(tiles []TileStats, topN int) []TopBackpressureTile {

@@ -19,16 +19,22 @@ const (
 
 // TraceObservation captures the subset of a trace event needed for report generation.
 type TraceObservation struct {
-	WallTime time.Time
-	Msg      string
-	Behavior string
-	Time     *float64
-	X        *int
-	Y        *int
-	Src      string
-	Dst      string
-	From     string
-	To       string
+	WallTime  time.Time
+	Msg       string
+	Behavior  string
+	Time      *float64
+	X         *int
+	Y         *int
+	Src       string
+	Dst       string
+	From      string
+	To        string
+	Label     string
+	Kind      string
+	Direction string
+	Color     string
+	Occupancy *int
+	Capacity  *int
 }
 
 var traceEnabled atomic.Bool
@@ -121,6 +127,24 @@ func ObserveBackpressure(timeValue float64, x, y int) {
 	})
 }
 
+// ObserveQueue records a watched queue occupancy sample for report generation.
+func ObserveQueue(label, kind string, timeValue float64, x, y int, direction, color string, occupancy, capacity int) {
+	observeTrace(TraceObservation{
+		WallTime:  time.Now(),
+		Msg:       "Queue",
+		Behavior:  "sample",
+		Time:      float64Ptr(timeValue),
+		X:         intPtr(x),
+		Y:         intPtr(y),
+		Label:     label,
+		Kind:      kind,
+		Direction: direction,
+		Color:     color,
+		Occupancy: intPtr(occupancy),
+		Capacity:  intPtr(capacity),
+	})
+}
+
 func observeTrace(observation TraceObservation) {
 	if traceObserver != nil {
 		traceObserver(observation)
@@ -132,7 +156,7 @@ func buildTraceObservation(msg string, args ...any) (TraceObservation, bool) {
 		WallTime: time.Now(),
 		Msg:      msg,
 	}
-	if msg != "Inst" && msg != "Memory" && msg != "DataFlow" && msg != "Backpressure" && msg != "Stall" {
+	if msg != "Inst" && msg != "Memory" && msg != "DataFlow" && msg != "Backpressure" && msg != "Stall" && msg != "Queue" {
 		return observation, false
 	}
 
@@ -177,6 +201,22 @@ func assignObservationField(observation *TraceObservation, key string, value any
 		observation.From = fmt.Sprint(value)
 	case "To":
 		observation.To = fmt.Sprint(value)
+	case "Label":
+		observation.Label = fmt.Sprint(value)
+	case "Kind":
+		observation.Kind = fmt.Sprint(value)
+	case "Direction":
+		observation.Direction = fmt.Sprint(value)
+	case "Color":
+		observation.Color = fmt.Sprint(value)
+	case "Occupancy":
+		if converted, ok := toInt(value); ok {
+			observation.Occupancy = intPtr(converted)
+		}
+	case "Capacity":
+		if converted, ok := toInt(value); ok {
+			observation.Capacity = intPtr(converted)
+		}
 	}
 }
 
@@ -226,6 +266,12 @@ func intPtr(value int) *int {
 
 func float64Ptr(value float64) *float64 {
 	ptr := new(float64)
+	*ptr = value
+	return ptr
+}
+
+func int64Ptr(value int64) *int64 {
+	ptr := new(int64)
 	*ptr = value
 	return ptr
 }

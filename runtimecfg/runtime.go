@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,16 +19,17 @@ import (
 )
 
 const (
-	defaultRows            = 4
-	defaultColumns         = 4
-	defaultExecutionModel  = "serial"
-	defaultExecutionPolicy = "in_order_dataflow"
-	defaultStrictMaxSlip   = int64(4)
-	defaultStrictFail      = false
-	defaultEnableFIFOModel = false
-	defaultDriverName      = "Driver"
-	defaultDeviceName      = "Device"
-	defaultLogTemplate     = "<test>.json.log"
+	defaultRows               = 4
+	defaultColumns            = 4
+	defaultExecutionModel     = "serial"
+	defaultExecutionPolicy    = "in_order_dataflow"
+	defaultStrictMaxSlip      = int64(4)
+	defaultStrictFail         = false
+	defaultEnableFIFOModel    = false
+	defaultEnableQueueWatches = false
+	defaultDriverName         = "Driver"
+	defaultDeviceName         = "Device"
+	defaultLogTemplate        = "<test>.json.log"
 
 	defaultDriverPortIncomingBufferDepth = 1
 	defaultDriverPortOutgoingBufferDepth = 1
@@ -53,6 +55,7 @@ type ResolvedConfig struct {
 	StrictMaxSlip         int64
 	StrictFailOnViolation bool
 	EnableFIFOModel       bool
+	EnableQueueWatches    bool
 	DriverName            string
 	DriverFreq            sim.Freq
 	DeviceName            string
@@ -73,6 +76,10 @@ type ResolvedConfig struct {
 	LinkLatency                   int
 	LinkBandwidth                 int
 	LinkTimingModel               string
+	ProgramYAML                   string
+	ReportName                    string
+	QueueWatches                  []core.QueueWatchSpec
+	BufferSweepDepths             []int
 }
 
 // BuildOverrides allows optional size override when not binding to architecture.
@@ -99,7 +106,7 @@ func LoadRuntime(specPath, testName string) (*Runtime, error) {
 		return nil, err
 	}
 
-	cfg, err := Resolve(spec, testName)
+	cfg, err := ResolveWithSpecPath(spec, specPath, testName)
 	if err != nil {
 		return nil, err
 	}
@@ -117,13 +124,38 @@ func LoadRuntime(specPath, testName string) (*Runtime, error) {
 //
 //nolint:gocyclo,funlen
 func Resolve(spec ArchSpec, testName string) (ResolvedConfig, error) {
+	return ResolveWithSpecPath(spec, "", testName)
+}
+
+// ResolveWithSpecPath resolves defaults and validates runtime values from ArchSpec,
+// using specPath to resolve case2 relative paths when available.
+//
+//nolint:gocyclo,funlen
+func ResolveWithSpecPath(spec ArchSpec, specPath, testName string) (ResolvedConfig, error) {
+	programYAML := resolveSpecRelativePath(specPath, spec.Simulator.ProgramYAML)
+	reportName := strings.TrimSpace(spec.Simulator.ReportName)
+	queueWatches := append([]core.QueueWatchSpec(nil), spec.Simulator.QueueWatches...)
+	bufferSweepDepths, err := resolveBufferSweepDepths(spec.Simulator.BufferSweepDepths)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+	if err := core.ValidateQueueWatchSpecs(queueWatches); err != nil {
+		return ResolvedConfig{}, fmt.Errorf("simulator.queue_watches: %w", err)
+	}
+
+	effectiveTestName := strings.TrimSpace(testName)
+	if effectiveTestName == "" && reportName != "" {
+		effectiveTestName = reportName
+	}
+
 	resolved := ResolvedConfig{
-		TestName:                      normalizeTestName(testName),
+		TestName:                      normalizeTestName(effectiveTestName),
 		Rows:                          defaultOrPositive(spec.CGRADefaults.Rows, defaultRows),
 		Columns:                       defaultOrPositive(spec.CGRADefaults.Columns, defaultColumns),
 		ExecutionModel:                defaultOrString(spec.Simulator.ExecutionModel, defaultExecutionModel),
 		ExecutionPolicy:               defaultOrString(spec.Simulator.ExecutionPolicy, defaultExecutionPolicy),
 		EnableFIFOModel:               defaultOrBool(spec.Simulator.EnableFIFOModel, defaultEnableFIFOModel),
+		EnableQueueWatches:            defaultOrBool(spec.Simulator.EnableQueueWatches, defaultEnableQueueWatches),
 		StrictMaxSlip:                 defaultOrInt64(spec.Simulator.StrictMaxSlip, defaultStrictMaxSlip),
 		StrictFailOnViolation:         defaultOrBool(spec.Simulator.StrictFailOnViolation, defaultStrictFail),
 		DriverName:                    defaultOrString(spec.Simulator.Driver.Name, defaultDriverName),
@@ -141,6 +173,10 @@ func Resolve(spec ArchSpec, testName string) (ResolvedConfig, error) {
 		MemoryMode:                    defaultMemoryMode,
 		LinkLatency:                   defaultLinkLatency,
 		LinkBandwidth:                 defaultLinkBandwidth,
+		ProgramYAML:                   programYAML,
+		ReportName:                    reportName,
+		QueueWatches:                  queueWatches,
+		BufferSweepDepths:             bufferSweepDepths,
 	}
 
 	normalizedPolicy, err := normalizeExecutionPolicy(resolved.ExecutionPolicy)
@@ -298,6 +334,8 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 		WithMemoryShare(cfg.MemoryShare).
 		WithCorePortBufferDepth(cfg.CorePortIncomingBufferDepth, cfg.CorePortOutgoingBufferDepth).
 		WithEnableFIFOModel(cfg.EnableFIFOModel).
+		WithEnableQueueWatches(cfg.EnableQueueWatches).
+		WithQueueWatches(cfg.QueueWatches).
 		WithRegisterCount(cfg.NumRegisters).
 		WithLocalMemoryWords(cfg.LocalMemoryWords).
 		Build(cfg.DeviceName)
@@ -319,6 +357,32 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 		Device:   device,
 		Observer: report.NewObserver(),
 	}, nil
+}
+
+func resolveSpecRelativePath(specPath, target string) string {
+	trimmedTarget := strings.TrimSpace(target)
+	if trimmedTarget == "" {
+		return ""
+	}
+	cleanTarget := filepath.Clean(trimmedTarget)
+	if filepath.IsAbs(cleanTarget) || strings.TrimSpace(specPath) == "" {
+		return cleanTarget
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(specPath), cleanTarget))
+}
+
+func resolveBufferSweepDepths(input []int) ([]int, error) {
+	if len(input) == 0 {
+		return nil, nil
+	}
+	depths := make([]int, 0, len(input))
+	for idx, depth := range input {
+		if depth <= 0 {
+			return nil, fmt.Errorf("simulator.buffer_sweep_depths[%d] must be > 0", idx)
+		}
+		depths = append(depths, depth)
+	}
+	return depths, nil
 }
 
 // InitTraceLogger initializes the default slog JSON trace logger.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sarchlab/zeonica/core"
 	"gopkg.in/yaml.v3"
 )
 
@@ -43,15 +44,20 @@ type LinkDefaults struct {
 
 // Simulator contains simulator runtime settings from arch spec.
 type Simulator struct {
-	ExecutionModel        string           `yaml:"execution_model"`
-	ExecutionPolicy       string           `yaml:"execution_policy"`
-	EnableFIFOModel       *bool            `yaml:"enable_fifo_model"`
-	StrictMaxSlip         *int64           `yaml:"strict_max_slip"`
-	StrictFailOnViolation *bool            `yaml:"strict_fail_on_violation"`
-	Logging               SimulatorLogging `yaml:"logging"`
-	Driver                NamedComponent   `yaml:"driver"`
-	Device                DeviceComponent  `yaml:"device"`
-	Extra                 map[string]any   `yaml:",inline"`
+	ExecutionModel        string                `yaml:"execution_model"`
+	ExecutionPolicy       string                `yaml:"execution_policy"`
+	EnableFIFOModel       *bool                 `yaml:"enable_fifo_model"`
+	EnableQueueWatches    *bool                 `yaml:"enable_queue_watches"`
+	ProgramYAML           string                `yaml:"program_yaml"`
+	ReportName            string                `yaml:"report_name"`
+	QueueWatches          []core.QueueWatchSpec `yaml:"queue_watches"`
+	BufferSweepDepths     []int                 `yaml:"buffer_sweep_depths"`
+	StrictMaxSlip         *int64                `yaml:"strict_max_slip"`
+	StrictFailOnViolation *bool                 `yaml:"strict_fail_on_violation"`
+	Logging               SimulatorLogging      `yaml:"logging"`
+	Driver                NamedComponent        `yaml:"driver"`
+	Device                DeviceComponent       `yaml:"device"`
+	Extra                 map[string]any        `yaml:",inline"`
 }
 
 // SimulatorLogging configures trace logging behavior.

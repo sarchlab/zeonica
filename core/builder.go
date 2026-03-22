@@ -1,6 +1,9 @@
 package core
 
 import (
+	"os"
+	"strings"
+
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
 )
@@ -18,6 +21,8 @@ type Builder struct {
 	portIncomingBufferCap int
 	portOutgoingBufferCap int
 	enableFIFOModel       bool
+	enableQueueWatches    bool
+	queueWatches          []QueueWatchSpec
 	numRegisters          int
 	localMemoryWords      int
 }
@@ -77,6 +82,22 @@ func (b Builder) WithEnableFIFOModel(enabled bool) Builder {
 	return b
 }
 
+// WithEnableQueueWatches toggles optional queue-occupancy instrumentation.
+func (b Builder) WithEnableQueueWatches(enabled bool) Builder {
+	b.enableQueueWatches = enabled
+	return b
+}
+
+// WithQueueWatches sets optional queue watch definitions for occupancy instrumentation.
+func (b Builder) WithQueueWatches(queueWatches []QueueWatchSpec) Builder {
+	if len(queueWatches) == 0 {
+		b.queueWatches = nil
+		return b
+	}
+	b.queueWatches = append([]QueueWatchSpec(nil), queueWatches...)
+	return b
+}
+
 // WithRegisterCount configures register-file size per core.
 func (b Builder) WithRegisterCount(num int) Builder {
 	b.numRegisters = num
@@ -87,6 +108,11 @@ func (b Builder) WithRegisterCount(num int) Builder {
 func (b Builder) WithLocalMemoryWords(words int) Builder {
 	b.localMemoryWords = words
 	return b
+}
+
+func readyHeldTraceEnabledFromEnv() bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv("ZEONICA_TRACE_READY_HELD")))
+	return value == "1" || value == "true" || value == "yes" || value == "on"
 }
 
 // Build creates a core.
@@ -110,6 +136,10 @@ func (b Builder) Build(name string) *Core {
 	localMemoryWords := b.localMemoryWords
 	if localMemoryWords <= 0 {
 		localMemoryWords = 1024
+	}
+	resolvedQueueWatches, err := resolveQueueWatchSpecs(b.queueWatches)
+	if err != nil {
+		panic(err)
 	}
 
 	c.TickingComponent = sim.NewTickingComponent(name, b.engine, b.freq, c)
@@ -136,30 +166,35 @@ func (b Builder) Build(name string) *Core {
 			"NorthWest": true,
 			"Router":    true,
 		},
-		Registers:         make([]cgra.Data, registerCount),
-		Memory:            make([]uint32, localMemoryWords),
-		RecvBufHead:       make([][]cgra.Data, 4),
-		RecvBufHeadReady:  make([][]bool, 4),
-		SendBufHead:       make([][]cgra.Data, 4),
-		SendBufHeadBusy:   make([][]bool, 4),
-		RecvBufQueue:      make([][][]cgra.Data, 4),
-		SendBufQueue:      make([][][]cgra.Data, 4),
-		RecvQueueCapacity: incomingBufCap,
-		SendQueueCapacity: outgoingBufCap,
-		EnableFIFOModel:   b.enableFIFOModel,
-		OpInputReadCache:  make(map[string]cgra.Data),
-		AddrBuf:           0,
-		IsToWriteMemory:   false,
-		States:            make(map[string]interface{}),
-		Mode:              SyncOp,
-		CurrentCycle:      0,
-		OpTimingCursor:    make(map[int]int),
-		OpTimingLate:      make(map[int]bool),
-		OpTimingRollCycle: make(map[int]int64),
-		TimingWaitBlocked: false,
-		StallReason:       "",
-		StallOpID:         0,
-		StallOpCode:       "",
+		Registers:              make([]cgra.Data, registerCount),
+		Memory:                 make([]uint32, localMemoryWords),
+		RecvBufHead:            make([][]cgra.Data, 4),
+		RecvBufHeadReady:       make([][]bool, 4),
+		SendBufHead:            make([][]cgra.Data, 4),
+		SendBufHeadBusy:        make([][]bool, 4),
+		RecvBufQueue:           make([][][]cgra.Data, 4),
+		SendBufQueue:           make([][][]cgra.Data, 4),
+		RecvQueueCapacity:      incomingBufCap,
+		SendQueueCapacity:      outgoingBufCap,
+		EnableFIFOModel:        b.enableFIFOModel,
+		EnableQueueWatches:     b.enableQueueWatches,
+		ConfiguredQueueWatches: cloneQueueWatches(resolvedQueueWatches),
+		OpInputReadCache:       make(map[string]cgra.Data),
+		AddrBuf:                0,
+		IsToWriteMemory:        false,
+		States:                 make(map[string]interface{}),
+		Mode:                   SyncOp,
+		CurrentCycle:           0,
+		OpTimingCursor:         make(map[int]int),
+		OpTimingLate:           make(map[int]bool),
+		OpTimingRollCycle:      make(map[int]int64),
+		OpIssueCount:           make(map[int]int),
+		ReadyHeldTraceEnabled:  readyHeldTraceEnabledFromEnv(),
+		ReadyHeldRunMode:       strings.TrimSpace(os.Getenv("ZEONICA_READY_HELD_RUN_MODE")),
+		TimingWaitBlocked:      false,
+		StallReason:            "",
+		StallOpID:              0,
+		StallOpCode:            "",
 		CurrReservationState: ReservationState{
 			ReservationMap:  make(map[int]bool),
 			OpToExec:        0,

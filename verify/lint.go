@@ -3,6 +3,8 @@ package verify
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/sarchlab/zeonica/core"
@@ -12,11 +14,16 @@ import (
 // It validates structure (STRUCT) and simple timing constraints (TIMING).
 // For kernels with modulo scheduling (ii > 0), it uses a D∈{0,1} iteration
 // distance model to reduce false positives on loop-carried dependencies.
+// Optional lint options can be provided to tune predicate analysis behavior.
 // Returns a list of issues found, or empty list if no issues.
 //
 //nolint:gocyclo
-func RunLint(programs map[string]core.Program, arch *ArchInfo) []Issue {
+func RunLint(programs map[string]core.Program, arch *ArchInfo, opts ...LintOptions) []Issue {
 	var issues []Issue
+	lintOpts := DefaultLintOptions()
+	if len(opts) > 0 {
+		lintOpts = normalizeLintOptions(opts[0])
+	}
 
 	// Extract CompiledII from the first program that has it
 	// (All programs should have the same II since they're from the same kernel)
@@ -107,6 +114,8 @@ func RunLint(programs map[string]core.Program, arch *ArchInfo) []Issue {
 
 	// TIMING: Build dependency graph and check latencies with modulo scheduling support
 	issues = append(issues, checkTimingConstraints(programs, arch, ii)...)
+	// PREDICATE: Check PHI/PHI_START/GRANT predicate consistency risks.
+	issues = append(issues, checkPredicateConstraints(programs, arch, ii, lintOpts)...)
 
 	return issues
 }
@@ -260,6 +269,427 @@ func checkTimingConstraints(programs map[string]core.Program, arch *ArchInfo, ii
 					}
 				}
 			}
+		}
+	}
+
+	return issues
+}
+
+type predMask uint8
+
+const (
+	predCanTrue predMask = 1 << iota
+	predCanFalse
+)
+
+const (
+	predTrueMask    predMask = predCanTrue
+	predFalseMask   predMask = predCanFalse
+	predUnknownMask predMask = predCanTrue | predCanFalse
+)
+
+func predHasTrue(v predMask) bool {
+	return v&predCanTrue != 0
+}
+
+func predHasFalse(v predMask) bool {
+	return v&predCanFalse != 0
+}
+
+func predAnd(values ...predMask) predMask {
+	canTrue := true
+	canFalse := false
+	for _, v := range values {
+		canTrue = canTrue && predHasTrue(v)
+		canFalse = canFalse || predHasFalse(v)
+	}
+
+	var out predMask
+	if canTrue {
+		out |= predCanTrue
+	}
+	if canFalse {
+		out |= predCanFalse
+	}
+	if out == 0 {
+		return predUnknownMask
+	}
+	return out
+}
+
+func predOr(a, b predMask) predMask {
+	out := predMask(0)
+	if predHasTrue(a) || predHasTrue(b) {
+		out |= predCanTrue
+	}
+	if predHasFalse(a) || predHasFalse(b) {
+		out |= predCanFalse
+	}
+	if out == 0 {
+		return predUnknownMask
+	}
+	return out
+}
+
+func parseRegisterIndex(impl string) (int, bool) {
+	if !strings.HasPrefix(impl, "$") {
+		return 0, false
+	}
+	idx, err := strconv.Atoi(strings.TrimPrefix(impl, "$"))
+	if err != nil {
+		return 0, false
+	}
+	return idx, true
+}
+
+func parseImmediateInt(impl string) (int64, bool) {
+	if !strings.HasPrefix(impl, "#") {
+		return 0, false
+	}
+	v := strings.TrimPrefix(impl, "#")
+	num, err := strconv.ParseInt(v, 0, 64)
+	if err == nil {
+		return num, true
+	}
+	u, err := strconv.ParseUint(v, 0, 64)
+	if err != nil {
+		return 0, false
+	}
+	return int64(u), true
+}
+
+func operandPredMask(operand core.Operand, regPred map[int]predMask) predMask {
+	if idx, ok := parseRegisterIndex(operand.Impl); ok {
+		if p, exists := regPred[idx]; exists {
+			return p
+		}
+		return predUnknownMask
+	}
+	if strings.HasPrefix(operand.Impl, "#") {
+		return predTrueMask
+	}
+	if isPortOperand(operand.Impl) {
+		return predUnknownMask
+	}
+	return predUnknownMask
+}
+
+func predicateGateMask(operand core.Operand) predMask {
+	v, ok := parseImmediateInt(operand.Impl)
+	if !ok {
+		return predUnknownMask
+	}
+	if v == 0 {
+		return predFalseMask
+	}
+	return predTrueMask
+}
+
+func writeRegisterDsts(op core.Operation, regPred map[int]predMask, pred predMask) {
+	for _, dst := range op.DstOperands.Operands {
+		if idx, ok := parseRegisterIndex(dst.Impl); ok {
+			regPred[idx] = pred
+		}
+	}
+}
+
+func andFromSrcOperands(op core.Operation, regPred map[int]predMask) predMask {
+	if len(op.SrcOperands.Operands) == 0 {
+		return predUnknownMask
+	}
+	preds := make([]predMask, 0, len(op.SrcOperands.Operands))
+	for _, src := range op.SrcOperands.Operands {
+		preds = append(preds, operandPredMask(src, regPred))
+	}
+	return predAnd(preds...)
+}
+
+type predicateStage string
+
+const (
+	predicateStageWarmup predicateStage = "warmup"
+	predicateStageSteady predicateStage = "steady"
+)
+
+type predicateRiskStat struct {
+	x       int
+	y       int
+	t       int
+	opID    int
+	message string
+	opcode  string
+
+	totalHits    int
+	definiteHits int
+	stageHits    map[predicateStage]int
+}
+
+func newPredicateRiskStat(x, y, t, opID int, message, opcode string) *predicateRiskStat {
+	return &predicateRiskStat{
+		x:       x,
+		y:       y,
+		t:       t,
+		opID:    opID,
+		message: message,
+		opcode:  opcode,
+		stageHits: map[predicateStage]int{
+			predicateStageWarmup: 0,
+			predicateStageSteady: 0,
+		},
+	}
+}
+
+func (p *predicateRiskStat) mark(stage predicateStage, definite bool) {
+	p.totalHits++
+	p.stageHits[stage]++
+	if definite {
+		p.definiteHits++
+	}
+}
+
+func (p *predicateRiskStat) certainty() string {
+	if p.totalHits > 0 && p.definiteHits == p.totalHits {
+		return "definite"
+	}
+	return "possible"
+}
+
+func computePredicatePassWindows(maxInvalid, ii int, opts LintOptions) (int, int) {
+	if !opts.EnablePrologueAwarePredicate {
+		passCount := maxInvalid + 1
+		if passCount < 1 {
+			passCount = 1
+		}
+		if passCount > 4 {
+			// Keep lint bounded in legacy mode.
+			passCount = 4
+		}
+		return passCount, 0
+	}
+
+	warmupPasses := maxInvalid + 1
+	if ii > 0 && ii+1 > warmupPasses {
+		warmupPasses = ii + 1
+	}
+	if warmupPasses < 1 {
+		warmupPasses = 1
+	}
+	if warmupPasses > opts.PredicateWarmupPassCap {
+		warmupPasses = opts.PredicateWarmupPassCap
+	}
+
+	steadyPasses := opts.PredicateSteadyStatePasses
+	if steadyPasses < 0 {
+		steadyPasses = 0
+	}
+	return warmupPasses, steadyPasses
+}
+
+func recordPredicateRisk(
+	stats map[string]*predicateRiskStat,
+	key string,
+	x, y, t, opID int,
+	message, opcode string,
+	stage predicateStage,
+	definite bool,
+) {
+	s, exists := stats[key]
+	if !exists {
+		s = newPredicateRiskStat(x, y, t, opID, message, opcode)
+		stats[key] = s
+	}
+	s.mark(stage, definite)
+}
+
+func checkPredicateConstraints(
+	programs map[string]core.Program,
+	arch *ArchInfo,
+	ii int,
+	opts LintOptions,
+) []Issue {
+	var issues []Issue
+
+	type opCursor struct {
+		timeIdx    int
+		op         core.Operation
+		invalidRem int
+	}
+
+	for coordStr, prog := range programs {
+		x, y, err := parseCoordinate(coordStr)
+		if err != nil || x < 0 || x >= arch.Columns || y < 0 || y >= arch.Rows {
+			continue
+		}
+
+		regPred := make(map[int]predMask)
+		phiStartSeen := make(map[int]bool)
+		grantOnceSeen := make(map[int]bool)
+		riskStats := make(map[string]*predicateRiskStat)
+
+		ops := make([]*opCursor, 0)
+		maxInvalid := 0
+		for _, entry := range prog.EntryBlocks {
+			for t, ig := range entry.InstructionGroups {
+				for _, op := range ig.Operations {
+					if op.InvalidIterations > maxInvalid {
+						maxInvalid = op.InvalidIterations
+					}
+					ops = append(ops, &opCursor{
+						timeIdx:    t,
+						op:         op,
+						invalidRem: op.InvalidIterations,
+					})
+				}
+			}
+		}
+
+		warmupPasses, steadyPasses := computePredicatePassWindows(maxInvalid, ii, opts)
+		totalPasses := warmupPasses + steadyPasses
+		if totalPasses < 1 {
+			totalPasses = 1
+		}
+
+		for pass := 0; pass < totalPasses; pass++ {
+			stage := predicateStageWarmup
+			if pass >= warmupPasses {
+				stage = predicateStageSteady
+			}
+			for _, item := range ops {
+				if item.invalidRem > 0 {
+					item.invalidRem--
+					continue
+				}
+
+				op := item.op
+				opName := strings.ToUpper(op.OpCode)
+
+				switch opName {
+				case "PHI_START":
+					if len(op.SrcOperands.Operands) < 2 {
+						writeRegisterDsts(op, regPred, predUnknownMask)
+						continue
+					}
+					src1 := operandPredMask(op.SrcOperands.Operands[0], regPred)
+					src2 := operandPredMask(op.SrcOperands.Operands[1], regPred)
+
+					if !phiStartSeen[op.ID] {
+						if predHasFalse(src1) {
+							recordPredicateRisk(
+								riskStats,
+								fmt.Sprintf("phi_start_first:%d", op.ID),
+								x, y, item.timeIdx, op.ID,
+								fmt.Sprintf("PHI_START id=%d first source may have pred=false on first execution", op.ID),
+								opName,
+								stage,
+								src1 == predFalseMask,
+							)
+						}
+						phiStartSeen[op.ID] = true
+						writeRegisterDsts(op, regPred, src1)
+					} else {
+						if predHasTrue(src1) && predHasTrue(src2) {
+							recordPredicateRisk(
+								riskStats,
+								fmt.Sprintf("phi_start_both_true:%d", op.ID),
+								x, y, item.timeIdx, op.ID,
+								fmt.Sprintf("PHI_START id=%d may see both source predicates true", op.ID),
+								opName,
+								stage,
+								src1 == predTrueMask && src2 == predTrueMask,
+							)
+						}
+						writeRegisterDsts(op, regPred, predOr(src1, src2))
+					}
+				case "PHI":
+					if len(op.SrcOperands.Operands) < 2 {
+						writeRegisterDsts(op, regPred, predUnknownMask)
+						continue
+					}
+					src1 := operandPredMask(op.SrcOperands.Operands[0], regPred)
+					src2 := operandPredMask(op.SrcOperands.Operands[1], regPred)
+					if predHasTrue(src1) && predHasTrue(src2) {
+						recordPredicateRisk(
+							riskStats,
+							fmt.Sprintf("phi_both_true:%d", op.ID),
+							x, y, item.timeIdx, op.ID,
+							fmt.Sprintf("PHI id=%d may have both source predicates true", op.ID),
+							opName,
+							stage,
+							src1 == predTrueMask && src2 == predTrueMask,
+						)
+					}
+					writeRegisterDsts(op, regPred, predOr(src1, src2))
+				case "GRANT_PREDICATE", "GPRED":
+					if len(op.SrcOperands.Operands) < 2 {
+						writeRegisterDsts(op, regPred, predUnknownMask)
+						continue
+					}
+					srcPred := operandPredMask(op.SrcOperands.Operands[0], regPred)
+					predPred := operandPredMask(op.SrcOperands.Operands[1], regPred)
+					gate := predicateGateMask(op.SrcOperands.Operands[1])
+					writeRegisterDsts(op, regPred, predAnd(srcPred, predPred, gate))
+				case "GRANT_ONCE":
+					if len(op.SrcOperands.Operands) == 0 {
+						writeRegisterDsts(op, regPred, predUnknownMask)
+						continue
+					}
+					srcPred := operandPredMask(op.SrcOperands.Operands[0], regPred)
+					if !grantOnceSeen[op.ID] {
+						grantOnceSeen[op.ID] = true
+						writeRegisterDsts(op, regPred, srcPred)
+					} else {
+						writeRegisterDsts(op, regPred, predFalseMask)
+					}
+				case "MOV", "DATA_MOV", "CTRL_MOV", "SEXT", "ZEXT", "CAST_FPTOSI", "NOT", "LOAD":
+					if len(op.SrcOperands.Operands) == 0 {
+						writeRegisterDsts(op, regPred, predUnknownMask)
+						continue
+					}
+					writeRegisterDsts(op, regPred, operandPredMask(op.SrcOperands.Operands[0], regPred))
+				case "CONSTANT":
+					writeRegisterDsts(op, regPred, predTrueMask)
+				case "PHI_CONST":
+					if len(op.SrcOperands.Operands) < 2 {
+						writeRegisterDsts(op, regPred, predUnknownMask)
+						continue
+					}
+					src1 := operandPredMask(op.SrcOperands.Operands[0], regPred)
+					src2 := operandPredMask(op.SrcOperands.Operands[1], regPred)
+					writeRegisterDsts(op, regPred, predOr(src1, src2))
+				case "ADD", "SUB", "MUL", "DIV", "FADD", "FSUB", "FMUL", "FDIV",
+					"OR", "XOR", "AND", "SHL", "LLS", "LRS", "GEP", "MUL_ADD",
+					"ICMP_EQ", "ICMP_SLT", "ICMP_SGT", "ICMP_SGE", "ICMP_SLE", "ICMP_SNE", "LT_EX":
+					writeRegisterDsts(op, regPred, andFromSrcOperands(op, regPred))
+				default:
+					// Unknown opcode to lint: keep analysis conservative.
+					writeRegisterDsts(op, regPred, predUnknownMask)
+				}
+			}
+		}
+
+		keys := make([]string, 0, len(riskStats))
+		for key := range riskStats {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			stat := riskStats[key]
+			issues = append(issues, Issue{
+				Type:    IssuePredicate,
+				PEX:     stat.x,
+				PEY:     stat.y,
+				Time:    stat.t,
+				OpID:    stat.opID,
+				Message: stat.message,
+				Details: map[string]interface{}{
+					"certainty":     stat.certainty(),
+					"opcode":        stat.opcode,
+					"warmup_hits":   stat.stageHits[predicateStageWarmup],
+					"steady_hits":   stat.stageHits[predicateStageSteady],
+					"total_hits":    stat.totalHits,
+					"definite_hits": stat.definiteHits,
+				},
+			})
 		}
 	}
 

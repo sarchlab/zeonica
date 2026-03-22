@@ -2,6 +2,7 @@
 package verify
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sarchlab/zeonica/core"
@@ -262,5 +263,355 @@ func TestFunctionalSimulatorMemory(t *testing.T) {
 	val1 := fs.GetRegisterValue(0, 0, 1)
 	if val1 != 42 {
 		t.Errorf("Expected $1 = 42 (from memory), got %d", val1)
+	}
+}
+
+func TestRunLintPredicatePhiStartFirstSourceRisk(t *testing.T) {
+	arch := &ArchInfo{
+		Rows:         2,
+		Columns:      2,
+		Topology:     "mesh",
+		HopLatency:   1,
+		MemCapacity:  1024,
+		CtrlMemItems: 256,
+	}
+
+	// Force $0 predicate=false, then PHI_START reads $0 as first source.
+	prog := core.Program{
+		EntryBlocks: []core.EntryBlock{
+			{
+				InstructionGroups: []core.InstructionGroup{
+					{
+						Operations: []core.Operation{
+							{
+								OpCode: "GRANT_PREDICATE",
+								SrcOperands: core.OperandList{
+									Operands: []core.Operand{
+										{Impl: "#1", Color: "RED"},
+										{Impl: "#0", Color: "RED"},
+									},
+								},
+								DstOperands: core.OperandList{
+									Operands: []core.Operand{
+										{Impl: "$0", Color: "RED"},
+									},
+								},
+							},
+						},
+					},
+					{
+						Operations: []core.Operation{
+							{
+								OpCode: "PHI_START",
+								ID:     145,
+								SrcOperands: core.OperandList{
+									Operands: []core.Operand{
+										{Impl: "$0", Color: "RED"},
+										{Impl: "$1", Color: "RED"},
+									},
+								},
+								DstOperands: core.OperandList{
+									Operands: []core.Operand{
+										{Impl: "$2", Color: "RED"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	issues := RunLint(map[string]core.Program{"(0, 0)": prog}, arch)
+
+	found := false
+	for _, issue := range issues {
+		if issue.Type == IssuePredicate && strings.Contains(issue.Message, "PHI_START") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected a PREDICATE issue for PHI_START first-source risk, got %v", issues)
+	}
+}
+
+func TestRunLintPredicatePhiBothTrueRisk(t *testing.T) {
+	arch := &ArchInfo{
+		Rows:         2,
+		Columns:      2,
+		Topology:     "mesh",
+		HopLatency:   1,
+		MemCapacity:  1024,
+		CtrlMemItems: 256,
+	}
+
+	// $0 and $1 are both definitely true before PHI.
+	prog := core.Program{
+		EntryBlocks: []core.EntryBlock{
+			{
+				InstructionGroups: []core.InstructionGroup{
+					{
+						Operations: []core.Operation{
+							{
+								OpCode: "MOV",
+								SrcOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "#1", Color: "RED"}},
+								},
+								DstOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "$0", Color: "RED"}},
+								},
+							},
+						},
+					},
+					{
+						Operations: []core.Operation{
+							{
+								OpCode: "MOV",
+								SrcOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "#2", Color: "RED"}},
+								},
+								DstOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "$1", Color: "RED"}},
+								},
+							},
+						},
+					},
+					{
+						Operations: []core.Operation{
+							{
+								OpCode: "PHI",
+								ID:     111,
+								SrcOperands: core.OperandList{
+									Operands: []core.Operand{
+										{Impl: "$0", Color: "RED"},
+										{Impl: "$1", Color: "RED"},
+									},
+								},
+								DstOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "$2", Color: "RED"}},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	issues := RunLint(map[string]core.Program{"(0, 0)": prog}, arch)
+
+	found := false
+	for _, issue := range issues {
+		if issue.Type == IssuePredicate && strings.Contains(issue.Message, "PHI") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected a PREDICATE issue for PHI both-true risk, got %v", issues)
+	}
+}
+
+func TestVerificationReportBlockingAndWarningCounts(t *testing.T) {
+	report := &VerificationReport{
+		LintIssues: []Issue{
+			{Type: IssueStruct, Message: "struct issue"},
+			{Type: IssueTiming, Message: "timing issue"},
+			{
+				Type:    IssuePredicate,
+				Message: "predicate possible",
+				Details: map[string]interface{}{"certainty": "possible"},
+			},
+			{
+				Type:    IssuePredicate,
+				Message: "predicate definite",
+				Details: map[string]interface{}{"certainty": "definite"},
+			},
+			{
+				Type:    IssuePredicate,
+				Message: "predicate without certainty",
+			},
+		},
+	}
+
+	if got := report.WarningLintIssueCount(); got != 1 {
+		t.Fatalf("expected 1 warning issue, got %d", got)
+	}
+	if got := report.BlockingLintIssueCount(); got != 4 {
+		t.Fatalf("expected 4 blocking issues, got %d", got)
+	}
+}
+
+func TestRunLintPredicatePhiStartInvalidIterationsPrologueSafe(t *testing.T) {
+	arch := &ArchInfo{
+		Rows:         2,
+		Columns:      2,
+		Topology:     "mesh",
+		HopLatency:   1,
+		MemCapacity:  1024,
+		CtrlMemItems: 256,
+	}
+
+	// The first PHI_START execution should see $0=true.
+	// A later GPRED overwrites $0 predicate to false, but only after one invalid iteration.
+	prog := core.Program{
+		EntryBlocks: []core.EntryBlock{
+			{
+				InstructionGroups: []core.InstructionGroup{
+					{
+						Operations: []core.Operation{
+							{
+								OpCode: "MOV",
+								SrcOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "#1", Color: "RED"}},
+								},
+								DstOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "$0", Color: "RED"}},
+								},
+							},
+						},
+					},
+					{
+						Operations: []core.Operation{
+							{
+								OpCode: "GRANT_PREDICATE",
+								SrcOperands: core.OperandList{
+									Operands: []core.Operand{
+										{Impl: "#1", Color: "RED"},
+										{Impl: "#0", Color: "RED"},
+									},
+								},
+								DstOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "$2", Color: "RED"}},
+								},
+							},
+						},
+					},
+					{
+						Operations: []core.Operation{
+							{
+								OpCode:            "GRANT_PREDICATE",
+								InvalidIterations: 1,
+								SrcOperands: core.OperandList{
+									Operands: []core.Operand{
+										{Impl: "#1", Color: "RED"},
+										{Impl: "#0", Color: "RED"},
+									},
+								},
+								DstOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "$0", Color: "RED"}},
+								},
+							},
+						},
+					},
+					{
+						Operations: []core.Operation{
+							{
+								OpCode: "PHI_START",
+								ID:     210,
+								SrcOperands: core.OperandList{
+									Operands: []core.Operand{
+										{Impl: "$0", Color: "RED"},
+										{Impl: "$2", Color: "RED"},
+									},
+								},
+								DstOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "$3", Color: "RED"}},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	issues := RunLint(map[string]core.Program{"(0, 0)": prog}, arch)
+	for _, issue := range issues {
+		if issue.Type == IssuePredicate && strings.Contains(issue.Message, "first source") {
+			t.Fatalf("unexpected PHI_START first-source issue with prologue protection: %+v", issue)
+		}
+	}
+}
+
+func TestRunLintPredicatePhiSteadyStateAfterWarmupStillDetected(t *testing.T) {
+	arch := &ArchInfo{
+		Rows:         2,
+		Columns:      2,
+		Topology:     "mesh",
+		HopLatency:   1,
+		MemCapacity:  1024,
+		CtrlMemItems: 256,
+	}
+
+	// All three ops become executable after warmup; PHI should still be flagged.
+	prog := core.Program{
+		EntryBlocks: []core.EntryBlock{
+			{
+				InstructionGroups: []core.InstructionGroup{
+					{
+						Operations: []core.Operation{
+							{
+								OpCode:            "MOV",
+								InvalidIterations: 1,
+								SrcOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "#1", Color: "RED"}},
+								},
+								DstOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "$0", Color: "RED"}},
+								},
+							},
+						},
+					},
+					{
+						Operations: []core.Operation{
+							{
+								OpCode:            "MOV",
+								InvalidIterations: 1,
+								SrcOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "#2", Color: "RED"}},
+								},
+								DstOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "$1", Color: "RED"}},
+								},
+							},
+						},
+					},
+					{
+						Operations: []core.Operation{
+							{
+								OpCode:            "PHI",
+								ID:                211,
+								InvalidIterations: 1,
+								SrcOperands: core.OperandList{
+									Operands: []core.Operand{
+										{Impl: "$0", Color: "RED"},
+										{Impl: "$1", Color: "RED"},
+									},
+								},
+								DstOperands: core.OperandList{
+									Operands: []core.Operand{{Impl: "$2", Color: "RED"}},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	issues := RunLint(map[string]core.Program{"(0, 0)": prog}, arch)
+	foundDefinitePhi := false
+	for _, issue := range issues {
+		if issue.Type == IssuePredicate && strings.Contains(issue.Message, "PHI id=211") {
+			if certainty, ok := issue.Details["certainty"].(string); ok && certainty == "definite" {
+				foundDefinitePhi = true
+			}
+		}
+	}
+	if !foundDefinitePhi {
+		t.Fatalf("expected definite PHI predicate issue after warmup, got: %+v", issues)
 	}
 }

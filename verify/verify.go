@@ -137,11 +137,13 @@ const (
 	IssueStruct IssueType = "STRUCT" // Mapping/structure error (illegal PE, port conflict)
 	// IssueTiming indicates a dependency/timing lint issue.
 	IssueTiming IssueType = "TIMING" // Dependency/timing error (insufficient latency)
+	// IssuePredicate indicates predicate-consistency risk in control/dataflow ops.
+	IssuePredicate IssueType = "PREDICATE" // Predicate risk (PHI/PHI_START/GPRED interactions)
 )
 
 // Issue represents a single lint issue
 type Issue struct {
-	Type    IssueType              // STRUCT or TIMING
+	Type    IssueType              // STRUCT, TIMING, or PREDICATE
 	PEX     int                    // PE X coordinate (-1 if not applicable)
 	PEY     int                    // PE Y coordinate (-1 if not applicable)
 	Time    int                    // Timestep (-1 if not applicable)
@@ -158,6 +160,41 @@ type ArchInfo struct {
 	HopLatency   int    // Cycles per network hop (default 1)
 	MemCapacity  int    // Memory capacity per PE (in words or bytes)
 	CtrlMemItems int    // Control memory entries per PE
+}
+
+const (
+	defaultPredicateWarmupPassCap   = 8
+	defaultPredicateSteadyPassCount = 2
+)
+
+// LintOptions controls static lint behavior.
+type LintOptions struct {
+	// EnablePrologueAwarePredicate enables bounded warmup+steady analysis for predicate checks.
+	EnablePrologueAwarePredicate bool
+	// PredicateWarmupPassCap bounds warmup passes used to consume invalid_iterations/prologue.
+	PredicateWarmupPassCap int
+	// PredicateSteadyStatePasses controls extra passes after warmup to inspect steady-state risks.
+	PredicateSteadyStatePasses int
+}
+
+// DefaultLintOptions returns the default lint configuration.
+func DefaultLintOptions() LintOptions {
+	return LintOptions{
+		EnablePrologueAwarePredicate: true,
+		PredicateWarmupPassCap:       defaultPredicateWarmupPassCap,
+		PredicateSteadyStatePasses:   defaultPredicateSteadyPassCount,
+	}
+}
+
+func normalizeLintOptions(opts LintOptions) LintOptions {
+	out := opts
+	if out.PredicateWarmupPassCap <= 0 {
+		out.PredicateWarmupPassCap = defaultPredicateWarmupPassCap
+	}
+	if out.PredicateSteadyStatePasses < 0 {
+		out.PredicateSteadyStatePasses = 0
+	}
+	return out
 }
 
 // PEState captures the runtime state of a single PE (for functional simulator)

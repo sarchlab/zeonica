@@ -114,30 +114,36 @@ type coreState struct {
 
 	Mode OpMode
 
-	RecvBufHead       [][]cgra.Data //[Color][Direction]
-	RecvBufHeadReady  [][]bool
-	SendBufHead       [][]cgra.Data
-	SendBufHeadBusy   [][]bool
-	RecvBufQueue      [][][]cgra.Data // [Color][Direction]FIFO
-	SendBufQueue      [][][]cgra.Data // [Color][Direction]FIFO
-	RecvQueueCapacity int
-	SendQueueCapacity int
-	EnableFIFOModel   bool
-	OpInputReadCache  map[string]cgra.Data
-	AddrBuf           uint32 // buffer for the address of the memory
-	IsToWriteMemory   bool
+	RecvBufHead            [][]cgra.Data //[Color][Direction]
+	RecvBufHeadReady       [][]bool
+	SendBufHead            [][]cgra.Data
+	SendBufHeadBusy        [][]bool
+	RecvBufQueue           [][][]cgra.Data // [Color][Direction]FIFO
+	SendBufQueue           [][][]cgra.Data // [Color][Direction]FIFO
+	RecvQueueCapacity      int
+	SendQueueCapacity      int
+	EnableFIFOModel        bool
+	EnableQueueWatches     bool
+	ConfiguredQueueWatches []resolvedQueueWatch
+	WatchedQueues          []resolvedQueueWatch
+	OpInputReadCache       map[string]cgra.Data
+	AddrBuf                uint32 // buffer for the address of the memory
+	IsToWriteMemory        bool
 
-	routingRules      []*routingRule
-	triggers          []*Trigger
-	CurrentTime       float64 // current simulation time for logging
-	CurrentCycle      int64
-	OpTimingCursor    map[int]int
-	OpTimingLate      map[int]bool
-	OpTimingRollCycle map[int]int64
-	TimingWaitBlocked bool
-	StallReason       string
-	StallOpID         int
-	StallOpCode       string
+	routingRules          []*routingRule
+	triggers              []*Trigger
+	CurrentTime           float64 // current simulation time for logging
+	CurrentCycle          int64
+	OpTimingCursor        map[int]int
+	OpTimingLate          map[int]bool
+	OpTimingRollCycle     map[int]int64
+	OpIssueCount          map[int]int
+	ReadyHeldTraceEnabled bool
+	ReadyHeldRunMode      string
+	TimingWaitBlocked     bool
+	StallReason           string
+	StallOpID             int
+	StallOpCode           string
 }
 
 type instEmulator struct {
@@ -145,6 +151,45 @@ type instEmulator struct {
 	ExecutionPolicy       string
 	StrictMaxSlip         int64
 	StrictFailOnViolation bool
+}
+
+type issueReadiness struct {
+	OperandsReady        bool
+	PredicateReadyOrTrue bool
+	ResourcesAvailable   bool
+	Ready                bool
+	WaitReason           string
+}
+
+type issueDecision struct {
+	AnnotatedTimeT       *int64
+	OperandsReady        bool
+	PredicateReadyOrTrue bool
+	ResourcesAvailable   bool
+	TimingGateSatisfied  bool
+	FireableExceptTime   bool
+	BlockedByLowerBound  bool
+	CanIssue             bool
+	WaitReason           string
+	TimingWaitBlocked    bool
+}
+
+type readyHeldObservation struct {
+	RunMode              string
+	Cycle                int64
+	X                    int
+	Y                    int
+	OpID                 int
+	OccurrenceIndex      int
+	OpCode               string
+	AnnotatedTimeT       *int64
+	OperandsReady        bool
+	PredicateReadyOrTrue bool
+	ResourcesAvailable   bool
+	TimingGateSatisfied  bool
+	FireableExceptTime   bool
+	BlockedByLowerBound  bool
+	IssuedThisCycle      bool
 }
 
 func (s *coreState) recvFIFOEnabled() bool {
@@ -213,6 +258,16 @@ func (s *coreState) recvQueueLen(color, direction int) int {
 		return len(s.RecvBufQueue[color][direction])
 	}
 	if s.RecvBufHeadReady[color][direction] {
+		return 1
+	}
+	return 0
+}
+
+func (s *coreState) sendQueueLen(color, direction int) int {
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction {
+		return len(s.SendBufQueue[color][direction])
+	}
+	if s.SendBufHeadBusy[color][direction] {
 		return 1
 	}
 	return 0
@@ -490,16 +545,52 @@ func (s *coreState) cloneForEval() *coreState {
 	clone.SendBufHeadBusy = clone2DBool(s.SendBufHeadBusy)
 	clone.RecvBufQueue = clone3DData(s.RecvBufQueue)
 	clone.SendBufQueue = clone3DData(s.SendBufQueue)
+	clone.ConfiguredQueueWatches = cloneQueueWatches(s.ConfiguredQueueWatches)
+	clone.WatchedQueues = cloneQueueWatches(s.WatchedQueues)
 	clone.OpInputReadCache = make(map[string]cgra.Data)
 	clone.OpTimingCursor = cloneIntIntMap(s.OpTimingCursor)
 	clone.OpTimingLate = cloneIntBoolMap(s.OpTimingLate)
 	clone.OpTimingRollCycle = cloneIntInt64Map(s.OpTimingRollCycle)
+	clone.OpIssueCount = cloneIntIntMap(s.OpIssueCount)
 	clone.CurrReservationState = ReservationState{
 		ReservationMap:  cloneIntBoolMap(s.CurrReservationState.ReservationMap),
 		OpToExec:        s.CurrReservationState.OpToExec,
 		RefCountRuntime: cloneStringIntMap(s.CurrReservationState.RefCountRuntime),
 	}
 	return &clone
+}
+
+func (s *coreState) observeWatchedQueues(timeValue float64) {
+	if s == nil || len(s.WatchedQueues) == 0 {
+		return
+	}
+
+	for _, watch := range s.WatchedQueues {
+		occupancy := 0
+		capacity := 1
+		switch watch.Kind {
+		case "recv":
+			occupancy = s.recvQueueLen(watch.ColorIdx, watch.DirectionIdx)
+			capacity = s.recvQueueCap()
+		case "send":
+			occupancy = s.sendQueueLen(watch.ColorIdx, watch.DirectionIdx)
+			capacity = s.sendQueueCap(watch.ColorIdx, watch.DirectionIdx)
+		default:
+			continue
+		}
+
+		ObserveQueue(
+			watch.Label,
+			watch.Kind,
+			timeValue,
+			int(s.TileX),
+			int(s.TileY),
+			watch.Direction,
+			watch.Color,
+			occupancy,
+			capacity,
+		)
+	}
 }
 
 func normalizeExecutionPolicyString(policy string) string {
@@ -637,54 +728,164 @@ func (i instEmulator) rollStrictExpectedCycle(expectedCycle, currentCycle int64,
 	return expectedCycle + steps*ii
 }
 
-func (i instEmulator) canIssue(operation Operation, state *coreState) bool {
-	if !i.CareFlags || operation.InvalidIterations > 0 {
-		return true
+func (s *coreState) readyHeldTraceActive() bool {
+	return s != nil && s.ReadyHeldTraceEnabled && strings.TrimSpace(s.ReadyHeldRunMode) != ""
+}
+
+func (s *coreState) nextOpOccurrenceIndex(opID int) int {
+	if s == nil || s.OpIssueCount == nil {
+		return 0
 	}
+	return s.OpIssueCount[opID]
+}
+
+func (s *coreState) advanceOpOccurrenceIndex(opID int) {
+	if s == nil {
+		return
+	}
+	if s.OpIssueCount == nil {
+		s.OpIssueCount = make(map[int]int)
+	}
+	s.OpIssueCount[opID] = s.OpIssueCount[opID] + 1
+}
+
+func (i instEmulator) applyIssueDecision(operation Operation, state *coreState, decision issueDecision) {
+	if state == nil {
+		return
+	}
+	if decision.TimingWaitBlocked {
+		state.TimingWaitBlocked = true
+	}
+	if decision.WaitReason != "" {
+		i.setStallReason(state, operation, decision.WaitReason)
+	}
+}
+
+func (i instEmulator) readyHeldObservationFor(
+	operation Operation,
+	state *coreState,
+	decision issueDecision,
+	occurrenceIndex int,
+	issuedThisCycle bool,
+) (readyHeldObservation, bool) {
+	if state == nil || !state.readyHeldTraceActive() {
+		return readyHeldObservation{}, false
+	}
+	if !decision.FireableExceptTime && !decision.BlockedByLowerBound && !issuedThisCycle {
+		return readyHeldObservation{}, false
+	}
+	return readyHeldObservation{
+		RunMode:              state.ReadyHeldRunMode,
+		Cycle:                state.CurrentCycle,
+		X:                    int(state.TileX),
+		Y:                    int(state.TileY),
+		OpID:                 operation.ID,
+		OccurrenceIndex:      occurrenceIndex,
+		OpCode:               operation.OpCode,
+		AnnotatedTimeT:       decision.AnnotatedTimeT,
+		OperandsReady:        decision.OperandsReady,
+		PredicateReadyOrTrue: decision.PredicateReadyOrTrue,
+		ResourcesAvailable:   decision.ResourcesAvailable,
+		TimingGateSatisfied:  decision.TimingGateSatisfied,
+		FireableExceptTime:   decision.FireableExceptTime,
+		BlockedByLowerBound:  decision.BlockedByLowerBound,
+		IssuedThisCycle:      issuedThisCycle,
+	}, true
+}
+
+func (i instEmulator) emitReadyHeldObservation(observation readyHeldObservation) {
+	var annotated any
+	if observation.AnnotatedTimeT != nil {
+		annotated = *observation.AnnotatedTimeT
+	}
+	Trace(
+		"ReadyHeld",
+		"run_mode", observation.RunMode,
+		"cycle", observation.Cycle,
+		"X", observation.X,
+		"Y", observation.Y,
+		"ID", observation.OpID,
+		"occurrence_index", observation.OccurrenceIndex,
+		"OpCode", observation.OpCode,
+		"annotated_time_t", annotated,
+		"operands_ready", observation.OperandsReady,
+		"predicate_ready_or_true", observation.PredicateReadyOrTrue,
+		"resources_available", observation.ResourcesAvailable,
+		"timing_gate_satisfied", observation.TimingGateSatisfied,
+		"fireable_except_time", observation.FireableExceptTime,
+		"blocked_by_lower_bound", observation.BlockedByLowerBound,
+		"issued_this_cycle", observation.IssuedThisCycle,
+	)
+}
+
+func (i instEmulator) issueDecision(operation Operation, state *coreState) issueDecision {
+	decision := issueDecision{
+		OperandsReady:        true,
+		PredicateReadyOrTrue: true,
+		ResourcesAvailable:   true,
+		TimingGateSatisfied:  true,
+		CanIssue:             true,
+	}
+
+	if !i.CareFlags || operation.InvalidIterations > 0 {
+		decision.FireableExceptTime = true
+		return decision
+	}
+
+	readiness := i.checkIssueReadinessDetails(operation, state)
+	decision.OperandsReady = readiness.OperandsReady
+	decision.PredicateReadyOrTrue = readiness.PredicateReadyOrTrue
+	decision.ResourcesAvailable = readiness.ResourcesAvailable
+	decision.FireableExceptTime = readiness.Ready
 
 	policy := normalizeExecutionPolicyString(i.ExecutionPolicy)
 	if schedule, cursor, hasDerived := i.resolveDerivedSchedule(operation, state); hasDerived &&
 		(policy == ExecutionPolicyStrictTimed || policy == ExecutionPolicyElasticScheduled) {
 		if cursor >= len(schedule) {
-			// Once all derived firings are consumed for this op, suppress further
-			// issue attempts instead of falling back to static time_step gating.
-			return false
+			decision.TimingGateSatisfied = false
+			decision.FireableExceptTime = false
+			decision.CanIssue = false
+			return decision
 		}
 
-		expectedCycle := schedule[cursor]
+		annotatedTime := schedule[cursor]
+		decision.AnnotatedTimeT = int64Ptr(annotatedTime)
+		expectedCycle := annotatedTime
+
 		switch policy {
 		case ExecutionPolicyStrictTimed:
 			if rolledCycle, exists := state.OpTimingRollCycle[operation.ID]; exists {
 				expectedCycle = rolledCycle
 			}
+			decision.TimingGateSatisfied = state.CurrentCycle >= expectedCycle
 
-			// Control-sensitive ops keep strict lower-bound timing but avoid
-			// finite-W replay penalties to preserve control-token alignment.
 			if isStrictControlSensitiveOp(operation.OpCode) {
 				if state.CurrentCycle < expectedCycle {
-					state.TimingWaitBlocked = true
-					i.setStallReason(state, operation, StallReasonScheduleBubble)
-					return false
+					decision.CanIssue = false
+					decision.WaitReason = StallReasonScheduleBubble
+					decision.TimingWaitBlocked = true
+					return decision
 				}
-
-				ready, waitReason := i.checkIssueReadiness(operation, state)
-				if ready {
-					if state.CurrentCycle > schedule[cursor] {
+				if readiness.Ready {
+					if state.CurrentCycle > annotatedTime {
 						state.OpTimingLate[operation.ID] = true
 					}
-					return true
+					decision.CanIssue = true
+					return decision
 				}
-				if state.CurrentCycle > schedule[cursor] {
+				if state.CurrentCycle > annotatedTime {
 					state.OpTimingLate[operation.ID] = true
 				}
-				i.setStallReason(state, operation, waitReason)
-				return false
+				decision.CanIssue = false
+				decision.WaitReason = readiness.WaitReason
+				return decision
 			}
 
 			if state.CurrentCycle < expectedCycle {
-				state.TimingWaitBlocked = true
-				i.setStallReason(state, operation, StallReasonScheduleBubble)
-				return false
+				decision.CanIssue = false
+				decision.WaitReason = StallReasonScheduleBubble
+				decision.TimingWaitBlocked = true
+				return decision
 			}
 
 			lateness := state.CurrentCycle - expectedCycle
@@ -715,88 +916,99 @@ func (i instEmulator) canIssue(operation Operation, state *coreState) bool {
 					"Lateness", lateness,
 					"MaxSlip", i.StrictMaxSlip,
 				)
-				state.TimingWaitBlocked = true
-				i.setStallReason(state, operation, StallReasonScheduleBubble)
-				return false
+				decision.CanIssue = false
+				decision.WaitReason = StallReasonScheduleBubble
+				decision.TimingWaitBlocked = true
+				return decision
 			}
 
-			ready, waitReason := i.checkIssueReadiness(operation, state)
-			if !ready {
-				if state.CurrentCycle > schedule[cursor] {
+			if !readiness.Ready {
+				if state.CurrentCycle > annotatedTime {
 					state.OpTimingLate[operation.ID] = true
 				}
-				i.setStallReason(state, operation, waitReason)
-				return false
+				decision.CanIssue = false
+				decision.WaitReason = readiness.WaitReason
+				return decision
 			}
 
-			if state.CurrentCycle > schedule[cursor] {
+			if state.CurrentCycle > annotatedTime {
 				state.OpTimingLate[operation.ID] = true
 			}
-			return true
+			decision.CanIssue = true
+			return decision
 		case ExecutionPolicyElasticScheduled:
-			if state.CurrentCycle < expectedCycle {
-				state.TimingWaitBlocked = true
-				i.setStallReason(state, operation, StallReasonScheduleBubble)
-				return false
+			decision.TimingGateSatisfied = state.CurrentCycle >= expectedCycle
+			decision.BlockedByLowerBound = readiness.Ready && !decision.TimingGateSatisfied
+			if !decision.TimingGateSatisfied {
+				decision.CanIssue = false
+				decision.WaitReason = StallReasonScheduleBubble
+				decision.TimingWaitBlocked = true
+				return decision
 			}
-
-			ready, waitReason := i.checkIssueReadiness(operation, state)
-			if ready {
-				return true
+			if readiness.Ready {
+				decision.CanIssue = true
+				return decision
 			}
-			i.setStallReason(state, operation, waitReason)
-			return false
+			decision.CanIssue = false
+			decision.WaitReason = readiness.WaitReason
+			return decision
 		}
 	}
 
 	currentStep, targetStep, ii := i.resolveScheduleStep(operation, state)
-	ready, waitReason := i.checkIssueReadiness(operation, state)
 
 	// No schedule (compiled_ii missing or 0): ignore time gating so existing workloads
 	// (e.g. histogram) that do not use II-based scheduling still run like in-order.
 	if ii <= 0 {
-		return ready
+		decision.CanIssue = readiness.Ready
+		decision.WaitReason = readiness.WaitReason
+		return decision
 	}
 
 	switch policy {
 	case ExecutionPolicyStrictTimed:
+		decision.TimingGateSatisfied = currentStep >= targetStep
 		if currentStep < targetStep {
-			state.TimingWaitBlocked = true
-			i.setStallReason(state, operation, StallReasonScheduleBubble)
-			return false
+			decision.CanIssue = false
+			decision.WaitReason = StallReasonScheduleBubble
+			decision.TimingWaitBlocked = true
+			return decision
 		}
 		if currentStep == targetStep {
-			if ready {
-				return true
+			if readiness.Ready {
+				decision.CanIssue = true
+				return decision
 			}
 			i.panicSynchronizationViolation(operation, state, "operand/credit not ready at scheduled step")
 		}
 		i.panicSynchronizationViolation(operation, state, "operation missed its exact scheduled step")
-		return false
+		return decision
 	case ExecutionPolicyElasticScheduled:
+		decision.TimingGateSatisfied = currentStep >= targetStep
 		if currentStep < targetStep {
-			state.TimingWaitBlocked = true
-			i.setStallReason(state, operation, StallReasonScheduleBubble)
-			return false
+			decision.CanIssue = false
+			decision.WaitReason = StallReasonScheduleBubble
+			decision.TimingWaitBlocked = true
+			return decision
 		}
-		if ready {
-			return true
-		}
-		i.setStallReason(state, operation, waitReason)
-		return false
+		decision.CanIssue = readiness.Ready
+		decision.WaitReason = readiness.WaitReason
+		return decision
 	case ExecutionPolicyInOrderDataflow:
-		if ready {
-			return true
-		}
-		i.setStallReason(state, operation, waitReason)
-		return false
+		decision.CanIssue = readiness.Ready
+		decision.WaitReason = readiness.WaitReason
+		return decision
 	default:
-		if ready {
-			return true
-		}
-		i.setStallReason(state, operation, waitReason)
-		return false
+		decision.CanIssue = readiness.Ready
+		decision.WaitReason = readiness.WaitReason
+		return decision
 	}
+}
+
+func (i instEmulator) canIssue(operation Operation, state *coreState) bool {
+	decision := i.issueDecision(operation, state)
+	i.applyIssueDecision(operation, state, decision)
+	return decision.CanIssue
 }
 
 // set up the necessary state for the instruction group
@@ -908,30 +1120,53 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 
 func (i instEmulator) runInstructionGroupWithSyncOpsLegacy(cinst InstructionGroup, state *coreState, time float64) bool {
 	run := true
+	type evaluatedDecision struct {
+		operation       Operation
+		decision        issueDecision
+		occurrenceIndex int
+	}
+	evaluated := make([]evaluatedDecision, 0, len(cinst.Operations))
 	for _, operation := range cinst.Operations {
-		if i.canIssue(operation, state) {
+		decision := i.issueDecision(operation, state)
+		i.applyIssueDecision(operation, state, decision)
+		evaluated = append(evaluated, evaluatedDecision{
+			operation:       operation,
+			decision:        decision,
+			occurrenceIndex: state.nextOpOccurrenceIndex(operation.ID),
+		})
+		if decision.CanIssue {
 			continue
-		} else {
-			run = false
-			break
 		}
+		run = false
+		break
 	}
 	if run {
+		allResults := make(map[Operand]cgra.Data)
 		for index := range cinst.Operations {
-			// Get reference to the original operation in state.SelectedBlock
 			operation := &state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[index]
-			// Decrement InvalidIterations before running if needed
 			if operation.InvalidIterations > 0 {
-				// print("Invalid iteration for ", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")\n")
 				operation.InvalidIterations--
 				continue
 			}
+			occurrenceIndex := state.nextOpOccurrenceIndex(operation.ID)
+			decision := evaluated[index].decision
+			if observation, ok := i.readyHeldObservationFor(*operation, state, decision, occurrenceIndex, true); ok {
+				i.emitReadyHeldObservation(observation)
+			}
 			results := i.RunOperation(*operation, state, time)
+			state.advanceOpOccurrenceIndex(operation.ID)
 			i.advanceDerivedTimingCursor(*operation, state)
-			// In Sync mode, apply each op result immediately so later ops in the
-			// same instruction group can observe updated registers/ports.
 			for operand, value := range results {
-				i.writeOperand(operand, value, state)
+				allResults[operand] = value
+			}
+		}
+		for operand, value := range allResults {
+			i.writeOperand(operand, value, state)
+		}
+	} else {
+		for _, eval := range evaluated {
+			if observation, ok := i.readyHeldObservationFor(eval.operation, state, eval.decision, eval.occurrenceIndex, false); ok {
+				i.emitReadyHeldObservation(observation)
 			}
 		}
 	}
@@ -948,8 +1183,6 @@ func (i instEmulator) runInstructionGroupWithSyncOpsLegacy(cinst InstructionGrou
 				"OpCode", state.StallOpCode,
 			)
 		}
-		// Keep ticking while waiting for future schedule slots, otherwise the
-		// simulator may stop before reaching those future cycles.
 		return true
 	}
 	if !run && state.StallReason != "" {
@@ -995,6 +1228,7 @@ func (i instEmulator) runInstructionGroupWithAsyncOpsLegacy(cinst InstructionGro
 				continue
 			}
 			results := i.RunOperation(*operation, state, time)
+			state.advanceOpOccurrenceIndex(operation.ID)
 			i.advanceDerivedTimingCursor(*operation, state)
 			// Merge results into allResults
 			for operand, value := range results {
@@ -1014,8 +1248,21 @@ func (i instEmulator) runInstructionGroupWithAsyncOpsLegacy(cinst InstructionGro
 func (i instEmulator) runInstructionGroupWithSyncOpsTwoPhase(cinst InstructionGroup, state *coreState, time float64) bool {
 	workState := state.cloneForEval()
 	run := true
+	type evaluatedDecision struct {
+		operation       Operation
+		decision        issueDecision
+		occurrenceIndex int
+	}
+	evaluated := make([]evaluatedDecision, 0, len(cinst.Operations))
 	for _, operation := range cinst.Operations {
-		if i.canIssue(operation, workState) {
+		decision := i.issueDecision(operation, workState)
+		i.applyIssueDecision(operation, workState, decision)
+		evaluated = append(evaluated, evaluatedDecision{
+			operation:       operation,
+			decision:        decision,
+			occurrenceIndex: workState.nextOpOccurrenceIndex(operation.ID),
+		})
+		if decision.CanIssue {
 			continue
 		}
 		run = false
@@ -1023,6 +1270,11 @@ func (i instEmulator) runInstructionGroupWithSyncOpsTwoPhase(cinst InstructionGr
 	}
 
 	if !run {
+		for _, eval := range evaluated {
+			if observation, ok := i.readyHeldObservationFor(eval.operation, workState, eval.decision, eval.occurrenceIndex, false); ok {
+				i.emitReadyHeldObservation(observation)
+			}
+		}
 		state.TimingWaitBlocked = workState.TimingWaitBlocked
 		state.StallReason = workState.StallReason
 		state.StallOpID = workState.StallOpID
@@ -1058,18 +1310,28 @@ func (i instEmulator) runInstructionGroupWithSyncOpsTwoPhase(cinst InstructionGr
 	}
 
 	invalidDecrements := make([]int, 0)
+	issuedObservations := make([]readyHeldObservation, 0, len(cinst.Operations))
 	for index, operation := range cinst.Operations {
 		if operation.InvalidIterations > 0 {
 			invalidDecrements = append(invalidDecrements, index)
 			continue
 		}
+		occurrenceIndex := workState.nextOpOccurrenceIndex(operation.ID)
+		decision := evaluated[index].decision
+		if observation, ok := i.readyHeldObservationFor(operation, workState, decision, occurrenceIndex, true); ok {
+			issuedObservations = append(issuedObservations, observation)
+		}
 		results := i.RunOperation(operation, workState, time)
+		workState.advanceOpOccurrenceIndex(operation.ID)
 		i.advanceDerivedTimingCursor(operation, workState)
 		for operand, value := range results {
 			i.writeOperand(operand, value, workState)
 		}
 	}
 	*state = *workState
+	for _, observation := range issuedObservations {
+		i.emitReadyHeldObservation(observation)
+	}
 	i.applyInvalidIterationDecrements(state, invalidDecrements)
 	return true
 }
@@ -1090,6 +1352,7 @@ func (i instEmulator) runInstructionGroupWithAsyncOpsTwoPhase(cinst InstructionG
 				continue
 			}
 			results := i.RunOperation(operation, workState, time)
+			workState.advanceOpOccurrenceIndex(operation.ID)
 			i.advanceDerivedTimingCursor(operation, workState)
 			for operand, value := range results {
 				allResults[operand] = value
@@ -1147,32 +1410,38 @@ func (i instEmulator) normalizeDirection(s string) string {
 	}
 }
 
-func (i instEmulator) checkIssueReadiness(inst Operation, state *coreState) (bool, string) {
-	//PrintState(state)
+func (i instEmulator) checkIssueReadinessDetails(inst Operation, state *coreState) issueReadiness {
+	readiness := issueReadiness{
+		OperandsReady:        true,
+		PredicateReadyOrTrue: true,
+		ResourcesAvailable:   true,
+		Ready:                true,
+	}
+
 	for index, src := range inst.SrcOperands.Operands {
 		if index == 1 {
 			if inst.OpCode == "PHI_CONST" || inst.OpCode == "PHI_START" {
-				// Track PHI_CONST per instruction to avoid cross-interference.
 				var stateKey string
 				if inst.OpCode == "PHI_CONST" {
 					stateKey = fmt.Sprintf("PhiConst_%d", inst.ID)
 				} else if inst.OpCode == "PHI_START" {
 					stateKey = fmt.Sprintf("PhiStart_%d", inst.ID)
 				}
-				if state.States[stateKey] == nil || state.States[stateKey] == false { // first execution
+				if state.States[stateKey] == nil || state.States[stateKey] == false {
 					if len(inst.SrcOperands.Operands) > 1 {
-						// fmt.Println("ID", inst.ID, "bypass check")
 						continue
-					} else {
-						panic("PHI_CONST or PHI_START must have two sources")
 					}
+					panic("PHI_CONST or PHI_START must have two sources")
 				}
 			}
 		}
 		srcImpl := i.normalizeDirection(src.Impl)
 		if state.Directions[srcImpl] {
 			if state.recvQueueLen(i.getColorIndex(src.Color), i.getDirecIndex(srcImpl)) == 0 {
-				return false, StallReasonOperandWait
+				readiness.OperandsReady = false
+				readiness.Ready = false
+				readiness.WaitReason = StallReasonOperandWait
+				return readiness
 			}
 		}
 	}
@@ -1193,13 +1462,20 @@ func (i instEmulator) checkIssueReadiness(inst Operation, state *coreState) (boo
 					"Color", dst.Color,
 					"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
 				)
-				return false, StallReasonOutputBlocked
+				readiness.ResourcesAvailable = false
+				readiness.Ready = false
+				readiness.WaitReason = StallReasonOutputBlocked
+				return readiness
 			}
 		}
 	}
-	//fmt.Println("[CheckFlags] checking flags for inst", inst.OpCode, "@(", state.TileX, ",", state.TileY, "):", flag)
-	// fmt.Println("Check", inst.OpCode, "ID", inst.ID, "@(", state.TileX, ",", state.TileY, "):", flag)
-	return true, ""
+
+	return readiness
+}
+
+func (i instEmulator) checkIssueReadiness(inst Operation, state *coreState) (bool, string) {
+	readiness := i.checkIssueReadinessDetails(inst, state)
+	return readiness.Ready, readiness.WaitReason
 }
 
 func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
@@ -2451,9 +2727,9 @@ func (i instEmulator) runPhiStart(inst Operation, state *coreState) map[Operand]
 	results := make(map[Operand]cgra.Data)
 
 	if state.States[stateKey] == nil || state.States[stateKey] == false { // first execution
-		if !src1Pred {
-			panic("Predicate of first time PHI_START must be true at (" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ") instruction " + strconv.Itoa(inst.ID))
-		}
+		// if !src1Pred {
+		// 	panic("Predicate of first time PHI_START must be true at (" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ") instruction " + strconv.Itoa(inst.ID))
+		// }
 		result = src1Val
 		finalPred = src1Pred
 		state.States[stateKey] = true

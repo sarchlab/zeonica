@@ -29,6 +29,8 @@ type DeviceBuilder struct {
 	corePortIncomingCap   int
 	corePortOutgoingCap   int
 	enableFIFOModel       bool
+	enableQueueWatches    bool
+	queueWatches          []core.QueueWatchSpec
 	numRegisters          int
 	localMemoryWords      int
 }
@@ -105,6 +107,22 @@ func (d DeviceBuilder) WithCorePortBufferDepth(incoming, outgoing int) DeviceBui
 // WithEnableFIFOModel toggles FIFO-based core execution model.
 func (d DeviceBuilder) WithEnableFIFOModel(enabled bool) DeviceBuilder {
 	d.enableFIFOModel = enabled
+	return d
+}
+
+// WithEnableQueueWatches toggles optional queue-occupancy instrumentation.
+func (d DeviceBuilder) WithEnableQueueWatches(enabled bool) DeviceBuilder {
+	d.enableQueueWatches = enabled
+	return d
+}
+
+// WithQueueWatches sets optional queue watch definitions for all cores.
+func (d DeviceBuilder) WithQueueWatches(queueWatches []core.QueueWatchSpec) DeviceBuilder {
+	if len(queueWatches) == 0 {
+		d.queueWatches = nil
+		return d
+	}
+	d.queueWatches = append([]core.QueueWatchSpec(nil), queueWatches...)
 	return d
 }
 
@@ -238,6 +256,8 @@ func (d DeviceBuilder) createTiles(
 				WithStrictTimingConfig(d.strictMaxSlip, d.strictFailOnViolation).
 				WithPortBufferDepth(d.corePortIncomingCap, d.corePortOutgoingCap).
 				WithEnableFIFOModel(d.enableFIFOModel).
+				WithEnableQueueWatches(d.enableQueueWatches).
+				WithQueueWatches(d.queueWatches).
 				WithRegisterCount(d.numRegisters).
 				WithLocalMemoryWords(d.localMemoryWords).
 				Build(coreName)

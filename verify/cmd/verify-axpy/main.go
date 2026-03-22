@@ -32,8 +32,15 @@ func main() {
 
 	report := verify.GenerateReport(programs, arch, 1000)
 	report.WriteReport(os.Stdout)
-	if len(report.LintIssues) > 0 {
-		log.Fatalf("AXPY verification failed with %d lint issues", len(report.LintIssues))
+	if report.BlockingLintIssueCount() > 0 {
+		log.Fatalf(
+			"AXPY verification failed with %d blocking lint issues (%d warnings)",
+			report.BlockingLintIssueCount(),
+			report.WarningLintIssueCount(),
+		)
+	}
+	if report.WarningLintIssueCount() > 0 {
+		log.Printf("AXPY verification has %d non-blocking warnings", report.WarningLintIssueCount())
 	}
 	if !report.SimulationOK {
 		log.Fatalf("AXPY simulation failed: %v", report.SimulationErr)

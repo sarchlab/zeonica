@@ -1,6 +1,6 @@
 {
   "testName": "disable-trace",
-  "logPath": "/tmp/TestInitTraceLoggerDisableTraceCreatesEmptyLogAndReport4117882270/001/trace.log",
+  "logPath": "/tmp/TestInitTraceLoggerDisableTraceCreatesEmptyLogAndReport326622658/001/trace.log",
   "grid": {
     "width": 1,
     "height": 1

@@ -102,6 +102,7 @@ func (c *Core) MapProgram(program interface{}, x int, y int) {
 	c.state.resetPortQueues()
 	c.state.TileX = uint32(x)
 	c.state.TileY = uint32(y)
+	c.state.WatchedQueues = matchingQueueWatchesForTile(c.state.EnableQueueWatches, c.state.ConfiguredQueueWatches, x, y)
 }
 
 // Tick runs the program for one cycle.
@@ -111,6 +112,7 @@ func (c *Core) Tick() (madeProgress bool) {
 	// madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
 	madeProgress = c.runProgram() || madeProgress
 	madeProgress = c.doSend() || madeProgress
+	c.state.observeWatchedQueues(float64(c.Engine.CurrentTime() * 1e9))
 	c.state.CurrentCycle++
 	return madeProgress
 }

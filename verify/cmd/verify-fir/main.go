@@ -30,8 +30,15 @@ func main() {
 
 	report := verify.GenerateReport(programs, arch, 1000)
 	report.WriteReport(os.Stdout)
-	if len(report.LintIssues) > 0 {
-		log.Fatalf("FIR verification failed with %d lint issues", len(report.LintIssues))
+	if report.BlockingLintIssueCount() > 0 {
+		log.Fatalf(
+			"FIR verification failed with %d blocking lint issues (%d warnings)",
+			report.BlockingLintIssueCount(),
+			report.WarningLintIssueCount(),
+		)
+	}
+	if report.WarningLintIssueCount() > 0 {
+		log.Printf("FIR verification has %d non-blocking warnings", report.WarningLintIssueCount())
 	}
 	if !report.SimulationOK {
 		log.Fatalf("FIR simulation failed: %v", report.SimulationErr)
