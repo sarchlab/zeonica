@@ -501,6 +501,7 @@ func recordPredicateRisk(
 	s.mark(stage, definite)
 }
 
+//nolint:gocyclo
 func checkPredicateConstraints(
 	programs map[string]core.Program,
 	arch *ArchInfo,

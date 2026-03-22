@@ -567,7 +567,7 @@ func (s *coreState) observeWatchedQueues(timeValue float64) {
 
 	for _, watch := range s.WatchedQueues {
 		occupancy := 0
-		capacity := 1
+		var capacity int
 		switch watch.Kind {
 		case "recv":
 			occupancy = s.recvQueueLen(watch.ColorIdx, watch.DirectionIdx)

@@ -10,6 +10,7 @@ import (
 	"github.com/sarchlab/zeonica/verify"
 )
 
+//nolint:gocyclo,funlen
 func main() {
 	programPath := os.Getenv("ZEONICA_PROGRAM_YAML")
 	if programPath == "" {

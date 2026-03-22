@@ -151,6 +151,7 @@ func observeTrace(observation TraceObservation) {
 	}
 }
 
+//nolint:gocyclo
 func buildTraceObservation(msg string, args ...any) (TraceObservation, bool) {
 	observation := TraceObservation{
 		WallTime: time.Now(),

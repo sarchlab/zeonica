@@ -538,6 +538,8 @@ func PrintSummary(report Report) {
 }
 
 // PrintSummaryToWriter prints a compact report summary to the writer.
+//
+//nolint:funlen
 func PrintSummaryToWriter(report Report, w io.Writer) {
 	fmt.Fprintln(w, "========================")
 	fmt.Fprintln(w, "Zeonica Report Summary")
