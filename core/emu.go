@@ -138,6 +138,7 @@ type coreState struct {
 	OpTimingLate          map[int]bool
 	OpTimingRollCycle     map[int]int64
 	OpIssueCount          map[int]int
+	PendingSyncGroup      *pendingSyncGroup
 	ReadyHeldTraceEnabled bool
 	ReadyHeldRunMode      string
 	TimingWaitBlocked     bool
@@ -190,6 +191,14 @@ type readyHeldObservation struct {
 	FireableExceptTime   bool
 	BlockedByLowerBound  bool
 	IssuedThisCycle      bool
+}
+
+type pendingSyncGroup struct {
+	RemainingCycles   int
+	BufferedResults   map[Operand]cgra.Data
+	InvalidDecrements []int
+	RepresentativeID  int
+	RepresentativeOp  string
 }
 
 func (s *coreState) recvFIFOEnabled() bool {
@@ -522,6 +531,37 @@ func cloneIntInt64Map(input map[int]int64) map[int]int64 {
 	return out
 }
 
+func cloneOperandDataMap(input map[Operand]cgra.Data) map[Operand]cgra.Data {
+	if input == nil {
+		return nil
+	}
+	out := make(map[Operand]cgra.Data, len(input))
+	for operand, value := range input {
+		out[operand] = value
+	}
+	return out
+}
+
+func cloneIntSlice(input []int) []int {
+	if input == nil {
+		return nil
+	}
+	return append([]int(nil), input...)
+}
+
+func clonePendingSyncGroup(input *pendingSyncGroup) *pendingSyncGroup {
+	if input == nil {
+		return nil
+	}
+	return &pendingSyncGroup{
+		RemainingCycles:   input.RemainingCycles,
+		BufferedResults:   cloneOperandDataMap(input.BufferedResults),
+		InvalidDecrements: cloneIntSlice(input.InvalidDecrements),
+		RepresentativeID:  input.RepresentativeID,
+		RepresentativeOp:  input.RepresentativeOp,
+	}
+}
+
 func cloneIntAnyMap(input map[string]interface{}) map[string]interface{} {
 	if input == nil {
 		return nil
@@ -552,6 +592,7 @@ func (s *coreState) cloneForEval() *coreState {
 	clone.OpTimingLate = cloneIntBoolMap(s.OpTimingLate)
 	clone.OpTimingRollCycle = cloneIntInt64Map(s.OpTimingRollCycle)
 	clone.OpIssueCount = cloneIntIntMap(s.OpIssueCount)
+	clone.PendingSyncGroup = clonePendingSyncGroup(s.PendingSyncGroup)
 	clone.CurrReservationState = ReservationState{
 		ReservationMap:  cloneIntBoolMap(s.CurrReservationState.ReservationMap),
 		OpToExec:        s.CurrReservationState.OpToExec,
@@ -1024,6 +1065,175 @@ func (i instEmulator) SetUpInstructionGroup(index int32, state *coreState) {
 	state.CurrReservationState.SetRefCount(iGroup, state)
 }
 
+func supportsDeferredLatency(opCode string) bool {
+	switch normalizeLatencyOpcode(opCode) {
+	case "LOAD", "STORE", "LDD", "STD", "LD", "LDW", "ST", "STW",
+		"TRIGGER", "JMP", "BEQ", "BNE", "BLT",
+		"RETURN_VALUE", "RETURN_VOID", "RET",
+		"PHI", "PHI_CONST", "PHI_START", "GRANT_PREDICATE", "GRANT_ONCE":
+		return false
+	default:
+		return true
+	}
+}
+
+func (i instEmulator) deferredSyncGroupLatency(cinst InstructionGroup, state *coreState) (int, int, string, bool) {
+	if state == nil {
+		return 1, 0, "", false
+	}
+
+	type sendKey struct {
+		color     int
+		direction int
+	}
+
+	maxLatency := 1
+	representativeID := 0
+	representativeOp := ""
+	requiredSends := make(map[sendKey]int)
+	executedOps := 0
+
+	for _, operation := range cinst.Operations {
+		if operation.InvalidIterations > 0 {
+			continue
+		}
+		executedOps++
+		if !supportsDeferredLatency(operation.OpCode) {
+			return 1, 0, "", false
+		}
+
+		latency := state.Code.OperationLatency(operation.OpCode)
+		if latency > maxLatency {
+			maxLatency = latency
+			representativeID = operation.ID
+			representativeOp = operation.OpCode
+		} else if representativeOp == "" {
+			representativeID = operation.ID
+			representativeOp = operation.OpCode
+		}
+
+		for _, dst := range operation.DstOperands.Operands {
+			normalized := i.normalizeDirection(dst.Impl)
+			if !state.Directions[normalized] {
+				continue
+			}
+			key := sendKey{
+				color:     i.getColorIndex(dst.Color),
+				direction: i.getDirecIndex(normalized),
+			}
+			requiredSends[key]++
+			if requiredSends[key] > state.sendQueueCap(key.color, key.direction) {
+				return 1, 0, "", false
+			}
+		}
+	}
+
+	if executedOps == 0 || maxLatency <= 1 {
+		return 1, 0, "", false
+	}
+
+	return maxLatency, representativeID, representativeOp, true
+}
+
+func (i instEmulator) canCommitPendingSyncGroup(state *coreState, pending *pendingSyncGroup) bool {
+	if state == nil || pending == nil {
+		return true
+	}
+
+	type sendKey struct {
+		color     int
+		direction int
+	}
+
+	requiredSends := make(map[sendKey]int)
+	for operand := range pending.BufferedResults {
+		normalized := i.normalizeDirection(operand.Impl)
+		if !state.Directions[normalized] {
+			continue
+		}
+		key := sendKey{
+			color:     i.getColorIndex(operand.Color),
+			direction: i.getDirecIndex(normalized),
+		}
+		requiredSends[key]++
+	}
+
+	for key, required := range requiredSends {
+		free := state.sendQueueCap(key.color, key.direction) - state.sendQueueLen(key.color, key.direction)
+		if free < required {
+			return false
+		}
+	}
+	return true
+}
+
+func (i instEmulator) advancePendingSyncGroup(state *coreState) bool {
+	if state == nil || state.PendingSyncGroup == nil {
+		return false
+	}
+
+	pending := state.PendingSyncGroup
+	if pending.RemainingCycles > 1 {
+		pending.RemainingCycles--
+		state.TimingWaitBlocked = true
+		return true
+	}
+
+	if pending.RemainingCycles == 1 {
+		pending.RemainingCycles = 0
+	}
+
+	if !i.canCommitPendingSyncGroup(state, pending) {
+		state.TimingWaitBlocked = true
+		state.StallReason = StallReasonOutputBlocked
+		state.StallOpID = pending.RepresentativeID
+		state.StallOpCode = pending.RepresentativeOp
+		return true
+	}
+
+	for operand, value := range pending.BufferedResults {
+		i.writeOperand(operand, value, state)
+	}
+	i.applyInvalidIterationDecrements(state, pending.InvalidDecrements)
+	state.PendingSyncGroup = nil
+	return true
+}
+
+func (i instEmulator) bufferDeferredResult(
+	operand Operand,
+	value cgra.Data,
+	workState *coreState,
+	bufferedResults map[Operand]cgra.Data,
+) {
+	bufferedResults[operand] = value
+	if workState == nil || !strings.HasPrefix(operand.Impl, "$") {
+		return
+	}
+	registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand.Impl, "$"))
+	if err != nil {
+		panic(fmt.Sprintf("invalid register index in deferred result buffering: %v", operand))
+	}
+	if registerIndex < 0 || registerIndex >= len(workState.Registers) {
+		panic(fmt.Sprintf("register index %d out of range in deferred result buffering", registerIndex))
+	}
+	workState.Registers[registerIndex] = value
+}
+
+func (i instEmulator) applyDeferredSyncIssueState(state *coreState, workState *coreState) {
+	if state == nil || workState == nil {
+		return
+	}
+
+	state.RecvBufHead = clone2DData(workState.RecvBufHead)
+	state.RecvBufHeadReady = clone2DBool(workState.RecvBufHeadReady)
+	state.RecvBufQueue = clone3DData(workState.RecvBufQueue)
+	state.OpTimingCursor = cloneIntIntMap(workState.OpTimingCursor)
+	state.OpTimingLate = cloneIntBoolMap(workState.OpTimingLate)
+	state.OpTimingRollCycle = cloneIntInt64Map(workState.OpTimingRollCycle)
+	state.OpIssueCount = cloneIntIntMap(workState.OpIssueCount)
+	state.CurrentTime = workState.CurrentTime
+}
+
 func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreState, time float64) bool {
 	// check the Return signal
 	if *state.exit && time > *state.requestExitTimestamp {
@@ -1112,6 +1322,9 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 	state.StallOpID = 0
 	state.StallOpCode = ""
 	state.OpInputReadCache = make(map[string]cgra.Data)
+	if state.PendingSyncGroup != nil {
+		return i.advancePendingSyncGroup(state)
+	}
 	if state.EnableFIFOModel {
 		return i.runInstructionGroupWithSyncOpsTwoPhase(cinst, state, time)
 	}
@@ -1141,11 +1354,17 @@ func (i instEmulator) runInstructionGroupWithSyncOpsLegacy(cinst InstructionGrou
 		break
 	}
 	if run {
+		deferredLatency, representativeID, representativeOp, deferGroup := i.deferredSyncGroupLatency(cinst, state)
 		allResults := make(map[Operand]cgra.Data)
+		invalidDecrements := make([]int, 0)
 		for index := range cinst.Operations {
 			operation := &state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[index]
 			if operation.InvalidIterations > 0 {
-				operation.InvalidIterations--
+				if deferGroup {
+					invalidDecrements = append(invalidDecrements, index)
+				} else {
+					operation.InvalidIterations--
+				}
 				continue
 			}
 			occurrenceIndex := state.nextOpOccurrenceIndex(operation.ID)
@@ -1159,6 +1378,17 @@ func (i instEmulator) runInstructionGroupWithSyncOpsLegacy(cinst InstructionGrou
 			for operand, value := range results {
 				allResults[operand] = value
 			}
+		}
+		if deferGroup {
+			state.PendingSyncGroup = &pendingSyncGroup{
+				RemainingCycles:   deferredLatency - 1,
+				BufferedResults:   allResults,
+				InvalidDecrements: invalidDecrements,
+				RepresentativeID:  representativeID,
+				RepresentativeOp:  representativeOp,
+			}
+			state.TimingWaitBlocked = true
+			return true
 		}
 		for operand, value := range allResults {
 			i.writeOperand(operand, value, state)
@@ -1309,8 +1539,10 @@ func (i instEmulator) runInstructionGroupWithSyncOpsTwoPhase(cinst InstructionGr
 		return false
 	}
 
+	deferredLatency, representativeID, representativeOp, deferGroup := i.deferredSyncGroupLatency(cinst, state)
 	invalidDecrements := make([]int, 0)
 	issuedObservations := make([]readyHeldObservation, 0, len(cinst.Operations))
+	bufferedResults := make(map[Operand]cgra.Data)
 	for index, operation := range cinst.Operations {
 		if operation.InvalidIterations > 0 {
 			invalidDecrements = append(invalidDecrements, index)
@@ -1325,8 +1557,27 @@ func (i instEmulator) runInstructionGroupWithSyncOpsTwoPhase(cinst InstructionGr
 		workState.advanceOpOccurrenceIndex(operation.ID)
 		i.advanceDerivedTimingCursor(operation, workState)
 		for operand, value := range results {
+			if deferGroup {
+				i.bufferDeferredResult(operand, value, workState, bufferedResults)
+				continue
+			}
 			i.writeOperand(operand, value, workState)
 		}
+	}
+	if deferGroup {
+		i.applyDeferredSyncIssueState(state, workState)
+		for _, observation := range issuedObservations {
+			i.emitReadyHeldObservation(observation)
+		}
+		state.PendingSyncGroup = &pendingSyncGroup{
+			RemainingCycles:   deferredLatency - 1,
+			BufferedResults:   bufferedResults,
+			InvalidDecrements: invalidDecrements,
+			RepresentativeID:  representativeID,
+			RepresentativeOp:  representativeOp,
+		}
+		state.TimingWaitBlocked = true
+		return true
 	}
 	*state = *workState
 	for _, observation := range issuedObservations {

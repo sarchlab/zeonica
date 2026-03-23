@@ -94,6 +94,7 @@ func (c *Core) MapProgram(program interface{}, x int, y int) {
 	c.state.OpTimingCursor = make(map[int]int)
 	c.state.OpTimingLate = make(map[int]bool)
 	c.state.OpTimingRollCycle = make(map[int]int64)
+	c.state.PendingSyncGroup = nil
 	c.state.TimingWaitBlocked = false
 	c.state.StallReason = ""
 	c.state.StallOpID = 0
