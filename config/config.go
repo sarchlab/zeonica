@@ -20,21 +20,25 @@ type DeviceBuilder struct {
 	freq    sim.Freq
 	monitor *monitoring.Monitor
 	//portFactory   portFactory
-	width, height         int
-	memoryMode            string         // simple or shared or local
-	memoryShare           map[[2]int]int //map[[x, y]]GroupID
-	executionPolicy       string
-	strictMaxSlip         int64
-	strictFailOnViolation bool
-	corePortIncomingCap   int
-	corePortOutgoingCap   int
-	enableFIFOModel       bool
-	enableQueueWatches    bool
-	queueWatches          []core.QueueWatchSpec
-	numRegisters          int
-	localMemoryWords      int
-	enableVectorPE        bool
-	vectorLanes           int
+	width, height          int
+	memoryMode             string         // simple or shared or local
+	memoryShare            map[[2]int]int //map[[x, y]]GroupID
+	sharedMemoryModel      string
+	sharedMemoryBanks      int
+	sharedMemoryLatency    int
+	sharedMemoryInterleave uint64
+	executionPolicy        string
+	strictMaxSlip          int64
+	strictFailOnViolation  bool
+	corePortIncomingCap    int
+	corePortOutgoingCap    int
+	enableFIFOModel        bool
+	enableQueueWatches     bool
+	queueWatches           []core.QueueWatchSpec
+	numRegisters           int
+	localMemoryWords       int
+	enableVectorPE         bool
+	vectorLanes            int
 }
 
 // type portFactory interface {
@@ -83,6 +87,18 @@ func (d DeviceBuilder) WithMemoryMode(mode string) DeviceBuilder {
 // WithMemoryShare sets the memory sharing configuration.
 func (d DeviceBuilder) WithMemoryShare(share map[[2]int]int) DeviceBuilder {
 	d.memoryShare = share
+	return d
+}
+
+func (d DeviceBuilder) WithSharedMemoryModel(model string) DeviceBuilder {
+	d.sharedMemoryModel = model
+	return d
+}
+
+func (d DeviceBuilder) WithSharedMemoryBankConfig(banks, baseLatency int, interleaveBytes uint64) DeviceBuilder {
+	d.sharedMemoryBanks = banks
+	d.sharedMemoryLatency = baseLatency
+	d.sharedMemoryInterleave = interleaveBytes
 	return d
 }
 
@@ -168,7 +184,7 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 	if d.memoryMode == "shared" {
 		// Create shared memory controller
 
-		controllers := make(map[int]*idealmemcontroller.Comp)
+		controllers := make(map[int]sim.Component)
 		connections := make(map[int]*directconnection.Comp)
 
 		for x := 0; x < d.width; x++ {
@@ -181,11 +197,26 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 				groupID := d.memoryShare[[2]int{x, y}]
 				if _, ok := controllers[groupID]; !ok {
 					// has not been created yet, create it
-					controller := idealmemcontroller.MakeBuilder().
-						WithEngine(d.engine).
-						WithNewStorage(4 * mem.GB).
-						WithLatency(5).
-						Build("SharedMemory")
+					var controller sim.Component
+					if d.sharedMemoryModel == "banked" {
+						controller = newBankedSharedMemoryController(
+							"SharedMemory",
+							d.engine,
+							d.freq,
+							BankedSharedMemoryConfig{
+								Banks:           d.sharedMemoryBanks,
+								BaseLatency:     d.sharedMemoryLatency,
+								InterleaveBytes: d.sharedMemoryInterleave,
+								Capacity:        4 * mem.GB,
+							},
+						)
+					} else {
+						controller = idealmemcontroller.MakeBuilder().
+							WithEngine(d.engine).
+							WithNewStorage(4 * mem.GB).
+							WithLatency(5).
+							Build("SharedMemory")
+					}
 					controllers[groupID] = controller
 
 					name := fmt.Sprintf("SharedMemory%d%d", x, y)
@@ -270,6 +301,7 @@ func (d DeviceBuilder) createTiles(
 				WithRegisterCount(d.numRegisters).
 				WithLocalMemoryWords(d.localMemoryWords).
 				WithVectorConfig(d.enableVectorPE, d.vectorLanes).
+				WithBlockingMemoryOps(d.memoryMode == "shared").
 				Build(coreName)
 
 			if d.monitor != nil {

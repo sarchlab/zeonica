@@ -346,3 +346,181 @@ func TestSharedMemory(t *testing.T) {
 	}
 
 }
+
+func TestSharedBankedMemoryBlockingLoadWithoutLDW(t *testing.T) {
+	engine := sim.NewSerialEngine()
+	driver, device := newSharedBankedMemoryTestRig(engine, 1, 1, 2, 3)
+	driver.RegisterDevice(device)
+	mapProgramFile(t, driver, "./test_shared_blocking_ld.yaml", 1, 1)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(42), 0)
+
+	dst := make([]uint32, 1)
+	driver.FeedIn([]uint32{1}, cgra.West, [2]int{0, 1}, 1, "R")
+	driver.Collect(dst, cgra.East, [2]int{0, 1}, 1, "R")
+	driver.Run()
+
+	if dst[0] != 42 {
+		t.Fatalf("blocking LD without LDW got %d, want 42", dst[0])
+	}
+}
+
+func TestSharedBankedMemoryBlockingLoadCanWriteRegister(t *testing.T) {
+	engine := sim.NewSerialEngine()
+	driver, device := newSharedBankedMemoryTestRig(engine, 1, 1, 2, 3)
+	driver.RegisterDevice(device)
+	mapProgramFile(t, driver, "./test_shared_blocking_ld_to_reg.yaml", 1, 1)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(123), 0)
+
+	dst := make([]uint32, 1)
+	driver.FeedIn([]uint32{1}, cgra.West, [2]int{0, 1}, 1, "R")
+	driver.Collect(dst, cgra.East, [2]int{0, 1}, 1, "R")
+	driver.Run()
+
+	if dst[0] != 123 {
+		t.Fatalf("blocking LD to register got %d, want 123", dst[0])
+	}
+}
+
+func TestSharedBankedMemoryBlockingStoreWithoutSTW(t *testing.T) {
+	engine := sim.NewSerialEngine()
+	driver, device := newSharedBankedMemoryTestRig(engine, 1, 1, 2, 3)
+	driver.RegisterDevice(device)
+	mapProgramFile(t, driver, "./test_shared_blocking_st_ld.yaml", 1, 1)
+
+	dst := make([]uint32, 1)
+	driver.FeedIn([]uint32{1}, cgra.West, [2]int{0, 1}, 1, "R")
+	driver.Collect(dst, cgra.East, [2]int{0, 1}, 1, "R")
+	driver.Run()
+
+	if dst[0] != 99 {
+		t.Fatalf("blocking ST/LD without STW/LDW got %d, want 99", dst[0])
+	}
+}
+
+func TestSharedBankedMemoryConflictSerializesSameBank(t *testing.T) {
+	sameDst, sameTime := runSharedBankedConflictProgram(t, "./test_shared_blocking_conflict_same.yaml")
+	diffDst, diffTime := runSharedBankedConflictProgram(t, "./test_shared_blocking_conflict_diff.yaml")
+	assertSameElements(t, sameDst, []uint32{11, 33})
+	assertSameElements(t, diffDst, []uint32{11, 22})
+	if sameTime <= diffTime {
+		t.Fatalf("same-bank conflict should take longer than different banks: same=%g diff=%g", sameTime, diffTime)
+	}
+}
+
+func TestSharedBankedMemoryGroupsDoNotConflictWithEachOther(t *testing.T) {
+	isolatedDst, isolatedTime := runSharedBankedGroupIsolationProgram(t)
+	sameDst, sameTime := runSharedBankedConflictProgram(t, "./test_shared_blocking_conflict_same.yaml")
+	assertSameElements(t, isolatedDst, []uint32{44, 55})
+	assertSameElements(t, sameDst, []uint32{11, 33})
+	if isolatedTime >= sameTime {
+		t.Fatalf("separate shared-memory groups should avoid same-bank serialization: isolated=%g same-bank-single-group=%g", isolatedTime, sameTime)
+	}
+}
+
+func runSharedBankedConflictProgram(t *testing.T, programPath string) ([]uint32, float64) {
+	t.Helper()
+	engine := sim.NewSerialEngine()
+	driver, device := newSharedBankedMemoryTestRig(engine, 1, 2, 2, 3)
+	driver.RegisterDevice(device)
+	mapProgramFile(t, driver, programPath, 1, 2)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(11), 0)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(22), 4)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(33), 8)
+
+	dst := make([]uint32, 2)
+	driver.FeedIn([]uint32{1, 1}, cgra.West, [2]int{0, 2}, 2, "R")
+	driver.Collect(dst, cgra.East, [2]int{0, 2}, 2, "R")
+	driver.Run()
+	return dst, float64(engine.CurrentTime())
+}
+
+func runSharedBankedGroupIsolationProgram(t *testing.T) ([]uint32, float64) {
+	t.Helper()
+	engine := sim.NewSerialEngine()
+	driver := api.DriverBuilder{}.
+		WithEngine(engine).
+		WithFreq(1 * sim.GHz).
+		Build("Driver")
+	device := config.DeviceBuilder{}.
+		WithEngine(engine).
+		WithFreq(1*sim.GHz).
+		WithWidth(1).
+		WithHeight(2).
+		WithMemoryMode("shared").
+		WithMemoryShare(map[[2]int]int{
+			{0, 0}: 0,
+			{0, 1}: 1,
+		}).
+		WithSharedMemoryModel("banked").
+		WithSharedMemoryBankConfig(2, 3, 4).
+		Build("Device")
+	driver.RegisterDevice(device)
+	mapProgramFile(t, driver, "./test_shared_blocking_group_isolation.yaml", 1, 2)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(44), 0)
+	driver.PreloadSharedMemory(0, 1, makeBytesFromUint32(55), 0)
+
+	dst := make([]uint32, 2)
+	driver.FeedIn([]uint32{1, 1}, cgra.West, [2]int{0, 2}, 2, "R")
+	driver.Collect(dst, cgra.East, [2]int{0, 2}, 2, "R")
+	driver.Run()
+	return dst, float64(engine.CurrentTime())
+}
+
+func newSharedBankedMemoryTestRig(engine sim.Engine, width, height, banks, latency int) (api.Driver, cgra.Device) {
+	driver := api.DriverBuilder{}.
+		WithEngine(engine).
+		WithFreq(1 * sim.GHz).
+		Build("Driver")
+	share := make(map[[2]int]int)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			share[[2]int{x, y}] = 0
+		}
+	}
+	device := config.DeviceBuilder{}.
+		WithEngine(engine).
+		WithFreq(1*sim.GHz).
+		WithWidth(width).
+		WithHeight(height).
+		WithMemoryMode("shared").
+		WithMemoryShare(share).
+		WithSharedMemoryModel("banked").
+		WithSharedMemoryBankConfig(banks, latency, 4).
+		Build("Device")
+	return driver, device
+}
+
+func mapProgramFile(t *testing.T, driver api.Driver, path string, width, height int) {
+	t.Helper()
+	program := core.LoadProgramFileFromYAML(path)
+	if len(program) == 0 {
+		t.Fatalf("failed to load program %s", path)
+	}
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			coord := fmt.Sprintf("(%d,%d)", x, y)
+			if prog, exists := program[coord]; exists {
+				driver.MapProgram(prog, [2]int{x, y})
+			}
+		}
+	}
+}
+
+func assertSameElements(t *testing.T, got, want []uint32) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("length mismatch: got %v want %v", got, want)
+	}
+	remaining := make(map[uint32]int, len(want))
+	for _, value := range want {
+		remaining[value]++
+	}
+	for _, value := range got {
+		remaining[value]--
+	}
+	for value, count := range remaining {
+		if count != 0 {
+			t.Fatalf("values mismatch: got %v want %v; value %d has count delta %d", got, want, value, count)
+		}
+	}
+}

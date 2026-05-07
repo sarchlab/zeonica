@@ -27,6 +27,7 @@ type Builder struct {
 	localMemoryWords      int
 	enableVectorPE        bool
 	vectorLanes           int
+	blockingMemoryOps     bool
 }
 
 // WithEngine sets the engine.
@@ -119,6 +120,11 @@ func (b Builder) WithVectorConfig(enabled bool, lanes int) Builder {
 	return b
 }
 
+func (b Builder) WithBlockingMemoryOps(enabled bool) Builder {
+	b.blockingMemoryOps = enabled
+	return b
+}
+
 func readyHeldTraceEnabledFromEnv() bool {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv("ZEONICA_TRACE_READY_HELD")))
 	return value == "1" || value == "true" || value == "yes" || value == "on"
@@ -197,6 +203,7 @@ func (b Builder) Build(name string) *Core {
 		OpInputReadCache:       make(map[string]cgra.Data),
 		AddrBuf:                0,
 		IsToWriteMemory:        false,
+		BlockingMemoryOps:      b.blockingMemoryOps,
 		States:                 make(map[string]interface{}),
 		Mode:                   SyncOp,
 		CurrentCycle:           0,

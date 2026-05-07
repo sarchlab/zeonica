@@ -94,6 +94,10 @@ type DeviceComponent struct {
 	EnableVectorPE          *bool              `yaml:"enable_vector_pe"`
 	MemoryMode              string             `yaml:"memory_mode"`
 	MemoryShare             []MemoryShareEntry `yaml:"memory_share"`
+	SharedMemoryModel       string             `yaml:"shared_memory_model"`
+	SharedMemoryBanks       int                `yaml:"shared_memory_banks"`
+	SharedMemoryBaseLatency int                `yaml:"shared_memory_base_latency"`
+	SharedMemoryInterleave  int                `yaml:"shared_memory_bank_interleave_bytes"`
 	PortIncomingBufferDepth *int               `yaml:"port_incoming_buffer_depth"`
 	PortOutgoingBufferDepth *int               `yaml:"port_outgoing_buffer_depth"`
 	Extra                   map[string]any     `yaml:",inline"`

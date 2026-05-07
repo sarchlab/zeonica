@@ -1,0 +1,54 @@
+array_config:
+  rows: 2
+  columns: 1
+  cores:
+  - row: 0
+    column: 0
+    core_id: core_0_0
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: MOV
+          src_operands:
+          - operand: West
+            color: R
+          dst_operands:
+          - operand: $0
+            color: R
+          id: 0
+      - operations:
+        - opcode: LD
+          src_operands:
+          - operand: '0'
+            color: R
+          dst_operands:
+          - operand: East
+            color: R
+          id: 1
+  - row: 1
+    column: 0
+    core_id: core_1_0
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: MOV
+          src_operands:
+          - operand: West
+            color: R
+          dst_operands:
+          - operand: $0
+            color: R
+          id: 3
+      - operations:
+        - opcode: LD
+          src_operands:
+          - operand: '8'
+            color: R
+          dst_operands:
+          - operand: East
+            color: R
+          id: 2

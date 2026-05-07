@@ -189,6 +189,10 @@ func (c *Core) doSend() bool {
 			if err != nil {
 				return madeProgress
 			}
+			if c.state.PendingMemoryOp != nil && c.state.PendingMemoryOp.IsWrite && !c.state.PendingMemoryOp.RequestSent {
+				c.state.PendingMemoryOp.RequestID = msg.ID
+				c.state.PendingMemoryOp.RequestSent = true
+			}
 
 			timeValue := float64(c.Engine.CurrentTime() * 1e9)
 			if TraceEnabled() {
@@ -217,6 +221,10 @@ func (c *Core) doSend() bool {
 			err := c.ports[cgra.Router].local.Send(msg)
 			if err != nil {
 				return madeProgress
+			}
+			if c.state.PendingMemoryOp != nil && !c.state.PendingMemoryOp.IsWrite && !c.state.PendingMemoryOp.RequestSent {
+				c.state.PendingMemoryOp.RequestID = msg.ID
+				c.state.PendingMemoryOp.RequestSent = true
 			}
 
 			timeValue := float64(c.Engine.CurrentTime() * 1e9)
@@ -306,6 +314,16 @@ func (c *Core) doRecv() bool {
 
 	// if msg is DataReadyRsp, then the data is ready
 	if msg, ok := item.(*mem.DataReadyRsp); ok {
+		if c.state.PendingMemoryOp != nil &&
+			!c.state.PendingMemoryOp.IsWrite &&
+			c.state.PendingMemoryOp.RequestSent &&
+			msg.RespondTo == c.state.PendingMemoryOp.RequestID {
+			value := cgra.NewScalar(convert4BytesToUint32(msg.Data))
+			c.state.PendingMemoryOp.DataReady = &value
+			c.ports[cgra.Router].local.RetrieveIncoming()
+			madeProgress = true
+			return madeProgress
+		}
 		value := cgra.NewScalar(convert4BytesToUint32(msg.Data))
 		if !c.state.recvQueuePush(routerColor, routerDir, value) {
 			return madeProgress
@@ -329,6 +347,15 @@ func (c *Core) doRecv() bool {
 		c.ports[cgra.Router].local.RetrieveIncoming()
 		madeProgress = true
 	} else if msg, ok := item.(*mem.WriteDoneRsp); ok {
+		if c.state.PendingMemoryOp != nil &&
+			c.state.PendingMemoryOp.IsWrite &&
+			c.state.PendingMemoryOp.RequestSent &&
+			msg.RespondTo == c.state.PendingMemoryOp.RequestID {
+			c.state.PendingMemoryOp.WriteDone = true
+			c.ports[cgra.Router].local.RetrieveIncoming()
+			madeProgress = true
+			return madeProgress
+		}
 		value := cgra.NewScalar(0)
 		if !c.state.recvQueuePush(routerColor, routerDir, value) {
 			return madeProgress

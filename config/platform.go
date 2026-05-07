@@ -22,7 +22,7 @@ type tileCore interface {
 
 type tile struct {
 	Core                   tileCore
-	SharedMemoryController *idealmemcontroller.Comp
+	SharedMemoryController sim.Component
 }
 
 func (t tile) GetTickingComponent() sim.Component {
@@ -78,7 +78,17 @@ func (t tile) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
 
 func (t tile) WriteSharedMemory(x int, y int, data []byte, baseAddr uint32) { // x, y is useless here
 	fmt.Println("WriteSharedMemory(", x, ",", y, ") ", baseAddr, " <- ", data)
-	err := t.SharedMemoryController.Storage.Write(uint64(baseAddr), data)
+	var err error
+	switch controller := t.SharedMemoryController.(type) {
+	case *idealmemcontroller.Comp:
+		err = controller.Storage.Write(uint64(baseAddr), data)
+	case interface {
+		WriteStorage(addr uint32, data []byte) error
+	}:
+		err = controller.WriteStorage(baseAddr, data)
+	default:
+		panic("shared memory controller does not support preload")
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -104,7 +114,7 @@ type device struct {
 	Name                    string
 	Width, Height           int
 	Tiles                   [][]*tile
-	SharedMemoryControllers []*idealmemcontroller.Comp
+	SharedMemoryControllers []sim.Component
 }
 
 // GetSize returns the width and height of the device.

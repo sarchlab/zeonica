@@ -268,6 +268,45 @@ func TestResolveInvalidMemoryMode(t *testing.T) {
 	}
 }
 
+func TestResolveSharedMemoryBankedConfig(t *testing.T) {
+	spec := ArchSpec{
+		Simulator: Simulator{
+			Device: DeviceComponent{
+				SharedMemoryModel:       "banked",
+				SharedMemoryBanks:       8,
+				SharedMemoryBaseLatency: 7,
+				SharedMemoryInterleave:  16,
+			},
+		},
+	}
+	cfg, err := Resolve(spec, "shared-banked")
+	if err != nil {
+		t.Fatalf("Resolve returned error: %v", err)
+	}
+	if cfg.SharedMemoryModel != "banked" {
+		t.Fatalf("unexpected shared memory model: %q", cfg.SharedMemoryModel)
+	}
+	if cfg.SharedMemoryBanks != 8 || cfg.SharedMemoryBaseLatency != 7 || cfg.SharedMemoryBankInterleave != 16 {
+		t.Fatalf(
+			"unexpected shared memory bank config: banks=%d latency=%d interleave=%d",
+			cfg.SharedMemoryBanks,
+			cfg.SharedMemoryBaseLatency,
+			cfg.SharedMemoryBankInterleave,
+		)
+	}
+}
+
+func TestResolveInvalidSharedMemoryModel(t *testing.T) {
+	spec := ArchSpec{Simulator: Simulator{Device: DeviceComponent{SharedMemoryModel: "foo"}}}
+	_, err := Resolve(spec, "shared-model-invalid")
+	if err == nil {
+		t.Fatal("expected invalid shared memory model error")
+	}
+	if !strings.Contains(err.Error(), "unsupported shared_memory_model") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestResolveInvalidLinkLatency(t *testing.T) {
 	spec := ArchSpec{LinkDefaults: LinkDefaults{Latency: intPtr(-1)}}
 	_, err := Resolve(spec, "link-latency-invalid")

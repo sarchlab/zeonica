@@ -40,6 +40,10 @@ const (
 	defaultEnableVectorPE                = false
 	defaultVectorLanes                   = 1
 	defaultMemoryMode                    = "simple"
+	defaultSharedMemoryModel             = "ideal"
+	defaultSharedMemoryBanks             = 1
+	defaultSharedMemoryBaseLatency       = 5
+	defaultSharedMemoryBankInterleave    = 4
 	defaultLinkLatency                   = 1
 	defaultLinkBandwidth                 = 32
 	linkTimingModelParseOnly             = "parse_only"
@@ -77,6 +81,10 @@ type ResolvedConfig struct {
 	VectorLanes                   int
 	MemoryMode                    string
 	MemoryShare                   map[[2]int]int
+	SharedMemoryModel             string
+	SharedMemoryBanks             int
+	SharedMemoryBaseLatency       int
+	SharedMemoryBankInterleave    int
 	LinkLatency                   int
 	LinkBandwidth                 int
 	LinkTimingModel               string
@@ -177,6 +185,10 @@ func ResolveWithSpecPath(spec ArchSpec, specPath, testName string) (ResolvedConf
 		EnableVectorPE:                defaultOrBool(spec.Simulator.Device.EnableVectorPE, defaultEnableVectorPE),
 		VectorLanes:                   defaultVectorLanes,
 		MemoryMode:                    defaultMemoryMode,
+		SharedMemoryModel:             defaultSharedMemoryModel,
+		SharedMemoryBanks:             defaultSharedMemoryBanks,
+		SharedMemoryBaseLatency:       defaultSharedMemoryBaseLatency,
+		SharedMemoryBankInterleave:    defaultSharedMemoryBankInterleave,
 		LinkLatency:                   defaultLinkLatency,
 		LinkBandwidth:                 defaultLinkBandwidth,
 		ProgramYAML:                   programYAML,
@@ -292,6 +304,34 @@ func ResolveWithSpecPath(spec ArchSpec, specPath, testName string) (ResolvedConf
 	if err != nil {
 		return ResolvedConfig{}, err
 	}
+	resolved.SharedMemoryModel, err = normalizeSharedMemoryModel(defaultOrString(spec.Simulator.Device.SharedMemoryModel, defaultSharedMemoryModel))
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+	resolved.SharedMemoryBanks, err = resolvePositive(
+		spec.Simulator.Device.SharedMemoryBanks,
+		defaultSharedMemoryBanks,
+		"simulator.device.shared_memory_banks",
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+	resolved.SharedMemoryBaseLatency, err = resolvePositive(
+		spec.Simulator.Device.SharedMemoryBaseLatency,
+		defaultSharedMemoryBaseLatency,
+		"simulator.device.shared_memory_base_latency",
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+	resolved.SharedMemoryBankInterleave, err = resolvePositive(
+		spec.Simulator.Device.SharedMemoryInterleave,
+		defaultSharedMemoryBankInterleave,
+		"simulator.device.shared_memory_bank_interleave_bytes",
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
 
 	resolved.LinkLatency, err = resolveNonNegativePtr(
 		spec.LinkDefaults.Latency,
@@ -352,6 +392,8 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 		WithStrictTimingConfig(cfg.StrictMaxSlip, cfg.StrictFailOnViolation).
 		WithMemoryMode(cfg.MemoryMode).
 		WithMemoryShare(cfg.MemoryShare).
+		WithSharedMemoryModel(cfg.SharedMemoryModel).
+		WithSharedMemoryBankConfig(cfg.SharedMemoryBanks, cfg.SharedMemoryBaseLatency, uint64(cfg.SharedMemoryBankInterleave)).
 		WithCorePortBufferDepth(cfg.CorePortIncomingBufferDepth, cfg.CorePortOutgoingBufferDepth).
 		WithEnableFIFOModel(cfg.EnableFIFOModel).
 		WithEnableQueueWatches(cfg.EnableQueueWatches).
@@ -589,6 +631,18 @@ func normalizeMemoryMode(input string) (string, error) {
 		return "local", nil
 	default:
 		return "", fmt.Errorf("unsupported memory_mode %q (supported: simple, shared, local)", input)
+	}
+}
+
+func normalizeSharedMemoryModel(input string) (string, error) {
+	text := strings.ToLower(strings.TrimSpace(input))
+	switch text {
+	case "", "ideal":
+		return "ideal", nil
+	case "banked":
+		return "banked", nil
+	default:
+		return "", fmt.Errorf("unsupported shared_memory_model %q (supported: ideal, banked)", input)
 	}
 }
 

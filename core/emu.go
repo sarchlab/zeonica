@@ -131,6 +131,8 @@ type coreState struct {
 	OpInputReadCache       map[string]cgra.Data
 	AddrBuf                uint32 // buffer for the address of the memory
 	IsToWriteMemory        bool
+	BlockingMemoryOps      bool
+	PendingMemoryOp        *pendingMemoryOp
 
 	routingRules          []*routingRule
 	triggers              []*Trigger
@@ -147,6 +149,19 @@ type coreState struct {
 	StallReason           string
 	StallOpID             int
 	StallOpCode           string
+}
+
+type pendingMemoryOp struct {
+	OpCode      string
+	Address     uint32
+	Value       uint32
+	Dst         []Operand
+	Pred        bool
+	IsWrite     bool
+	RequestID   string
+	RequestSent bool
+	DataReady   *cgra.Data
+	WriteDone   bool
 }
 
 type instEmulator struct {
@@ -564,6 +579,19 @@ func clonePendingSyncGroup(input *pendingSyncGroup) *pendingSyncGroup {
 	}
 }
 
+func clonePendingMemoryOp(input *pendingMemoryOp) *pendingMemoryOp {
+	if input == nil {
+		return nil
+	}
+	clone := *input
+	clone.Dst = append([]Operand(nil), input.Dst...)
+	if input.DataReady != nil {
+		value := *input.DataReady
+		clone.DataReady = &value
+	}
+	return &clone
+}
+
 func cloneIntAnyMap(input map[string]interface{}) map[string]interface{} {
 	if input == nil {
 		return nil
@@ -595,6 +623,7 @@ func (s *coreState) cloneForEval() *coreState {
 	clone.OpTimingRollCycle = cloneIntInt64Map(s.OpTimingRollCycle)
 	clone.OpIssueCount = cloneIntIntMap(s.OpIssueCount)
 	clone.PendingSyncGroup = clonePendingSyncGroup(s.PendingSyncGroup)
+	clone.PendingMemoryOp = clonePendingMemoryOp(s.PendingMemoryOp)
 	clone.CurrReservationState = ReservationState{
 		ReservationMap:  cloneIntBoolMap(s.CurrReservationState.ReservationMap),
 		OpToExec:        s.CurrReservationState.OpToExec,
@@ -1324,6 +1353,9 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 	state.StallOpID = 0
 	state.StallOpCode = ""
 	state.OpInputReadCache = make(map[string]cgra.Data)
+	if state.PendingMemoryOp != nil {
+		return i.advancePendingMemoryOp(state)
+	}
 	if state.PendingSyncGroup != nil {
 		return i.advancePendingSyncGroup(state)
 	}
@@ -1331,6 +1363,43 @@ func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, sta
 		return i.runInstructionGroupWithSyncOpsTwoPhase(cinst, state, time)
 	}
 	return i.runInstructionGroupWithSyncOpsLegacy(cinst, state, time)
+}
+
+func (i instEmulator) advancePendingMemoryOp(state *coreState) bool {
+	pending := state.PendingMemoryOp
+	if pending == nil {
+		return false
+	}
+
+	if pending.IsWrite {
+		if !pending.WriteDone {
+			state.TimingWaitBlocked = true
+			state.StallReason = StallReasonOperandWait
+			return true
+		}
+		state.PendingMemoryOp = nil
+		return true
+	}
+
+	if pending.DataReady == nil {
+		state.TimingWaitBlocked = true
+		state.StallReason = StallReasonOperandWait
+		return true
+	}
+	for _, dst := range pending.Dst {
+		dstImpl := i.normalizeDirection(dst.Impl)
+		if state.Directions[dstImpl] &&
+			state.sendQueueIsFull(i.getColorIndex(dst.Color), i.getDirecIndex(dstImpl)) {
+			state.TimingWaitBlocked = true
+			state.StallReason = StallReasonOutputBlocked
+			return true
+		}
+	}
+	for _, dst := range pending.Dst {
+		i.writeOperand(dst, *pending.DataReady, state)
+	}
+	state.PendingMemoryOp = nil
+	return true
 }
 
 func (i instEmulator) runInstructionGroupWithSyncOpsLegacy(cinst InstructionGroup, state *coreState, time float64) bool {
@@ -1723,12 +1792,37 @@ func (i instEmulator) checkIssueReadinessDetails(inst Operation, state *coreStat
 		}
 	}
 
+	if state.BlockingMemoryOps && isBlockingMemoryShape(inst, state) {
+		routerColor := i.getColorIndex("R")
+		routerDir := int(cgra.Router)
+		if state.sendQueueIsFull(routerColor, routerDir) {
+			readiness.ResourcesAvailable = false
+			readiness.Ready = false
+			readiness.WaitReason = StallReasonOutputBlocked
+			return readiness
+		}
+	}
+
 	return readiness
 }
 
 func (i instEmulator) checkIssueReadiness(inst Operation, state *coreState) (bool, string) {
 	readiness := i.checkIssueReadinessDetails(inst, state)
 	return readiness.Ready, readiness.WaitReason
+}
+
+func isBlockingMemoryShape(inst Operation, state *coreState) bool {
+	if state == nil || !state.BlockingMemoryOps {
+		return false
+	}
+	switch inst.OpCode {
+	case "LD":
+		return len(inst.DstOperands.Operands) > 0 && inst.DstOperands.Operands[0].Impl != "Router"
+	case "ST":
+		return len(inst.DstOperands.Operands) == 0
+	default:
+		return false
+	}
 }
 
 func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
@@ -2282,6 +2376,23 @@ func (i instEmulator) runLoadDRAM(inst Operation, state *coreState) map[Operand]
 	addrStruct := i.readOperand(src1, state)
 	addr := addrStruct.First()
 	dst := inst.DstOperands.Operands[0]
+	if state.BlockingMemoryOps && i.normalizeDirection(dst.Impl) != "Router" {
+		finalPred := addrStruct.Pred
+		state.PendingMemoryOp = &pendingMemoryOp{
+			OpCode:  inst.OpCode,
+			Address: addr,
+			Dst:     append([]Operand(nil), inst.DstOperands.Operands...),
+			Pred:    finalPred,
+			IsWrite: false,
+		}
+		state.AddrBuf = addr
+		state.IsToWriteMemory = false
+		state.TimingWaitBlocked = true
+		Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+		return map[Operand]cgra.Data{
+			{Impl: "Router", Color: "R"}: cgra.NewScalarWithPred(addr, finalPred),
+		}
+	}
 	if dst.Impl != "Router" {
 		panic("the destination of a LOAD_DRAM instruction must be Router")
 	}
@@ -2348,6 +2459,28 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) map[Opera
 }
 
 func (i instEmulator) runStoreDRAM(inst Operation, state *coreState) map[Operand]cgra.Data {
+	if state.BlockingMemoryOps && len(inst.DstOperands.Operands) == 0 {
+		valueStruct := i.readOperand(inst.SrcOperands.Operands[0], state)
+		value := valueStruct.First()
+		addrStruct := i.readOperand(inst.SrcOperands.Operands[1], state)
+		addr := addrStruct.First()
+		finalPred := addrStruct.Pred && valueStruct.Pred
+		state.PendingMemoryOp = &pendingMemoryOp{
+			OpCode:  inst.OpCode,
+			Address: addr,
+			Value:   value,
+			Pred:    finalPred,
+			IsWrite: true,
+		}
+		state.AddrBuf = addr
+		state.IsToWriteMemory = true
+		state.TimingWaitBlocked = true
+		Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+		return map[Operand]cgra.Data{
+			{Impl: "Router", Color: "R"}: cgra.NewScalarWithPred(value, finalPred),
+		}
+	}
+
 	src1 := inst.SrcOperands.Operands[0]
 	addrStruct := i.readOperand(src1, state)
 	addr := addrStruct.First()
