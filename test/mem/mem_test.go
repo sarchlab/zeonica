@@ -413,7 +413,11 @@ func TestSharedBankedMemoryGroupsDoNotConflictWithEachOther(t *testing.T) {
 	assertSameElements(t, isolatedDst, []uint32{44, 55})
 	assertSameElements(t, sameDst, []uint32{11, 33})
 	if isolatedTime >= sameTime {
-		t.Fatalf("separate shared-memory groups should avoid same-bank serialization: isolated=%g same-bank-single-group=%g", isolatedTime, sameTime)
+		t.Fatalf(
+			"separate shared-memory groups should avoid same-bank serialization: isolated=%g same-bank-single-group=%g",
+			isolatedTime,
+			sameTime,
+		)
 	}
 }
 

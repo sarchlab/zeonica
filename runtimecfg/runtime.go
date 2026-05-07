@@ -304,7 +304,10 @@ func ResolveWithSpecPath(spec ArchSpec, specPath, testName string) (ResolvedConf
 	if err != nil {
 		return ResolvedConfig{}, err
 	}
-	resolved.SharedMemoryModel, err = normalizeSharedMemoryModel(defaultOrString(spec.Simulator.Device.SharedMemoryModel, defaultSharedMemoryModel))
+	resolved.SharedMemoryModel, err = normalizeSharedMemoryModel(defaultOrString(
+		spec.Simulator.Device.SharedMemoryModel,
+		defaultSharedMemoryModel,
+	))
 	if err != nil {
 		return ResolvedConfig{}, err
 	}
@@ -393,7 +396,11 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 		WithMemoryMode(cfg.MemoryMode).
 		WithMemoryShare(cfg.MemoryShare).
 		WithSharedMemoryModel(cfg.SharedMemoryModel).
-		WithSharedMemoryBankConfig(cfg.SharedMemoryBanks, cfg.SharedMemoryBaseLatency, uint64(cfg.SharedMemoryBankInterleave)).
+		WithSharedMemoryBankConfig(
+			cfg.SharedMemoryBanks,
+			cfg.SharedMemoryBaseLatency,
+			uint64(cfg.SharedMemoryBankInterleave),
+		).
 		WithCorePortBufferDepth(cfg.CorePortIncomingBufferDepth, cfg.CorePortOutgoingBufferDepth).
 		WithEnableFIFOModel(cfg.EnableFIFOModel).
 		WithEnableQueueWatches(cfg.EnableQueueWatches).
