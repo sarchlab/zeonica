@@ -302,14 +302,6 @@ func runBoundary1MLP(archSpecPath string) (int, stagedRunSummary) {
 	return totalMismatch, summary
 }
 
-func countColumns(ranges []colRange) int {
-	total := 0
-	for _, r := range ranges {
-		total += r.end - r.start
-	}
-	return total
-}
-
 func inRanges(x int, ranges []colRange) bool {
 	for _, r := range ranges {
 		if x >= r.start && x < r.end {

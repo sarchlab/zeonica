@@ -33,6 +33,7 @@ func mustPanicContains(t *testing.T, want string, fn func()) {
 	fn()
 }
 
+//nolint:funlen
 func TestVectorBroadcastAndArithmetic(t *testing.T) {
 	emu := instEmulator{}
 	state := newVectorTestState(4)

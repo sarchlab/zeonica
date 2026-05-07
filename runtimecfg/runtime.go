@@ -314,6 +314,8 @@ func ResolveWithSpecPath(spec ArchSpec, specPath, testName string) (ResolvedConf
 }
 
 // BuildRuntime builds engine, driver, and device from a resolved config.
+//
+//nolint:funlen
 func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, error) {
 	executionModel := strings.ToLower(strings.TrimSpace(cfg.ExecutionModel))
 	var engine sim.Engine

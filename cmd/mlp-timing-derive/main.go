@@ -31,6 +31,7 @@ type timingOpSchedule struct {
 	Cycles []int64 `json:"cycles"`
 }
 
+//nolint:gocyclo,funlen
 func main() {
 	logPath := flag.String("log", "", "path to elastic trace log (JSONL)")
 	outPath := flag.String("out", "", "path to output timing sidecar JSON")
@@ -101,6 +102,7 @@ func main() {
 	fmt.Printf("total firings: %d\n", totalFirings)
 }
 
+//nolint:gocyclo,funlen
 func deriveFromLog(logPath string) (map[opKey][]int64, int64, error) {
 	file, err := os.Open(logPath)
 	if err != nil {

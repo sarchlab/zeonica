@@ -15,6 +15,7 @@ import (
 
 const testName = "buffer_depth_4x4"
 
+//nolint:gocyclo
 func runBufferDepth4x4(rt *runtimecfg.Runtime) int {
 	width := rt.Config.Columns
 	height := rt.Config.Rows
