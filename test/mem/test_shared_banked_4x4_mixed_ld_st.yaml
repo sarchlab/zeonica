@@ -1,0 +1,170 @@
+array_config:
+  rows: 4
+  columns: 4
+  cores:
+  - row: 0
+    column: 0
+    core_id: core_0_0
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: MOV
+          src_operands:
+          - operand: West
+            color: R
+          dst_operands:
+          - operand: $0
+            color: R
+          id: 0
+      - operations:
+        - opcode: LD
+          src_operands:
+          - operand: '0'
+            color: R
+          dst_operands:
+          - operand: West
+            color: R
+          id: 1
+  - row: 1
+    column: 0
+    core_id: core_0_1
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: MOV
+          src_operands:
+          - operand: West
+            color: R
+          dst_operands:
+          - operand: $0
+            color: R
+          id: 2
+      - operations:
+        - opcode: ST
+          src_operands:
+          - operand: '99'
+            color: R
+          - operand: '8'
+            color: R
+          id: 3
+      - operations:
+        - opcode: LD
+          src_operands:
+          - operand: '8'
+            color: R
+          dst_operands:
+          - operand: West
+            color: R
+          id: 4
+  - row: 2
+    column: 0
+    core_id: core_0_2
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: MOV
+          src_operands:
+          - operand: West
+            color: R
+          dst_operands:
+          - operand: $0
+            color: R
+          id: 5
+      - operations:
+        - opcode: LD
+          src_operands:
+          - operand: '16'
+            color: R
+          dst_operands:
+          - operand: West
+            color: R
+          id: 6
+  - row: 0
+    column: 1
+    core_id: core_1_0
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: MOV
+          src_operands:
+          - operand: South
+            color: R
+          dst_operands:
+          - operand: $0
+            color: R
+          id: 7
+      - operations:
+        - opcode: LD
+          src_operands:
+          - operand: '4'
+            color: R
+          dst_operands:
+          - operand: South
+            color: R
+          id: 8
+  - row: 0
+    column: 2
+    core_id: core_2_0
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: MOV
+          src_operands:
+          - operand: South
+            color: R
+          dst_operands:
+          - operand: $0
+            color: R
+          id: 9
+      - operations:
+        - opcode: ST
+          src_operands:
+          - operand: '77'
+            color: R
+          - operand: '12'
+            color: R
+          id: 10
+      - operations:
+        - opcode: LD
+          src_operands:
+          - operand: '12'
+            color: R
+          dst_operands:
+          - operand: South
+            color: R
+          id: 11
+  - row: 0
+    column: 3
+    core_id: core_3_0
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: MOV
+          src_operands:
+          - operand: South
+            color: R
+          dst_operands:
+          - operand: $0
+            color: R
+          id: 12
+      - operations:
+        - opcode: LD
+          src_operands:
+          - operand: '20'
+            color: R
+          dst_operands:
+          - operand: South
+            color: R
+          id: 13

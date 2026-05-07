@@ -421,6 +421,57 @@ func TestSharedBankedMemoryGroupsDoNotConflictWithEachOther(t *testing.T) {
 	}
 }
 
+func TestSharedBankedMemory4x4BoundaryAccess(t *testing.T) {
+	engine := sim.NewSerialEngine()
+	driver, device := newSharedBankedMemoryTestRig(engine, 4, 4, 2, 5)
+	driver.RegisterDevice(device)
+	mapProgramFile(t, driver, "./test_shared_banked_4x4_boundary_access.yaml", 4, 4)
+	preloadSharedBanked4x4Memory(driver)
+
+	westDst := make([]uint32, 4)
+	southDst := make([]uint32, 4)
+	driver.FeedIn([]uint32{1, 1, 1, 1}, cgra.West, [2]int{0, 4}, 4, "R")
+	driver.FeedIn([]uint32{1, 1, 1}, cgra.South, [2]int{1, 4}, 3, "R")
+	driver.Collect(westDst, cgra.West, [2]int{0, 4}, 4, "R")
+	driver.Collect(southDst, cgra.South, [2]int{0, 4}, 4, "R")
+	driver.Run()
+
+	assertSameElements(t, westDst, []uint32{11, 33, 44, 11})
+	assertSameElements(t, southDst, []uint32{22, 22, 33, 44})
+}
+
+func TestSharedBankedMemory4x4MixedLDSTConflict(t *testing.T) {
+	engine := sim.NewSerialEngine()
+	driver, device := newSharedBankedMemoryTestRig(engine, 4, 4, 2, 5)
+	driver.RegisterDevice(device)
+	mapProgramFile(t, driver, "./test_shared_banked_4x4_mixed_ld_st.yaml", 4, 4)
+	preloadSharedBanked4x4Memory(driver)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(55), 16)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(66), 20)
+
+	westDst := make([]uint32, 3)
+	southDst := make([]uint32, 3)
+	driver.FeedIn([]uint32{1, 1, 1}, cgra.West, [2]int{0, 3}, 3, "R")
+	driver.FeedIn([]uint32{1, 1, 1}, cgra.South, [2]int{1, 4}, 3, "R")
+	driver.Collect(westDst, cgra.West, [2]int{0, 3}, 3, "R")
+	driver.Collect(southDst, cgra.South, [2]int{1, 4}, 3, "R")
+	driver.Run()
+
+	assertSameElements(t, westDst, []uint32{11, 99, 55})
+	assertSameElements(t, southDst, []uint32{22, 77, 66})
+}
+
+func TestSharedBankedMemory4x4SameBankSlowerThanDifferentBank(t *testing.T) {
+	sameDst, sameTime := runSharedBanked4x4TimingProgram(t, "./test_shared_banked_4x4_conflict_same.yaml")
+	diffDst, diffTime := runSharedBanked4x4TimingProgram(t, "./test_shared_banked_4x4_conflict_diff.yaml")
+
+	assertSameElements(t, sameDst, []uint32{11, 33, 55, 77, 99, 111, 133})
+	assertSameElements(t, diffDst, []uint32{11, 22, 33, 44, 55, 66, 77})
+	if sameTime <= diffTime {
+		t.Fatalf("4x4 same-bank conflict should take longer than mixed-bank access: same=%g diff=%g", sameTime, diffTime)
+	}
+}
+
 func runSharedBankedConflictProgram(t *testing.T, programPath string) ([]uint32, float64) {
 	t.Helper()
 	engine := sim.NewSerialEngine()
@@ -468,6 +519,41 @@ func runSharedBankedGroupIsolationProgram(t *testing.T) ([]uint32, float64) {
 	driver.Collect(dst, cgra.East, [2]int{0, 2}, 2, "R")
 	driver.Run()
 	return dst, float64(engine.CurrentTime())
+}
+
+func runSharedBanked4x4TimingProgram(t *testing.T, programPath string) ([]uint32, float64) {
+	t.Helper()
+	engine := sim.NewSerialEngine()
+	driver, device := newSharedBankedMemoryTestRig(engine, 4, 4, 2, 5)
+	driver.RegisterDevice(device)
+	mapProgramFile(t, driver, programPath, 4, 4)
+	preloadSharedBanked4x4Memory(driver)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(55), 16)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(66), 20)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(77), 24)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(88), 28)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(99), 32)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(111), 40)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(133), 48)
+
+	westDst := make([]uint32, 4)
+	southDst := make([]uint32, 3)
+	driver.FeedIn([]uint32{1, 1, 1, 1}, cgra.West, [2]int{0, 4}, 4, "R")
+	driver.FeedIn([]uint32{1, 1, 1}, cgra.South, [2]int{1, 4}, 3, "R")
+	driver.Collect(westDst, cgra.West, [2]int{0, 4}, 4, "R")
+	driver.Collect(southDst, cgra.South, [2]int{1, 4}, 3, "R")
+	driver.Run()
+
+	dst := append([]uint32{}, westDst...)
+	dst = append(dst, southDst...)
+	return dst, float64(engine.CurrentTime())
+}
+
+func preloadSharedBanked4x4Memory(driver api.Driver) {
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(11), 0)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(22), 4)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(33), 8)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(44), 12)
 }
 
 func newSharedBankedMemoryTestRig(engine sim.Engine, width, height, banks, latency int) (api.Driver, cgra.Device) {
