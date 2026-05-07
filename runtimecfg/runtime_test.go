@@ -198,6 +198,50 @@ func TestResolveMicroarchitectureOverrides(t *testing.T) {
 	}
 }
 
+func TestResolveVectorModeOverrides(t *testing.T) {
+	spec := ArchSpec{
+		TileDefaults: TileDefaults{VectorLanes: 8},
+		Simulator: Simulator{
+			Device: DeviceComponent{
+				EnableVectorPE: boolPtr(true),
+			},
+		},
+	}
+
+	cfg, err := Resolve(spec, "vector-overrides")
+	if err != nil {
+		t.Fatalf("Resolve returned error: %v", err)
+	}
+	if !cfg.EnableVectorPE {
+		t.Fatal("expected vector mode enabled")
+	}
+	if cfg.VectorLanes != 8 {
+		t.Fatalf("unexpected vector lanes: got %d want 8", cfg.VectorLanes)
+	}
+}
+
+func TestResolveVectorModeDisabledForcesScalarLanes(t *testing.T) {
+	spec := ArchSpec{
+		TileDefaults: TileDefaults{VectorLanes: 8},
+		Simulator: Simulator{
+			Device: DeviceComponent{
+				EnableVectorPE: boolPtr(false),
+			},
+		},
+	}
+
+	cfg, err := Resolve(spec, "vector-disabled")
+	if err != nil {
+		t.Fatalf("Resolve returned error: %v", err)
+	}
+	if cfg.EnableVectorPE {
+		t.Fatal("expected vector mode disabled")
+	}
+	if cfg.VectorLanes != 1 {
+		t.Fatalf("expected disabled vector mode to force scalar lanes, got %d", cfg.VectorLanes)
+	}
+}
+
 func TestResolveMicroarchitectureInvalidDepth(t *testing.T) {
 	spec := ArchSpec{
 		Simulator: Simulator{

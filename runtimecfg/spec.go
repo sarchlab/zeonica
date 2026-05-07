@@ -31,6 +31,7 @@ type CGRADefaults struct {
 type TileDefaults struct {
 	NumRegisters     int            `yaml:"num_registers"`
 	LocalMemoryWords int            `yaml:"local_memory_words"`
+	VectorLanes      int            `yaml:"vector_lanes"`
 	Extra            map[string]any `yaml:",inline"`
 }
 
@@ -90,6 +91,7 @@ type DeviceComponent struct {
 	Name                    string             `yaml:"name"`
 	Frequency               string             `yaml:"frequency"`
 	BindToArchitecture      *bool              `yaml:"bind_to_architecture"`
+	EnableVectorPE          *bool              `yaml:"enable_vector_pe"`
 	MemoryMode              string             `yaml:"memory_mode"`
 	MemoryShare             []MemoryShareEntry `yaml:"memory_share"`
 	PortIncomingBufferDepth *int               `yaml:"port_incoming_buffer_depth"`

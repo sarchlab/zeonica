@@ -33,6 +33,8 @@ type DeviceBuilder struct {
 	queueWatches          []core.QueueWatchSpec
 	numRegisters          int
 	localMemoryWords      int
+	enableVectorPE        bool
+	vectorLanes           int
 }
 
 // type portFactory interface {
@@ -135,6 +137,13 @@ func (d DeviceBuilder) WithRegisterCount(num int) DeviceBuilder {
 // WithLocalMemoryWords sets local memory size (in words) per core.
 func (d DeviceBuilder) WithLocalMemoryWords(words int) DeviceBuilder {
 	d.localMemoryWords = words
+	return d
+}
+
+// WithVectorConfig configures optional vector PE execution.
+func (d DeviceBuilder) WithVectorConfig(enabled bool, lanes int) DeviceBuilder {
+	d.enableVectorPE = enabled
+	d.vectorLanes = lanes
 	return d
 }
 
@@ -260,6 +269,7 @@ func (d DeviceBuilder) createTiles(
 				WithQueueWatches(d.queueWatches).
 				WithRegisterCount(d.numRegisters).
 				WithLocalMemoryWords(d.localMemoryWords).
+				WithVectorConfig(d.enableVectorPE, d.vectorLanes).
 				Build(coreName)
 
 			if d.monitor != nil {

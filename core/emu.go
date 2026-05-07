@@ -123,6 +123,8 @@ type coreState struct {
 	RecvQueueCapacity      int
 	SendQueueCapacity      int
 	EnableFIFOModel        bool
+	EnableVectorPE         bool
+	VectorLanes            int
 	EnableQueueWatches     bool
 	ConfiguredQueueWatches []resolvedQueueWatch
 	WatchedQueues          []resolvedQueueWatch
@@ -1788,6 +1790,7 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"ICMP_SLT": i.runLTExport,
 		"ICMP_SGT": i.runGTExport,
 		"ICMP_SGE": i.runSGEExport,
+		"ICMP_ULT": i.runULTExport,
 
 		// do not distinguish between data_mov and control mov
 		"DATA_MOV": i.runMov,
@@ -1816,15 +1819,29 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 		"NOT": i.runNot,
 	}
 
+	vectorFuncs := map[string]func(Operation, *coreState) map[Operand]cgra.Data{
+		"VBROADCAST":        i.runVBroadcast,
+		"VADD":              i.runVAdd,
+		"VMUL":              i.runVMul,
+		"VECTOR.REDUCE.ADD": i.runVectorReduceAdd,
+		"VEXTRACT":          i.runVExtract,
+		"VLOAD_CONTIG":      i.runVLoadContig,
+		"VSTORE_CONTIG":     i.runVStoreContig,
+	}
+
 	retFuncs := map[string]func(Operation, *coreState, float64) map[Operand]cgra.Data{
 		"RETURN_VALUE": i.runRetImm,
 		"RETURN_VOID":  i.runRetDelay,
 		"RET":          i.runRetImm, // backward compatibility
 	}
 
-	if instFunc, ok := instFuncs[instName]; ok {
+	if instFunc, ok := vectorFuncs[instName]; ok {
+		return instFunc(inst, state)
+	} else if instFunc, ok := instFuncs[instName]; ok {
+		i.rejectVectorSourcesForScalarOp(inst, state)
 		return instFunc(inst, state)
 	} else if retFunc, ok := retFuncs[instName]; ok {
+		i.rejectVectorSourcesForScalarOp(inst, state)
 		return retFunc(inst, state, time)
 	} else {
 		panic(fmt.Sprintf("unknown instruction '%s' at PC %d", instName, state.PCInBlock))
@@ -1943,6 +1960,142 @@ func (i instEmulator) writeOperand(operand Operand, value cgra.Data, state *core
 			panic(fmt.Sprintf("Invalid operand %v in writeOperand; expected register", operand))
 		}
 	}
+}
+
+func (i instEmulator) rejectVectorSourcesForScalarOp(inst Operation, state *coreState) {
+	for _, src := range inst.SrcOperands.Operands {
+		value := i.peekScalarGuardOperand(src, state)
+		if value.LaneCount() > 1 {
+			panic(fmt.Sprintf("scalar opcode %s cannot consume vector src operand", inst.OpCode))
+		}
+	}
+}
+
+func (i instEmulator) peekScalarGuardOperand(operand Operand, state *coreState) cgra.Data {
+	if strings.HasPrefix(operand.Impl, "$") {
+		registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand.Impl, "$"))
+		if err != nil || registerIndex < 0 || registerIndex >= len(state.Registers) {
+			return cgra.Data{}
+		}
+		return state.Registers[registerIndex]
+	}
+	normalizedImpl := i.normalizeDirection(operand.Impl)
+	if state.Directions[normalizedImpl] {
+		value, _ := state.recvQueuePeek(i.getColorIndex(operand.Color), i.getDirecIndex(normalizedImpl))
+		return value
+	}
+	return cgra.NewScalar(0)
+}
+
+func (i instEmulator) vectorLanes(state *coreState) int {
+	if state.VectorLanes <= 0 {
+		return 1
+	}
+	return state.VectorLanes
+}
+
+func (i instEmulator) requireVectorEnabled(state *coreState) int {
+	lanes := i.vectorLanes(state)
+	if !state.EnableVectorPE || lanes <= 1 {
+		panic("vector opcode requires simulator.device.enable_vector_pe=true")
+	}
+	return lanes
+}
+
+func (i instEmulator) requireVectorOperand(opCode string, value cgra.Data, lanes int) cgra.Data {
+	if value.LaneCount() != lanes {
+		panic(fmt.Sprintf("%s expects %d-lane vector", opCode, lanes))
+	}
+	return value
+}
+
+func (i instEmulator) runVBroadcast(inst Operation, state *coreState) map[Operand]cgra.Data {
+	lanes := i.requireVectorEnabled(state)
+	src := i.readOperand(inst.SrcOperands.Operands[0], state)
+	out := make([]uint32, lanes)
+	for idx := range out {
+		out[idx] = src.First()
+	}
+	results := make(map[Operand]cgra.Data)
+	for _, dst := range inst.DstOperands.Operands {
+		results[dst] = cgra.FromSlice(out, src.Pred)
+	}
+	return results
+}
+
+func (i instEmulator) runVectorBinary(inst Operation, state *coreState, fn func(uint32, uint32) uint32) map[Operand]cgra.Data {
+	lanes := i.requireVectorEnabled(state)
+	src1 := i.requireVectorOperand(inst.OpCode, i.readOperand(inst.SrcOperands.Operands[0], state), lanes)
+	src2 := i.requireVectorOperand(inst.OpCode, i.readOperand(inst.SrcOperands.Operands[1], state), lanes)
+	out := make([]uint32, lanes)
+	for idx := range out {
+		out[idx] = fn(src1.Data[idx], src2.Data[idx])
+	}
+	results := make(map[Operand]cgra.Data)
+	for _, dst := range inst.DstOperands.Operands {
+		results[dst] = cgra.FromSlice(out, src1.Pred && src2.Pred)
+	}
+	return results
+}
+
+func (i instEmulator) runVAdd(inst Operation, state *coreState) map[Operand]cgra.Data {
+	return i.runVectorBinary(inst, state, func(a, b uint32) uint32 { return a + b })
+}
+
+func (i instEmulator) runVMul(inst Operation, state *coreState) map[Operand]cgra.Data {
+	return i.runVectorBinary(inst, state, func(a, b uint32) uint32 { return a * b })
+}
+
+func (i instEmulator) runVectorReduceAdd(inst Operation, state *coreState) map[Operand]cgra.Data {
+	lanes := i.requireVectorEnabled(state)
+	src := i.requireVectorOperand(inst.OpCode, i.readOperand(inst.SrcOperands.Operands[0], state), lanes)
+	var sum uint32
+	for _, lane := range src.Data {
+		sum += lane
+	}
+	results := make(map[Operand]cgra.Data)
+	for _, dst := range inst.DstOperands.Operands {
+		results[dst] = cgra.NewScalarWithPred(sum, src.Pred)
+	}
+	return results
+}
+
+func (i instEmulator) runVExtract(inst Operation, state *coreState) map[Operand]cgra.Data {
+	lanes := i.requireVectorEnabled(state)
+	src := i.requireVectorOperand(inst.OpCode, i.readOperand(inst.SrcOperands.Operands[0], state), lanes)
+	index := int(i.readOperand(inst.SrcOperands.Operands[1], state).First())
+	if index < 0 || index >= lanes {
+		panic(fmt.Sprintf("vector extract index out of bounds: %d", index))
+	}
+	results := make(map[Operand]cgra.Data)
+	for _, dst := range inst.DstOperands.Operands {
+		results[dst] = cgra.NewScalarWithPred(src.Data[index], src.Pred)
+	}
+	return results
+}
+
+func (i instEmulator) runVLoadContig(inst Operation, state *coreState) map[Operand]cgra.Data {
+	lanes := i.requireVectorEnabled(state)
+	base := int(i.readOperand(inst.SrcOperands.Operands[0], state).First())
+	if base < 0 || base+lanes > len(state.Memory) {
+		panic("vector load out of bounds")
+	}
+	results := make(map[Operand]cgra.Data)
+	for _, dst := range inst.DstOperands.Operands {
+		results[dst] = cgra.FromSlice(state.Memory[base:base+lanes], true)
+	}
+	return results
+}
+
+func (i instEmulator) runVStoreContig(inst Operation, state *coreState) map[Operand]cgra.Data {
+	lanes := i.requireVectorEnabled(state)
+	src := i.requireVectorOperand(inst.OpCode, i.readOperand(inst.SrcOperands.Operands[0], state), lanes)
+	base := int(i.readOperand(inst.SrcOperands.Operands[1], state).First())
+	if base < 0 || base+lanes > len(state.Memory) {
+		panic("vector store out of bounds")
+	}
+	copy(state.Memory[base:base+lanes], src.Data)
+	return nil
 }
 
 func (i instEmulator) getDirecIndex(side string) int {
@@ -2108,6 +2261,7 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) map[Operan
 	}
 	value := state.Memory[addr]
 	slog.Warn("Memory",
+		"Time", state.CurrentTime,
 		"Behavior", "LoadDirect",
 		"ID", inst.ID,
 		"Value", value,
@@ -2889,6 +3043,34 @@ func (i instEmulator) runSGEExport(inst Operation, state *coreState) map[Operand
 		}
 	} else {
 		resultVal = 0
+		for _, dst := range inst.DstOperands.Operands {
+			results[dst] = cgra.NewScalarWithPred(0, resultPred)
+		}
+	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Src1", fmt.Sprintf("%d(%t)", src1Val, src1Pred), "Src2", fmt.Sprintf("%d(%t)", src2Val, src2Pred), "Result", fmt.Sprintf("%d(%t)", resultVal, resultPred))
+	return results
+}
+
+func (i instEmulator) runULTExport(inst Operation, state *coreState) map[Operand]cgra.Data {
+	src1 := inst.SrcOperands.Operands[0]
+	src2 := inst.SrcOperands.Operands[1]
+
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
+	src1Pred := src1Struct.Pred
+	src2Pred := src2Struct.Pred
+	resultPred := src1Pred && src2Pred
+
+	resultVal := uint32(0)
+	results := make(map[Operand]cgra.Data)
+	if src1Val < src2Val {
+		resultVal = 1
+		for _, dst := range inst.DstOperands.Operands {
+			results[dst] = cgra.NewScalarWithPred(1, resultPred)
+		}
+	} else {
 		for _, dst := range inst.DstOperands.Operands {
 			results[dst] = cgra.NewScalarWithPred(0, resultPred)
 		}

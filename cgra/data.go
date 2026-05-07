@@ -24,6 +24,26 @@ func (d Data) First() uint32 {
 	return d.Data[0]
 }
 
+// LaneCount returns the number of lanes carried by this value.
+func (d Data) LaneCount() int {
+	return len(d.Data)
+}
+
+// IsScalar reports whether the value is a single-lane scalar.
+func (d Data) IsScalar() bool {
+	return len(d.Data) <= 1
+}
+
+// Clone returns a deep copy of the value container.
+func (d Data) Clone() Data {
+	if len(d.Data) == 0 {
+		return Data{Pred: d.Pred}
+	}
+	cloned := make([]uint32, len(d.Data))
+	copy(cloned, d.Data)
+	return Data{Data: cloned, Pred: d.Pred}
+}
+
 // WithPred returns a copy with the given predicate flag.
 func (d Data) WithPred(pred bool) Data {
 	d.Pred = pred
@@ -32,5 +52,10 @@ func (d Data) WithPred(pred bool) Data {
 
 // FromSlice constructs a Data from a slice and optional predicate.
 func FromSlice(vals []uint32, pred bool) Data {
-	return Data{Data: vals, Pred: pred}
+	if len(vals) == 0 {
+		return Data{Pred: pred}
+	}
+	cloned := make([]uint32, len(vals))
+	copy(cloned, vals)
+	return Data{Data: cloned, Pred: pred}
 }

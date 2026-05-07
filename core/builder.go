@@ -25,6 +25,8 @@ type Builder struct {
 	queueWatches          []QueueWatchSpec
 	numRegisters          int
 	localMemoryWords      int
+	enableVectorPE        bool
+	vectorLanes           int
 }
 
 // WithEngine sets the engine.
@@ -110,6 +112,13 @@ func (b Builder) WithLocalMemoryWords(words int) Builder {
 	return b
 }
 
+// WithVectorConfig configures optional vector PE execution.
+func (b Builder) WithVectorConfig(enabled bool, lanes int) Builder {
+	b.enableVectorPE = enabled
+	b.vectorLanes = lanes
+	return b
+}
+
 func readyHeldTraceEnabledFromEnv() bool {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv("ZEONICA_TRACE_READY_HELD")))
 	return value == "1" || value == "true" || value == "yes" || value == "on"
@@ -136,6 +145,10 @@ func (b Builder) Build(name string) *Core {
 	localMemoryWords := b.localMemoryWords
 	if localMemoryWords <= 0 {
 		localMemoryWords = 1024
+	}
+	vectorLanes := b.vectorLanes
+	if !b.enableVectorPE || vectorLanes <= 0 {
+		vectorLanes = 1
 	}
 	resolvedQueueWatches, err := resolveQueueWatchSpecs(b.queueWatches)
 	if err != nil {
@@ -177,6 +190,8 @@ func (b Builder) Build(name string) *Core {
 		RecvQueueCapacity:      incomingBufCap,
 		SendQueueCapacity:      outgoingBufCap,
 		EnableFIFOModel:        b.enableFIFOModel,
+		EnableVectorPE:         b.enableVectorPE,
+		VectorLanes:            vectorLanes,
 		EnableQueueWatches:     b.enableQueueWatches,
 		ConfiguredQueueWatches: cloneQueueWatches(resolvedQueueWatches),
 		OpInputReadCache:       make(map[string]cgra.Data),

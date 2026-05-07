@@ -37,6 +37,8 @@ const (
 	defaultCorePortOutgoingBufferDepth   = 1
 	defaultNumRegisters                  = 64
 	defaultLocalMemoryWords              = 1024
+	defaultEnableVectorPE                = false
+	defaultVectorLanes                   = 1
 	defaultMemoryMode                    = "simple"
 	defaultLinkLatency                   = 1
 	defaultLinkBandwidth                 = 32
@@ -71,6 +73,8 @@ type ResolvedConfig struct {
 	CorePortOutgoingBufferDepth   int
 	NumRegisters                  int
 	LocalMemoryWords              int
+	EnableVectorPE                bool
+	VectorLanes                   int
 	MemoryMode                    string
 	MemoryShare                   map[[2]int]int
 	LinkLatency                   int
@@ -170,6 +174,8 @@ func ResolveWithSpecPath(spec ArchSpec, specPath, testName string) (ResolvedConf
 		CorePortOutgoingBufferDepth:   defaultCorePortOutgoingBufferDepth,
 		NumRegisters:                  defaultNumRegisters,
 		LocalMemoryWords:              defaultLocalMemoryWords,
+		EnableVectorPE:                defaultOrBool(spec.Simulator.Device.EnableVectorPE, defaultEnableVectorPE),
+		VectorLanes:                   defaultVectorLanes,
 		MemoryMode:                    defaultMemoryMode,
 		LinkLatency:                   defaultLinkLatency,
 		LinkBandwidth:                 defaultLinkBandwidth,
@@ -260,6 +266,18 @@ func ResolveWithSpecPath(spec ArchSpec, specPath, testName string) (ResolvedConf
 	if err != nil {
 		return ResolvedConfig{}, err
 	}
+	if resolved.EnableVectorPE {
+		resolved.VectorLanes, err = resolvePositive(
+			spec.TileDefaults.VectorLanes,
+			defaultVectorLanes,
+			"tile_defaults.vector_lanes",
+		)
+		if err != nil {
+			return ResolvedConfig{}, err
+		}
+	} else {
+		resolved.VectorLanes = 1
+	}
 
 	resolved.MemoryMode, err = normalizeMemoryMode(defaultOrString(spec.Simulator.Device.MemoryMode, defaultMemoryMode))
 	if err != nil {
@@ -338,6 +356,7 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 		WithQueueWatches(cfg.QueueWatches).
 		WithRegisterCount(cfg.NumRegisters).
 		WithLocalMemoryWords(cfg.LocalMemoryWords).
+		WithVectorConfig(cfg.EnableVectorPE, cfg.VectorLanes).
 		Build(cfg.DeviceName)
 
 	if cfg.LinkTimingModel == linkTimingModelParseOnly {

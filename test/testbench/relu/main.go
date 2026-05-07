@@ -25,10 +25,10 @@ func Relu(rt *runtimecfg.Runtime) int {
 
 	programPath := strings.TrimSpace(os.Getenv("ZEONICA_PROGRAM_YAML"))
 	if programPath == "" {
-		if _, err := os.Stat("relu.yaml"); err == nil {
-			programPath = "relu.yaml"
+		if _, err := os.Stat("relu_instruction.yaml"); err == nil {
+			programPath = "relu_instruction.yaml"
 		} else {
-			programPath = "relu/relu.yaml"
+			programPath = "relu/relu_instruction.yaml"
 		}
 	}
 	program := core.LoadProgramFileFromYAML(programPath)
@@ -47,10 +47,10 @@ func Relu(rt *runtimecfg.Runtime) int {
 		}
 	}
 
-	// preload input data at tile (3,2): 32 int32 values
+	// relu_instruction.yaml: LOAD is placed on tile (3,0), preload input there.
 	inputData := []int32{1, -2, 3, -4, 5, -6, 7, -8, 9, -10, 11, -12, 13, 14, -15, 16, 17, 18, 19, 20, -21, 22, 23, 24, -25, 26, 27, 28, -29, 30, -31, 32}
 	for i := 0; i < len(inputData); i++ {
-		driver.PreloadMemory(3, 2, uint32(inputData[i]), uint32(i))
+		driver.PreloadMemory(3, 0, uint32(inputData[i]), uint32(i))
 	}
 
 	// fire all the cores in the beginning
@@ -68,8 +68,8 @@ func Relu(rt *runtimecfg.Runtime) int {
 	fmt.Println("========================")
 	fmt.Println("========================")
 
-	// output tile (1,3), 32 elements
-	outputTile := [2]int{1, 3}
+	// relu_instruction.yaml: STORE is placed on tile (1,0), read output there.
+	outputTile := [2]int{1, 0}
 	scanLimit := 32
 	fmt.Printf("output memory @ tile (%d,%d):\n", outputTile[0], outputTile[1])
 	outputData := make([]uint32, scanLimit)
