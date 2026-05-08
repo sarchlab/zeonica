@@ -53,7 +53,7 @@ simulator:
   logging:
     enabled: true
     enableTrace: true
-    file: "<test>.json.log"
+    file: "test/testbench/trace/<test>.json.log"
 
   driver:
     name: "Driver"
