@@ -21,7 +21,7 @@ array_config:
       - operations:
         - opcode: LD
           src_operands:
-          - operand: '0'
+          - operand: "#0"
             color: RED
           dst_operands:
           - operand: Router
@@ -55,7 +55,7 @@ array_config:
       - operations:
         - opcode: LD
           src_operands:
-          - operand: '0'
+          - operand: "#0"
             color: RED
           dst_operands:
           - operand: Router

@@ -40,7 +40,7 @@ array_config:
           src_operands:
           - operand: $1
             color: RED
-          - operand: '4'
+          - operand: "#4"
             color: RED
           dst_operands:
           - operand: $1
@@ -49,7 +49,7 @@ array_config:
       - operations:
         - opcode: MOV
           src_operands:
-          - operand: '777'
+          - operand: "#777"
             color: RED
           dst_operands:
           - operand: East
@@ -94,7 +94,7 @@ array_config:
           src_operands:
           - operand: $1
             color: RED
-          - operand: '4'
+          - operand: "#4"
             color: RED
           dst_operands:
           - operand: $1
@@ -139,7 +139,7 @@ array_config:
           src_operands:
           - operand: $1
             color: RED
-          - operand: '4'
+          - operand: "#4"
             color: RED
           dst_operands:
           - operand: $1
@@ -193,7 +193,7 @@ array_config:
           src_operands:
           - operand: $1
             color: RED
-          - operand: '4'
+          - operand: "#4"
             color: RED
           dst_operands:
           - operand: $1
