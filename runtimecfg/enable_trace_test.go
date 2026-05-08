@@ -42,12 +42,12 @@ func TestInitTraceLoggerDisableTraceCreatesEmptyLogAndReport(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "trace.log")
 	rt := &Runtime{
 		Config: ResolvedConfig{
-			TestName:    "disable-trace",
-			Rows:        1,
-			Columns:     1,
+			TestName:       "disable-trace",
+			Rows:           1,
+			Columns:        1,
 			LoggingEnabled: true,
-			EnableTrace: false,
-			LogPath:     logPath,
+			EnableTrace:    false,
+			LogPath:        logPath,
 		},
 		Observer: report.NewObserver(),
 	}
@@ -77,6 +77,10 @@ func TestInitTraceLoggerDisableTraceCreatesEmptyLogAndReport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateSaveAndPrintReport returned error: %v", err)
 	}
+	expectedReportPath := filepath.Join(filepath.Dir(logPath), "disable-trace.report.json")
+	if reportPath != expectedReportPath {
+		t.Fatalf("expected report path %q, got %q", expectedReportPath, reportPath)
+	}
 
 	content, err := os.ReadFile(reportPath)
 	if err != nil {
@@ -91,12 +95,12 @@ func TestInitTraceLoggerEnableTraceWritesEvents(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "trace.log")
 	rt := &Runtime{
 		Config: ResolvedConfig{
-			TestName:    "enable-trace",
-			Rows:        1,
-			Columns:     1,
+			TestName:       "enable-trace",
+			Rows:           1,
+			Columns:        1,
 			LoggingEnabled: true,
-			EnableTrace: true,
-			LogPath:     logPath,
+			EnableTrace:    true,
+			LogPath:        logPath,
 		},
 		Observer: report.NewObserver(),
 	}
