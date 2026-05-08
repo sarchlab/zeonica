@@ -28,6 +28,7 @@ type Builder struct {
 	enableVectorPE        bool
 	vectorLanes           int
 	blockingMemoryOps     bool
+	sharedMemoryBase      uint32
 }
 
 // WithEngine sets the engine.
@@ -39,6 +40,12 @@ func (b Builder) WithEngine(engine sim.Engine) Builder {
 // WithFreq sets the frequency of the core.
 func (b Builder) WithFreq(freq sim.Freq) Builder {
 	b.freq = freq
+	return b
+}
+
+// WithSharedMemoryBase sets a word-address offset for shared-memory requests.
+func (b Builder) WithSharedMemoryBase(base uint32) Builder {
+	b.sharedMemoryBase = base
 	return b
 }
 
@@ -202,6 +209,7 @@ func (b Builder) Build(name string) *Core {
 		ConfiguredQueueWatches: cloneQueueWatches(resolvedQueueWatches),
 		OpInputReadCache:       make(map[string]cgra.Data),
 		AddrBuf:                0,
+		SharedMemoryBase:       b.sharedMemoryBase,
 		IsToWriteMemory:        false,
 		BlockingMemoryOps:      b.blockingMemoryOps,
 		States:                 make(map[string]interface{}),

@@ -19,7 +19,7 @@ array_config:
             color: RED
           id: 0
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
           - operand: "#0"
             color: RED
@@ -44,17 +44,17 @@ array_config:
             color: RED
           id: 2
       - operations:
-        - opcode: ST
+        - opcode: STORE
           src_operands:
           - operand: "#99"
             color: RED
-          - operand: "#8"
+          - operand: "#2"
             color: RED
           id: 3
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
-          - operand: "#8"
+          - operand: "#2"
             color: RED
           dst_operands:
           - operand: West
@@ -77,9 +77,9 @@ array_config:
             color: RED
           id: 5
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
-          - operand: "#16"
+          - operand: "#4"
             color: RED
           dst_operands:
           - operand: West
@@ -102,9 +102,9 @@ array_config:
             color: RED
           id: 7
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
-          - operand: "#4"
+          - operand: "#1"
             color: RED
           dst_operands:
           - operand: South
@@ -127,17 +127,17 @@ array_config:
             color: RED
           id: 9
       - operations:
-        - opcode: ST
+        - opcode: STORE
           src_operands:
           - operand: "#77"
             color: RED
-          - operand: "#12"
+          - operand: "#3"
             color: RED
           id: 10
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
-          - operand: "#12"
+          - operand: "#3"
             color: RED
           dst_operands:
           - operand: South
@@ -160,9 +160,9 @@ array_config:
             color: RED
           id: 12
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
-          - operand: "#20"
+          - operand: "#5"
             color: RED
           dst_operands:
           - operand: South

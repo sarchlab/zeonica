@@ -43,6 +43,7 @@ type Driver interface {
 
 	//
 	ReadMemory(x int, y int, addr uint32) uint32
+	ReadSharedMemory(x int, y int, addr uint32) uint32
 
 	// Run will run all the tasks that have been added to the driver.
 	Run()
@@ -78,6 +79,11 @@ func (d *driverImpl) PreloadSharedMemory(x int, y int, data []byte, baseAddr uin
 func (d *driverImpl) ReadMemory(x int, y int, addr uint32) uint32 {
 	tile := d.device.GetTile(x, y)
 	return tile.GetMemory(x, y, addr)
+}
+
+func (d *driverImpl) ReadSharedMemory(x int, y int, addr uint32) uint32 {
+	tile := d.device.GetTile(x, y)
+	return tile.ReadSharedMemory(x, y, addr)
 }
 
 // Tick runs the driver for one cycle.

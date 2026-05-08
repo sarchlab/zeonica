@@ -446,8 +446,8 @@ func TestSharedBankedMemory4x4MixedLDSTConflict(t *testing.T) {
 	driver.RegisterDevice(device)
 	mapProgramFile(t, driver, "./test_shared_banked_4x4_mixed_ld_st.yaml", 4, 4)
 	preloadSharedBanked4x4Memory(driver)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(55), 16)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(66), 20)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(55), 4)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(66), 5)
 
 	westDst := make([]uint32, 3)
 	southDst := make([]uint32, 3)
@@ -479,8 +479,8 @@ func runSharedBankedConflictProgram(t *testing.T, programPath string) ([]uint32,
 	driver.RegisterDevice(device)
 	mapProgramFile(t, driver, programPath, 1, 2)
 	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(11), 0)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(22), 4)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(33), 8)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(22), 1)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(33), 2)
 
 	dst := make([]uint32, 2)
 	driver.FeedIn([]uint32{1, 1}, cgra.West, [2]int{0, 2}, 2, "R")
@@ -528,13 +528,13 @@ func runSharedBanked4x4TimingProgram(t *testing.T, programPath string) ([]uint32
 	driver.RegisterDevice(device)
 	mapProgramFile(t, driver, programPath, 4, 4)
 	preloadSharedBanked4x4Memory(driver)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(55), 16)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(66), 20)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(77), 24)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(88), 28)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(99), 32)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(111), 40)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(133), 48)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(55), 4)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(66), 5)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(77), 6)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(88), 7)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(99), 8)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(111), 10)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(133), 12)
 
 	westDst := make([]uint32, 4)
 	southDst := make([]uint32, 3)
@@ -551,9 +551,9 @@ func runSharedBanked4x4TimingProgram(t *testing.T, programPath string) ([]uint32
 
 func preloadSharedBanked4x4Memory(driver api.Driver) {
 	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(11), 0)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(22), 4)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(33), 8)
-	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(44), 12)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(22), 1)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(33), 2)
+	driver.PreloadSharedMemory(0, 0, makeBytesFromUint32(44), 3)
 }
 
 func newSharedBankedMemoryTestRig(engine sim.Engine, width, height, banks, latency int) (api.Driver, cgra.Device) {

@@ -56,8 +56,8 @@ func (i instEmulator) scalarOpcodeFuncs() map[string]opcodeFunc {
 
 		"LT_EX": i.runLTExport,
 
-		"LOAD":  i.runLoadDirect,
-		"STORE": i.runStoreDirect,
+		"LOAD":  i.runLoad,
+		"STORE": i.runStore,
 		"LDD":   i.runLoadDirect,  // backward compatibility
 		"STD":   i.runStoreDirect, // backward compatibility
 

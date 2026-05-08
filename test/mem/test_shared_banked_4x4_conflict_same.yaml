@@ -19,7 +19,7 @@ array_config:
             color: RED
           id: 0
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
           - operand: "#0"
             color: RED
@@ -44,7 +44,7 @@ array_config:
             color: RED
           id: 2
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
           - operand: "#8"
             color: RED
@@ -69,9 +69,9 @@ array_config:
             color: RED
           id: 4
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
-          - operand: "#16"
+          - operand: "#4"
             color: RED
           dst_operands:
           - operand: West
@@ -94,9 +94,9 @@ array_config:
             color: RED
           id: 6
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
-          - operand: "#24"
+          - operand: "#6"
             color: RED
           dst_operands:
           - operand: West
@@ -119,9 +119,9 @@ array_config:
             color: RED
           id: 8
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
-          - operand: "#32"
+          - operand: "#2"
             color: RED
           dst_operands:
           - operand: South
@@ -144,9 +144,9 @@ array_config:
             color: RED
           id: 10
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
-          - operand: "#40"
+          - operand: "#10"
             color: RED
           dst_operands:
           - operand: South
@@ -169,9 +169,9 @@ array_config:
             color: RED
           id: 12
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
-          - operand: "#48"
+          - operand: "#12"
             color: RED
           dst_operands:
           - operand: South

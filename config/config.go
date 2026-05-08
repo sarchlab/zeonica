@@ -3,7 +3,6 @@ package config
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/sarchlab/akita/v4/mem/idealmemcontroller"
 	"github.com/sarchlab/akita/v4/mem/mem"
@@ -23,6 +22,7 @@ type DeviceBuilder struct {
 	width, height          int
 	memoryMode             string         // simple or shared or local
 	memoryShare            map[[2]int]int //map[[x, y]]GroupID
+	sharedMemoryBase       map[[2]int]uint32
 	sharedMemoryModel      string
 	sharedMemoryBanks      int
 	sharedMemoryLatency    int
@@ -87,6 +87,12 @@ func (d DeviceBuilder) WithMemoryMode(mode string) DeviceBuilder {
 // WithMemoryShare sets the memory sharing configuration.
 func (d DeviceBuilder) WithMemoryShare(share map[[2]int]int) DeviceBuilder {
 	d.memoryShare = share
+	return d
+}
+
+// WithSharedMemoryBase sets per-tile logical-to-shared address offsets.
+func (d DeviceBuilder) WithSharedMemoryBase(bases map[[2]int]uint32) DeviceBuilder {
+	d.sharedMemoryBase = bases
 	return d
 }
 
@@ -190,11 +196,11 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 		for x := 0; x < d.width; x++ {
 			for y := 0; y < d.height; y++ {
 				tile := dev.Tiles[y][x]
-				// if has mapping
-				if _, ok := d.memoryShare[[2]int{x, y}]; !ok {
-					panic("No mapping for tile " + strconv.Itoa(x) + "," + strconv.Itoa(y))
+				groupID, ok := d.memoryShare[[2]int{x, y}]
+				if !ok {
+					continue
 				}
-				groupID := d.memoryShare[[2]int{x, y}]
+				tile.SharedMemoryBase = d.sharedMemoryBase[[2]int{x, y}]
 				if _, ok := controllers[groupID]; !ok {
 					// has not been created yet, create it
 					var controller sim.Component
@@ -302,6 +308,7 @@ func (d DeviceBuilder) createTiles(
 				WithLocalMemoryWords(d.localMemoryWords).
 				WithVectorConfig(d.enableVectorPE, d.vectorLanes).
 				WithBlockingMemoryOps(d.memoryMode == "shared").
+				WithSharedMemoryBase(d.sharedMemoryBase[[2]int{x, y}]).
 				Build(coreName)
 
 			if d.monitor != nil {

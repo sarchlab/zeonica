@@ -19,7 +19,7 @@ array_config:
             color: RED
           id: 0
       - operations:
-        - opcode: ST
+        - opcode: STORE
           src_operands:
           - operand: "#99"
             color: RED
@@ -27,7 +27,7 @@ array_config:
             color: RED
           id: 1
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
           - operand: "#0"
             color: RED

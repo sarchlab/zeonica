@@ -83,6 +83,7 @@ type MemoryShareEntry struct {
 	TileX int            `yaml:"tile_x"`
 	TileY int            `yaml:"tile_y"`
 	Group int            `yaml:"group"`
+	Base  uint32         `yaml:"base,omitempty"`
 	Extra map[string]any `yaml:",inline"`
 }
 

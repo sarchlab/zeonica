@@ -19,7 +19,7 @@ array_config:
             color: RED
           id: 0
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
           - operand: "#0"
             color: RED
@@ -44,9 +44,9 @@ array_config:
             color: RED
           id: 3
       - operations:
-        - opcode: LD
+        - opcode: LOAD
           src_operands:
-          - operand: "#8"
+          - operand: "#2"
             color: RED
           dst_operands:
           - operand: East

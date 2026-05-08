@@ -130,6 +130,7 @@ type coreState struct {
 	WatchedQueues          []resolvedQueueWatch
 	OpInputReadCache       map[string]cgra.Data
 	AddrBuf                uint32 // buffer for the address of the memory
+	SharedMemoryBase       uint32
 	IsToWriteMemory        bool
 	BlockingMemoryOps      bool
 	PendingMemoryOp        *pendingMemoryOp
@@ -153,6 +154,7 @@ type coreState struct {
 
 type pendingMemoryOp struct {
 	OpCode      string
+	OpID        int
 	Address     uint32
 	Value       uint32
 	Dst         []Operand
@@ -1816,9 +1818,9 @@ func isBlockingMemoryShape(inst Operation, state *coreState) bool {
 		return false
 	}
 	switch inst.OpCode {
-	case "LD":
+	case "LD", "LOAD":
 		return len(inst.DstOperands.Operands) > 0 && inst.DstOperands.Operands[0].Impl != "Router"
-	case "ST":
+	case "ST", "STORE":
 		return len(inst.DstOperands.Operands) == 0
 	default:
 		return false
@@ -2258,6 +2260,13 @@ func (i instEmulator) runNot(inst Operation, state *coreState) map[Operand]cgra.
 	return results
 }
 
+func (i instEmulator) runLoad(inst Operation, state *coreState) map[Operand]cgra.Data {
+	if state.BlockingMemoryOps {
+		return i.runLoadDRAM(inst, state)
+	}
+	return i.runLoadDirect(inst, state)
+}
+
 func (i instEmulator) runLoadDirect(inst Operation, state *coreState) map[Operand]cgra.Data {
 	src1 := inst.SrcOperands.Operands[0]
 	addrStruct := i.readOperand(src1, state)
@@ -2301,8 +2310,17 @@ func (i instEmulator) runLoadDRAM(inst Operation, state *coreState) map[Operand]
 	dst := inst.DstOperands.Operands[0]
 	if state.BlockingMemoryOps && i.normalizeDirection(dst.Impl) != "Router" {
 		finalPred := addrStruct.Pred
+		if !finalPred {
+			results := make(map[Operand]cgra.Data)
+			for _, dst := range inst.DstOperands.Operands {
+				results[dst] = cgra.NewScalarWithPred(0, false)
+			}
+			Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+			return results
+		}
 		state.PendingMemoryOp = &pendingMemoryOp{
 			OpCode:  inst.OpCode,
+			OpID:    inst.ID,
 			Address: addr,
 			Dst:     append([]Operand(nil), inst.DstOperands.Operands...),
 			Pred:    finalPred,
@@ -2381,6 +2399,13 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) map[Opera
 	return make(map[Operand]cgra.Data)
 }
 
+func (i instEmulator) runStore(inst Operation, state *coreState) map[Operand]cgra.Data {
+	if state.BlockingMemoryOps {
+		return i.runStoreDRAM(inst, state)
+	}
+	return i.runStoreDirect(inst, state)
+}
+
 func (i instEmulator) runStoreDRAM(inst Operation, state *coreState) map[Operand]cgra.Data {
 	if state.BlockingMemoryOps && len(inst.DstOperands.Operands) == 0 {
 		valueStruct := i.readOperand(inst.SrcOperands.Operands[0], state)
@@ -2388,8 +2413,13 @@ func (i instEmulator) runStoreDRAM(inst Operation, state *coreState) map[Operand
 		addrStruct := i.readOperand(inst.SrcOperands.Operands[1], state)
 		addr := addrStruct.First()
 		finalPred := addrStruct.Pred && valueStruct.Pred
+		if !finalPred {
+			Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+			return make(map[Operand]cgra.Data)
+		}
 		state.PendingMemoryOp = &pendingMemoryOp{
 			OpCode:  inst.OpCode,
+			OpID:    inst.ID,
 			Address: addr,
 			Value:   value,
 			Pred:    finalPred,

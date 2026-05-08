@@ -81,6 +81,7 @@ type ResolvedConfig struct {
 	VectorLanes                   int
 	MemoryMode                    string
 	MemoryShare                   map[[2]int]int
+	MemoryShareBase               map[[2]int]uint32
 	SharedMemoryModel             string
 	SharedMemoryBanks             int
 	SharedMemoryBaseLatency       int
@@ -304,6 +305,15 @@ func ResolveWithSpecPath(spec ArchSpec, specPath, testName string) (ResolvedConf
 	if err != nil {
 		return ResolvedConfig{}, err
 	}
+	resolved.MemoryShareBase, err = resolveMemoryShareBase(
+		resolved.MemoryMode,
+		resolved.Rows,
+		resolved.Columns,
+		spec.Simulator.Device.MemoryShare,
+	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
 	resolved.SharedMemoryModel, err = normalizeSharedMemoryModel(defaultOrString(
 		spec.Simulator.Device.SharedMemoryModel,
 		defaultSharedMemoryModel,
@@ -395,6 +405,7 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 		WithStrictTimingConfig(cfg.StrictMaxSlip, cfg.StrictFailOnViolation).
 		WithMemoryMode(cfg.MemoryMode).
 		WithMemoryShare(cfg.MemoryShare).
+		WithSharedMemoryBase(cfg.MemoryShareBase).
 		WithSharedMemoryModel(cfg.SharedMemoryModel).
 		WithSharedMemoryBankConfig(
 			cfg.SharedMemoryBanks,
@@ -688,13 +699,11 @@ func resolveMemoryShare(mode string, rows, cols int, entries []MemoryShareEntry)
 		return nil, nil
 	}
 
-	share := make(map[[2]int]int, rows*cols)
-	for y := 0; y < rows; y++ {
-		for x := 0; x < cols; x++ {
-			share[[2]int{x, y}] = 0
-		}
+	if len(entries) == 0 {
+		return defaultMemoryShare(rows, cols), nil
 	}
 
+	share := make(map[[2]int]int, len(entries))
 	for _, entry := range entries {
 		if entry.TileX < 0 || entry.TileX >= cols || entry.TileY < 0 || entry.TileY >= rows {
 			return nil, fmt.Errorf(
@@ -711,6 +720,36 @@ func resolveMemoryShare(mode string, rows, cols int, entries []MemoryShareEntry)
 		share[[2]int{entry.TileX, entry.TileY}] = entry.Group
 	}
 	return share, nil
+}
+
+func defaultMemoryShare(rows, cols int) map[[2]int]int {
+	share := make(map[[2]int]int, rows*cols)
+	for y := 0; y < rows; y++ {
+		for x := 0; x < cols; x++ {
+			share[[2]int{x, y}] = 0
+		}
+	}
+	return share
+}
+
+func resolveMemoryShareBase(mode string, rows, cols int, entries []MemoryShareEntry) (map[[2]int]uint32, error) {
+	if mode != "shared" {
+		return nil, nil
+	}
+	bases := make(map[[2]int]uint32, len(entries))
+	for _, entry := range entries {
+		if entry.TileX < 0 || entry.TileX >= cols || entry.TileY < 0 || entry.TileY >= rows {
+			return nil, fmt.Errorf(
+				"simulator.device.memory_share has out-of-range tile (%d,%d) for grid %dx%d",
+				entry.TileX,
+				entry.TileY,
+				cols,
+				rows,
+			)
+		}
+		bases[[2]int{entry.TileX, entry.TileY}] = entry.Base
+	}
+	return bases, nil
 }
 
 type teeHandler struct {

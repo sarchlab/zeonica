@@ -154,7 +154,7 @@ func TestResolveMicroarchitectureOverrides(t *testing.T) {
 				MemoryMode:              "shared",
 				PortIncomingBufferDepth: intPtr(6),
 				PortOutgoingBufferDepth: intPtr(7),
-				MemoryShare:             []MemoryShareEntry{{TileX: 1, TileY: 1, Group: 9}},
+				MemoryShare:             []MemoryShareEntry{{TileX: 1, TileY: 1, Group: 9, Base: 1024}},
 			},
 		},
 	}
@@ -184,11 +184,14 @@ func TestResolveMicroarchitectureOverrides(t *testing.T) {
 	if cfg.MemoryMode != "shared" {
 		t.Fatalf("memory mode override failed: %q", cfg.MemoryMode)
 	}
-	if len(cfg.MemoryShare) != 4 {
-		t.Fatalf("shared mode should materialize full 2x2 map, got %d", len(cfg.MemoryShare))
+	if len(cfg.MemoryShare) != 1 {
+		t.Fatalf("shared mode should preserve explicit memory_share map, got %d entries", len(cfg.MemoryShare))
 	}
 	if got := cfg.MemoryShare[[2]int{1, 1}]; got != 9 {
 		t.Fatalf("memory_share override for (1,1) failed: got %d want 9", got)
+	}
+	if got := cfg.MemoryShareBase[[2]int{1, 1}]; got != 1024 {
+		t.Fatalf("memory_share base override for (1,1) failed: got %d want 1024", got)
 	}
 	if cfg.LinkLatency != 3 || cfg.LinkBandwidth != 128 {
 		t.Fatalf("link override failed: latency=%d bandwidth=%d", cfg.LinkLatency, cfg.LinkBandwidth)
