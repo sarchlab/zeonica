@@ -13,19 +13,19 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 0
       - operations:
         - opcode: LD
           src_operands:
           - operand: '0'
-            color: R
+            color: RED
           dst_operands:
           - operand: West
-            color: R
+            color: RED
           id: 1
   - row: 1
     column: 0
@@ -38,19 +38,19 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 2
       - operations:
         - opcode: LD
           src_operands:
           - operand: '4'
-            color: R
+            color: RED
           dst_operands:
           - operand: West
-            color: R
+            color: RED
           id: 3
   - row: 2
     column: 0
@@ -63,19 +63,19 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 4
       - operations:
         - opcode: LD
           src_operands:
           - operand: '8'
-            color: R
+            color: RED
           dst_operands:
           - operand: West
-            color: R
+            color: RED
           id: 5
   - row: 3
     column: 0
@@ -88,19 +88,19 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 6
       - operations:
         - opcode: LD
           src_operands:
           - operand: '12'
-            color: R
+            color: RED
           dst_operands:
           - operand: West
-            color: R
+            color: RED
           id: 7
   - row: 0
     column: 1
@@ -113,19 +113,19 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: South
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 8
       - operations:
         - opcode: LD
           src_operands:
           - operand: '16'
-            color: R
+            color: RED
           dst_operands:
           - operand: South
-            color: R
+            color: RED
           id: 9
   - row: 0
     column: 2
@@ -138,19 +138,19 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: South
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 10
       - operations:
         - opcode: LD
           src_operands:
           - operand: '20'
-            color: R
+            color: RED
           dst_operands:
           - operand: South
-            color: R
+            color: RED
           id: 11
   - row: 0
     column: 3
@@ -163,17 +163,17 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: South
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 12
       - operations:
         - opcode: LD
           src_operands:
           - operand: '24'
-            color: R
+            color: RED
           dst_operands:
           - operand: South
-            color: R
+            color: RED
           id: 13

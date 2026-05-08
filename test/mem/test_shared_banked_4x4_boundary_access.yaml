@@ -13,28 +13,28 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 0
       - operations:
         - opcode: LD
           src_operands:
           - operand: '0'
-            color: R
+            color: RED
           dst_operands:
           - operand: West
-            color: R
+            color: RED
           id: 1
       - operations:
         - opcode: LD
           src_operands:
           - operand: '4'
-            color: R
+            color: RED
           dst_operands:
           - operand: South
-            color: R
+            color: RED
           id: 2
   - row: 1
     column: 0
@@ -47,19 +47,19 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 3
       - operations:
         - opcode: LD
           src_operands:
           - operand: '8'
-            color: R
+            color: RED
           dst_operands:
           - operand: West
-            color: R
+            color: RED
           id: 4
   - row: 2
     column: 0
@@ -72,19 +72,19 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 5
       - operations:
         - opcode: LD
           src_operands:
           - operand: '12'
-            color: R
+            color: RED
           dst_operands:
           - operand: West
-            color: R
+            color: RED
           id: 6
   - row: 3
     column: 0
@@ -97,19 +97,19 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 7
       - operations:
         - opcode: LD
           src_operands:
           - operand: '0'
-            color: R
+            color: RED
           dst_operands:
           - operand: West
-            color: R
+            color: RED
           id: 8
   - row: 0
     column: 1
@@ -122,19 +122,19 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: South
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 9
       - operations:
         - opcode: LD
           src_operands:
           - operand: '4'
-            color: R
+            color: RED
           dst_operands:
           - operand: South
-            color: R
+            color: RED
           id: 10
   - row: 0
     column: 2
@@ -147,19 +147,19 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: South
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 11
       - operations:
         - opcode: LD
           src_operands:
           - operand: '8'
-            color: R
+            color: RED
           dst_operands:
           - operand: South
-            color: R
+            color: RED
           id: 12
   - row: 0
     column: 3
@@ -172,17 +172,17 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: South
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 13
       - operations:
         - opcode: LD
           src_operands:
           - operand: '12'
-            color: R
+            color: RED
           dst_operands:
           - operand: South
-            color: R
+            color: RED
           id: 14

@@ -13,47 +13,47 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 0
       - operations:
         - opcode: ST
           src_operands:
           - operand: $1
-            color: R
+            color: RED
           - operand: $0
-            color: R
+            color: RED
           dst_operands:
           - operand: Router
-            color: R
+            color: RED
           id: 1
       - operations:
         - opcode: STW
           src_operands:
           - operand: Router
-            color: R
+            color: RED
           id: 2
       - operations:
         - opcode: ADD
           src_operands:
           - operand: $1
-            color: R
+            color: RED
           - operand: '4'
-            color: R
+            color: RED
           dst_operands:
           - operand: $1
-            color: R
+            color: RED
           id: 3
       - operations:
         - opcode: MOV
           src_operands:
           - operand: '777'
-            color: R
+            color: RED
           dst_operands:
           - operand: East
-            color: R
+            color: RED
           id: 4
   - row: 1
     column: 0
@@ -66,39 +66,39 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: East
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 5
       - operations:
         - opcode: LD
           src_operands:
           - operand: $1
-            color: R
+            color: RED
           dst_operands:
           - operand: Router
-            color: R
+            color: RED
           id: 6
       - operations:
         - opcode: LDW
           src_operands:
           - operand: Router
-            color: R
+            color: RED
           dst_operands:
           - operand: West
-            color: R
+            color: RED
           id: 7
       - operations:
         - opcode: ADD
           src_operands:
           - operand: $1
-            color: R
+            color: RED
           - operand: '4'
-            color: R
+            color: RED
           dst_operands:
           - operand: $1
-            color: R
+            color: RED
           id: 8
   - row: 0
     column: 1
@@ -111,48 +111,48 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 9
       - operations:
         - opcode: LD
           src_operands:
           - operand: $1
-            color: R
+            color: RED
           dst_operands:
           - operand: Router
-            color: R
+            color: RED
           id: 10
       - operations:
         - opcode: LDW
           src_operands:
           - operand: Router
-            color: R
+            color: RED
           dst_operands:
           - operand: East
-            color: R
+            color: RED
           id: 11
       - operations:
         - opcode: ADD
           src_operands:
           - operand: $1
-            color: R
+            color: RED
           - operand: '4'
-            color: R
+            color: RED
           dst_operands:
           - operand: $1
-            color: R
+            color: RED
           id: 12
       - operations:
         - opcode: MOV
           src_operands:
           - operand: $0
-            color: R
+            color: RED
           dst_operands:
           - operand: North
-            color: R
+            color: RED
           id: 13
   - row: 1
     column: 1
@@ -165,46 +165,46 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: South
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 14
       - operations:
         - opcode: LD
           src_operands:
           - operand: $1
-            color: R
+            color: RED
           dst_operands:
           - operand: Router
-            color: R
+            color: RED
           id: 15
       - operations:
         - opcode: LDW
           src_operands:
           - operand: Router
-            color: R
+            color: RED
           dst_operands:
           - operand: East
-            color: R
+            color: RED
           id: 16
       - operations:
         - opcode: ADD
           src_operands:
           - operand: $1
-            color: R
+            color: RED
           - operand: '4'
-            color: R
+            color: RED
           dst_operands:
           - operand: $1
-            color: R
+            color: RED
           id: 17
       - operations:
         - opcode: MOV
           src_operands:
           - operand: $0
-            color: R
+            color: RED
           dst_operands:
           - operand: West
-            color: R
+            color: RED
           id: 18

@@ -13,26 +13,26 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 0
       - operations:
         - opcode: LD
           src_operands:
           - operand: '0'
-            color: R
+            color: RED
           dst_operands:
           - operand: $1
-            color: R
+            color: RED
           id: 1
       - operations:
         - opcode: MOV
           src_operands:
           - operand: $1
-            color: R
+            color: RED
           dst_operands:
           - operand: East
-            color: R
+            color: RED
           id: 2
