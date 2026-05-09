@@ -27,6 +27,7 @@ type TraceObservation struct {
 	OpCode    string
 	Pred      *bool
 	Addr      *uint64
+	PhysAddr  *uint64
 	Data      any
 	X         *int
 	Y         *int
@@ -53,7 +54,7 @@ var observationFieldAssigners = map[string]func(*TraceObservation, any){
 	"OpCode":    assignOpCode,
 	"Pred":      assignPred,
 	"Addr":      assignAddr,
-	"PhysAddr":  assignAddr,
+	"PhysAddr":  assignPhysAddr,
 	"Data":      assignData,
 	"X":         assignX,
 	"Y":         assignY,
@@ -263,6 +264,12 @@ func assignPred(observation *TraceObservation, value any) {
 func assignAddr(observation *TraceObservation, value any) {
 	if converted, ok := toUint64(value); ok {
 		observation.Addr = uint64Ptr(converted)
+	}
+}
+
+func assignPhysAddr(observation *TraceObservation, value any) {
+	if converted, ok := toUint64(value); ok {
+		observation.PhysAddr = uint64Ptr(converted)
 	}
 }
 

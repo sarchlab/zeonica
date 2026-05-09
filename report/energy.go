@@ -12,6 +12,27 @@ const (
 	EnergyUnknownActionWarn  = "warn"
 	EnergyUnknownActionZero  = "zero"
 
+	EnergyActionInstPrefix     = "pe.inst."
+	EnergyActionDataflowPrefix = "pe.dataflow."
+	EnergyActionMemoryPrefix   = "pe.memory."
+
+	EnergyActionPredicateSuppressed = EnergyActionInstPrefix + "predicate_suppressed"
+	EnergyActionInstUnknown         = EnergyActionInstPrefix + "<unknown>"
+
+	EnergyActionDataflowSend    = EnergyActionDataflowPrefix + "send"
+	EnergyActionDataflowRecv    = EnergyActionDataflowPrefix + "recv"
+	EnergyActionDataflowFeedIn  = EnergyActionDataflowPrefix + "feedin"
+	EnergyActionDataflowCollect = EnergyActionDataflowPrefix + "collect"
+	EnergyActionDataflowUnknown = EnergyActionDataflowPrefix + "<unknown>"
+
+	EnergyActionMemoryLocalRead     = EnergyActionMemoryPrefix + "local_read"
+	EnergyActionMemoryLocalWrite    = EnergyActionMemoryPrefix + "local_write"
+	EnergyActionMemoryRequestLoad   = EnergyActionMemoryPrefix + "request_load"
+	EnergyActionMemoryRequestStore  = EnergyActionMemoryPrefix + "request_store"
+	EnergyActionMemoryResponseLoad  = EnergyActionMemoryPrefix + "response_load"
+	EnergyActionMemoryResponseStore = EnergyActionMemoryPrefix + "response_store"
+	EnergyActionMemoryUnknown       = EnergyActionMemoryPrefix + "<unknown>"
+
 	EnergyStaticScopeInstantiatedTilesTotalCycles = "instantiated_tiles_total_cycles"
 	EnergyStaticScopeActiveTilesActiveCycles      = "active_tiles_active_cycles"
 )
@@ -175,6 +196,7 @@ func BuildEnergyReport(
 	actionBreakdown := buildActionCountBreakdown(counts.actionCounts, model.Actions)
 	dynamic := sumActionEnergy(actionBreakdown)
 	tileBreakdown := buildTileEnergyBreakdown(counts.byTile)
+	tileBreakdown = ensureStaticTiles(model.Static, tileBreakdown, tiles, width, height)
 	staticEnergy := applyStaticEnergy(model.Static, tileBreakdown, tiles, totalCycles, width, height)
 	total := dynamic + staticEnergy
 	estimationOK := true
@@ -198,9 +220,9 @@ func BuildEnergyReport(
 		TotalEnergyPJ:    total,
 		ActionCounts:     actionBreakdown,
 		ByLayer:          buildLayerBreakdown(actionBreakdown),
-		ByOpcode:         buildPrefixBreakdown(actionBreakdown, "pe.inst.", true),
-		ByDataflowAction: buildPrefixBreakdown(actionBreakdown, "pe.dataflow.", false),
-		ByMemoryAction:   buildPrefixBreakdown(actionBreakdown, "pe.memory.", false),
+		ByOpcode:         buildPrefixBreakdown(actionBreakdown, EnergyActionInstPrefix, true),
+		ByDataflowAction: buildPrefixBreakdown(actionBreakdown, EnergyActionDataflowPrefix, false),
+		ByMemoryAction:   buildPrefixBreakdown(actionBreakdown, EnergyActionMemoryPrefix, false),
 		ByTile:           tileBreakdown,
 		UnknownActions:   counts.unknown,
 		UnresolvedEvents: counts.unresolved,
@@ -273,52 +295,58 @@ func normalizeEnergyAction(event traceEvent) (string, bool) {
 
 func normalizeInstEnergyAction(event traceEvent) string {
 	if event.Pred != nil && !*event.Pred {
-		return "pe.inst.predicate_suppressed"
+		return EnergyActionPredicateSuppressed
 	}
 	opcode := strings.ToUpper(strings.TrimSpace(event.OpCode))
 	if opcode == "" {
-		return "pe.inst.<unknown>"
+		return EnergyActionInstUnknown
 	}
-	return "pe.inst." + opcode
+	return EnergyActionInstPrefix + opcode
 }
 
 func normalizeDataflowEnergyAction(event traceEvent) string {
 	actions := map[string]string{
-		"send":    "pe.dataflow.send",
-		"recv":    "pe.dataflow.recv",
-		"feedin":  "pe.dataflow.feedin",
-		"collect": "pe.dataflow.collect",
+		"send":    EnergyActionDataflowSend,
+		"recv":    EnergyActionDataflowRecv,
+		"feedin":  EnergyActionDataflowFeedIn,
+		"collect": EnergyActionDataflowCollect,
 	}
 	if action, ok := actions[strings.ToLower(strings.TrimSpace(event.Behavior))]; ok {
 		return action
 	}
-	return "pe.dataflow.<unknown>"
+	return EnergyActionDataflowUnknown
 }
 
 func normalizeMemoryEnergyAction(event traceEvent) string {
 	behavior := strings.ToLower(strings.TrimSpace(event.Behavior))
 	switch behavior {
 	case "writememory":
-		return "pe.memory.local_write"
+		return EnergyActionMemoryLocalWrite
 	case "readmemory":
-		return "pe.memory.local_read"
+		return EnergyActionMemoryLocalRead
 	case "send":
 		return memoryTransferAction("request", event.OpCode)
 	case "recv":
 		return memoryTransferAction("response", event.OpCode)
 	default:
-		return "pe.memory.<unknown>"
+		return EnergyActionMemoryUnknown
 	}
 }
 
 func memoryTransferAction(prefix, opcode string) string {
 	switch memoryOpcodeClass(opcode) {
 	case "store":
-		return "pe.memory." + prefix + "_store"
+		if prefix == "request" {
+			return EnergyActionMemoryRequestStore
+		}
+		return EnergyActionMemoryResponseStore
 	case "load":
-		return "pe.memory." + prefix + "_load"
+		if prefix == "request" {
+			return EnergyActionMemoryRequestLoad
+		}
+		return EnergyActionMemoryResponseLoad
 	default:
-		return "pe.memory." + prefix + "_unknown"
+		return EnergyActionMemoryPrefix + prefix + "_unknown"
 	}
 }
 
@@ -411,12 +439,7 @@ func buildTileEnergyBreakdown(dynamic map[tileCoord]float64) []EnergyTileBreakdo
 			TotalEnergyPJ:   energy,
 		})
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Y != out[j].Y {
-			return out[i].Y < out[j].Y
-		}
-		return out[i].X < out[j].X
-	})
+	sortEnergyTileBreakdown(out)
 	return out
 }
 
@@ -453,6 +476,59 @@ func applyStaticEnergy(
 		}
 	}
 	return total
+}
+
+func ensureStaticTiles(
+	model EnergyStaticModel,
+	byTile []EnergyTileBreakdown,
+	tiles []TileStats,
+	width int,
+	height int,
+) []EnergyTileBreakdown {
+	if !model.Enabled || model.TileLeakagePJPerCycle == 0 {
+		return byTile
+	}
+	seen := map[string]struct{}{}
+	for _, tile := range byTile {
+		seen[tile.Coord] = struct{}{}
+	}
+	switch model.Scope {
+	case EnergyStaticScopeInstantiatedTilesTotalCycles:
+		for y := 0; y < height; y++ {
+			for x := 0; x < width; x++ {
+				byTile = appendStaticTileIfMissing(byTile, seen, x, y)
+			}
+		}
+	case EnergyStaticScopeActiveTilesActiveCycles:
+		for _, tile := range tiles {
+			byTile = appendStaticTileIfMissing(byTile, seen, tile.X, tile.Y)
+		}
+	}
+	sortEnergyTileBreakdown(byTile)
+	return byTile
+}
+
+func appendStaticTileIfMissing(
+	byTile []EnergyTileBreakdown,
+	seen map[string]struct{},
+	x int,
+	y int,
+) []EnergyTileBreakdown {
+	coord := formatCoord(x, y)
+	if _, ok := seen[coord]; ok {
+		return byTile
+	}
+	seen[coord] = struct{}{}
+	return append(byTile, EnergyTileBreakdown{X: x, Y: y, Coord: coord})
+}
+
+func sortEnergyTileBreakdown(tiles []EnergyTileBreakdown) {
+	sort.Slice(tiles, func(i, j int) bool {
+		if tiles[i].Y != tiles[j].Y {
+			return tiles[i].Y < tiles[j].Y
+		}
+		return tiles[i].X < tiles[j].X
+	})
 }
 
 func issueCoord(item energyEvent) string {

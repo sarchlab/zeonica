@@ -10,16 +10,16 @@ func TestBuildEnergyReportCountsPredicateAndLayeredLoadStore(t *testing.T) {
 		Units:               "pJ",
 		UnknownActionPolicy: EnergyUnknownActionError,
 		Actions: map[string]float64{
-			"pe.inst.ADD":                  1,
-			"pe.inst.predicate_suppressed": 0.25,
-			"pe.inst.LOAD":                 2,
-			"pe.inst.STORE":                3,
-			"pe.memory.request_load":       4,
-			"pe.memory.response_load":      5,
-			"pe.memory.request_store":      6,
-			"pe.memory.response_store":     7,
-			"pe.dataflow.send":             8,
-			"pe.dataflow.recv":             9,
+			EnergyActionInstPrefix + "ADD":   1,
+			EnergyActionPredicateSuppressed:  0.25,
+			EnergyActionInstPrefix + "LOAD":  2,
+			EnergyActionInstPrefix + "STORE": 3,
+			EnergyActionMemoryRequestLoad:    4,
+			EnergyActionMemoryResponseLoad:   5,
+			EnergyActionMemoryRequestStore:   6,
+			EnergyActionMemoryResponseStore:  7,
+			EnergyActionDataflowSend:         8,
+			EnergyActionDataflowRecv:         9,
 		},
 	}
 	events := []energyEvent{
@@ -42,13 +42,13 @@ func TestBuildEnergyReportCountsPredicateAndLayeredLoadStore(t *testing.T) {
 	if result.DynamicEnergyPJ != 45.25 {
 		t.Fatalf("dynamic energy = %v, want 45.25", result.DynamicEnergyPJ)
 	}
-	if got := actionCount(result.ActionCounts, "pe.inst.predicate_suppressed"); got != 1 {
+	if got := actionCount(result.ActionCounts, EnergyActionPredicateSuppressed); got != 1 {
 		t.Fatalf("predicate_suppressed count = %d, want 1", got)
 	}
-	if got := actionCount(result.ActionCounts, "pe.memory.request_load"); got != 1 {
+	if got := actionCount(result.ActionCounts, EnergyActionMemoryRequestLoad); got != 1 {
 		t.Fatalf("request_load count = %d, want 1", got)
 	}
-	if got := actionCount(result.ActionCounts, "pe.memory.response_store"); got != 1 {
+	if got := actionCount(result.ActionCounts, EnergyActionMemoryResponseStore); got != 1 {
 		t.Fatalf("response_store count = %d, want 1", got)
 	}
 }
@@ -75,6 +75,25 @@ func TestBuildEnergyReportUnknownPolicies(t *testing.T) {
 	}
 }
 
+func TestBuildEnergyReportUnknownErrorMarksEstimationFailed(t *testing.T) {
+	model := &EnergyModel{
+		Enabled:             true,
+		Units:               "pJ",
+		UnknownActionPolicy: EnergyUnknownActionError,
+		Actions:             map[string]float64{},
+	}
+	events := []energyEvent{
+		{event: traceEvent{Msg: "Inst", OpCode: "ADD"}, coord: tileCoord{x: 0, y: 0}, hasCoord: true},
+	}
+	result := BuildEnergyReport(model, events, nil, 1, 1, 1)
+	if result.EstimationOK {
+		t.Fatal("expected strict unknown action to mark estimation failed")
+	}
+	if len(result.UnknownActions) != 1 {
+		t.Fatalf("unknown actions = %d, want 1", len(result.UnknownActions))
+	}
+}
+
 func TestBuildEnergyReportStaticScope(t *testing.T) {
 	model := &EnergyModel{
 		Enabled:             true,
@@ -94,6 +113,40 @@ func TestBuildEnergyReportStaticScope(t *testing.T) {
 	if result.TotalEnergyPJ != 30 {
 		t.Fatalf("total energy = %v, want 30", result.TotalEnergyPJ)
 	}
+	if got := sumTileEnergy(result.ByTile); got != result.TotalEnergyPJ {
+		t.Fatalf("sum tile energy = %v, want total %v", got, result.TotalEnergyPJ)
+	}
+	if len(result.ByTile) != 6 {
+		t.Fatalf("tile breakdown entries = %d, want 6", len(result.ByTile))
+	}
+}
+
+func TestBuildEnergyReportActiveStaticScopeIncludesActiveTiles(t *testing.T) {
+	model := &EnergyModel{
+		Enabled:             true,
+		Units:               "pJ",
+		UnknownActionPolicy: EnergyUnknownActionError,
+		Actions:             map[string]float64{},
+		Static: EnergyStaticModel{
+			Enabled:               true,
+			Scope:                 EnergyStaticScopeActiveTilesActiveCycles,
+			TileLeakagePJPerCycle: 0.5,
+		},
+	}
+	tiles := []TileStats{
+		{X: 0, Y: 0, Coord: "(0,0)", ActiveCycles: 3},
+		{X: 1, Y: 0, Coord: "(1,0)", ActiveCycles: 5},
+	}
+	result := BuildEnergyReport(model, nil, tiles, 10, 2, 1)
+	if result.StaticEnergyPJ != 4 {
+		t.Fatalf("static energy = %v, want 4", result.StaticEnergyPJ)
+	}
+	if got := sumTileEnergy(result.ByTile); got != result.TotalEnergyPJ {
+		t.Fatalf("sum tile energy = %v, want total %v", got, result.TotalEnergyPJ)
+	}
+	if len(result.ByTile) != 2 {
+		t.Fatalf("tile breakdown entries = %d, want 2", len(result.ByTile))
+	}
 }
 
 func actionCount(actions []EnergyActionCount, name string) int64 {
@@ -103,4 +156,12 @@ func actionCount(actions []EnergyActionCount, name string) int64 {
 		}
 	}
 	return 0
+}
+
+func sumTileEnergy(tiles []EnergyTileBreakdown) float64 {
+	var total float64
+	for _, tile := range tiles {
+		total += tile.TotalEnergyPJ
+	}
+	return total
 }

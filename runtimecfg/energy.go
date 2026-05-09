@@ -19,18 +19,25 @@ type energyModelFile struct {
 	Static              report.EnergyStaticModel `yaml:"static"`
 }
 
+type energyOverrideFields struct {
+	units               bool
+	unknownActionPolicy bool
+	static              bool
+}
+
 func resolveEnergyModel(spec EnergySpec, specPath string) (*report.EnergyModel, error) {
 	enabled := defaultOrBool(spec.Enabled, false)
 	if !enabled && strings.TrimSpace(spec.ModelFile) == "" {
 		return nil, nil
 	}
 
+	overrides := energyOverridePresence(spec)
 	model := &report.EnergyModel{
 		Enabled:             enabled,
-		Units:               defaultOrString(spec.Units, "pJ"),
+		Units:               spec.Units,
 		ModelFile:           resolveSpecRelativePath(specPath, spec.ModelFile),
 		Actions:             copyEnergyActions(spec.Actions),
-		UnknownActionPolicy: defaultOrString(spec.UnknownActionPolicy, report.EnergyUnknownActionError),
+		UnknownActionPolicy: spec.UnknownActionPolicy,
 		Static:              spec.Static,
 	}
 
@@ -39,7 +46,7 @@ func resolveEnergyModel(spec EnergySpec, specPath string) (*report.EnergyModel, 
 		if err != nil {
 			return nil, err
 		}
-		model = mergeEnergyModels(fileModel, model)
+		model = mergeEnergyModels(fileModel, model, overrides)
 		model.ModelFile = filepath.Clean(model.ModelFile)
 	}
 
@@ -91,7 +98,7 @@ func loadEnergyModelFile(path string) (*report.EnergyModel, error) {
 	}, nil
 }
 
-func mergeEnergyModels(base, override *report.EnergyModel) *report.EnergyModel {
+func mergeEnergyModels(base, override *report.EnergyModel, fields energyOverrideFields) *report.EnergyModel {
 	if base == nil {
 		return override
 	}
@@ -101,16 +108,16 @@ func mergeEnergyModels(base, override *report.EnergyModel) *report.EnergyModel {
 
 	merged := *base
 	merged.Enabled = override.Enabled
-	if strings.TrimSpace(override.Units) != "" {
+	if fields.units {
 		merged.Units = override.Units
 	}
-	if strings.TrimSpace(override.UnknownActionPolicy) != "" {
+	if fields.unknownActionPolicy {
 		merged.UnknownActionPolicy = override.UnknownActionPolicy
 	}
 	if strings.TrimSpace(override.ModelFile) != "" {
 		merged.ModelFile = override.ModelFile
 	}
-	if override.Static.Enabled || override.Static.Scope != "" || override.Static.TileLeakagePJPerCycle != 0 {
+	if fields.static {
 		merged.Static = override.Static
 	}
 	merged.Actions = copyEnergyActions(base.Actions)
@@ -118,6 +125,14 @@ func mergeEnergyModels(base, override *report.EnergyModel) *report.EnergyModel {
 		merged.Actions[action] = value
 	}
 	return &merged
+}
+
+func energyOverridePresence(spec EnergySpec) energyOverrideFields {
+	return energyOverrideFields{
+		units:               strings.TrimSpace(spec.Units) != "",
+		unknownActionPolicy: strings.TrimSpace(spec.UnknownActionPolicy) != "",
+		static:              spec.Static.Enabled || spec.Static.Scope != "" || spec.Static.TileLeakagePJPerCycle != 0,
+	}
 }
 
 func copyEnergyActions(input map[string]float64) map[string]float64 {

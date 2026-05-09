@@ -239,6 +239,7 @@ func (o *Observer) Observe(observation core.TraceObservation) {
 		OpCode:    observation.OpCode,
 		Pred:      observation.Pred,
 		Addr:      observation.Addr,
+		PhysAddr:  observation.PhysAddr,
 		Data:      observation.Data,
 		X:         observation.X,
 		Y:         observation.Y,

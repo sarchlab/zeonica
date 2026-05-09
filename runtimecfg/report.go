@@ -62,6 +62,9 @@ func (r *Runtime) GenerateAndSaveReport(topN int, passed *bool, mismatchCount *i
 			return report.Report{}, "", fmt.Errorf("generate report from log: %w", err)
 		}
 	}
+	if err := validateEnergyReport(result); err != nil {
+		return report.Report{}, "", err
+	}
 
 	reportPath := r.DefaultReportPath()
 	if dir := filepath.Dir(reportPath); dir != "." && dir != "" {
@@ -74,6 +77,13 @@ func (r *Runtime) GenerateAndSaveReport(topN int, passed *bool, mismatchCount *i
 	}
 
 	return result, reportPath, nil
+}
+
+func validateEnergyReport(result report.Report) error {
+	if result.Energy == nil || result.Energy.EstimationOK {
+		return nil
+	}
+	return fmt.Errorf("energy estimation failed: %s", result.Energy.FailureReason)
 }
 
 // GenerateSaveAndPrintReport generates, saves, and prints summary in one call.

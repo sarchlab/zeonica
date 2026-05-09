@@ -160,6 +160,49 @@ func TestObserverBuildMatchesGenerateFromLogWithEnergyMetadata(t *testing.T) {
 	}
 }
 
+func TestObserverBuildMatchesGenerateFromLogWithMemoryAddressMetadata(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "trace.json.log")
+	ts0 := time.Date(2026, 3, 6, 0, 0, 0, 0, time.UTC)
+
+	event := testEnergyMemoryTraceEvent(ts0)
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("Marshal returned error: %v", err)
+	}
+	if err := os.WriteFile(logPath, append(payload, '\n'), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	opts := GenerateOptions{
+		TestName:   "observer-energy-memory-test",
+		LogPath:    logPath,
+		GridWidth:  1,
+		GridHeight: 1,
+		TopN:       5,
+		EnergyModel: &EnergyModel{
+			Enabled:             true,
+			Units:               "pJ",
+			UnknownActionPolicy: EnergyUnknownActionError,
+			Actions: map[string]float64{
+				EnergyActionMemoryRequestLoad: 2,
+			},
+		},
+	}
+
+	fromLog, err := GenerateFromLog(opts)
+	if err != nil {
+		t.Fatalf("GenerateFromLog returned error: %v", err)
+	}
+
+	observer := NewObserver()
+	observer.Observe(testEnergyMemoryObservation(ts0))
+
+	fromObserver := observer.Build(opts)
+	if !reflect.DeepEqual(fromLog, fromObserver) {
+		t.Fatalf("expected observer report to match log report\nfrom log: %#v\nfrom observer: %#v", fromLog, fromObserver)
+	}
+}
+
 func testEnergyTraceEvent(ts time.Time) traceEvent {
 	pred := true
 	addr := uint64(8)
@@ -189,6 +232,38 @@ func testEnergyObservation(ts time.Time) core.TraceObservation {
 		OpCode:   "ADD",
 		Pred:     &pred,
 		Addr:     &addr,
+	}
+}
+
+func testEnergyMemoryTraceEvent(ts time.Time) traceEvent {
+	addr := uint64(4)
+	physAddr := uint64(1028)
+	return traceEvent{
+		Timestamp: ts.Format(time.RFC3339Nano),
+		Msg:       "Memory",
+		Behavior:  "Send",
+		Time:      testFloat64Ptr(0),
+		X:         testIntPtr(0),
+		Y:         testIntPtr(0),
+		OpCode:    "LOAD",
+		Addr:      &addr,
+		PhysAddr:  &physAddr,
+	}
+}
+
+func testEnergyMemoryObservation(ts time.Time) core.TraceObservation {
+	addr := uint64(4)
+	physAddr := uint64(1028)
+	return core.TraceObservation{
+		WallTime: ts,
+		Msg:      "Memory",
+		Behavior: "Send",
+		Time:     testFloat64Ptr(0),
+		X:        testIntPtr(0),
+		Y:        testIntPtr(0),
+		OpCode:   "LOAD",
+		Addr:     &addr,
+		PhysAddr: &physAddr,
 	}
 }
 

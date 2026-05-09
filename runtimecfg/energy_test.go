@@ -68,6 +68,38 @@ actions:
 	if cfg.EnergyModel.Actions["pe.inst.MUL"] != 2 {
 		t.Fatalf("MUL energy = %v, want model file value 2", cfg.EnergyModel.Actions["pe.inst.MUL"])
 	}
+	if cfg.EnergyModel.UnknownActionPolicy != report.EnergyUnknownActionWarn {
+		t.Fatalf("unknown policy = %q, want model file value warn", cfg.EnergyModel.UnknownActionPolicy)
+	}
+}
+
+func TestResolveEnergyModelInlinePolicyOverridesModelFile(t *testing.T) {
+	dir := t.TempDir()
+	modelPath := filepath.Join(dir, "energy.yaml")
+	if err := os.WriteFile(modelPath, []byte(`
+units: pJ
+unknown_action_policy: warn
+actions:
+  pe.inst.ADD: 1
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	enabled := true
+	spec := ArchSpec{
+		Energy: EnergySpec{
+			Enabled:             &enabled,
+			ModelFile:           modelPath,
+			UnknownActionPolicy: report.EnergyUnknownActionZero,
+		},
+	}
+	cfg, err := Resolve(spec, "energy-policy-override")
+	if err != nil {
+		t.Fatalf("Resolve returned error: %v", err)
+	}
+	if cfg.EnergyModel.UnknownActionPolicy != report.EnergyUnknownActionZero {
+		t.Fatalf("unknown policy = %q, want inline override zero", cfg.EnergyModel.UnknownActionPolicy)
+	}
 }
 
 func TestResolveEnergyModelInvalidUnits(t *testing.T) {
