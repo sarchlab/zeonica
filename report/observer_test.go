@@ -117,20 +117,8 @@ func TestObserverBuildMatchesGenerateFromLog(t *testing.T) {
 func TestObserverBuildMatchesGenerateFromLogWithEnergyMetadata(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "trace.json.log")
 	ts0 := time.Date(2026, 3, 6, 0, 0, 0, 0, time.UTC)
-	pred := true
-	addr := uint64(8)
-	event := traceEvent{
-		Timestamp: ts0.Format(time.RFC3339Nano),
-		Msg:       "Inst",
-		Time:      testFloat64Ptr(0),
-		X:         testIntPtr(0),
-		Y:         testIntPtr(0),
-		ID:        testIntPtr(42),
-		OpCode:    "ADD",
-		Pred:      &pred,
-		Addr:      &addr,
-	}
 
+	event := testEnergyTraceEvent(ts0)
 	payload, err := json.Marshal(event)
 	if err != nil {
 		t.Fatalf("Marshal returned error: %v", err)
@@ -161,8 +149,38 @@ func TestObserverBuildMatchesGenerateFromLogWithEnergyMetadata(t *testing.T) {
 	}
 
 	observer := NewObserver()
-	observer.Observe(core.TraceObservation{
-		WallTime: ts0,
+	observer.Observe(testEnergyObservation(ts0))
+
+	fromObserver := observer.Build(opts)
+	if !reflect.DeepEqual(fromLog, fromObserver) {
+		t.Fatalf("expected observer report to match log report\nfrom log: %#v\nfrom observer: %#v", fromLog, fromObserver)
+	}
+	if fromObserver.Energy == nil || fromObserver.Energy.DynamicEnergyPJ != 2 {
+		t.Fatalf("energy report = %#v, want dynamic energy 2", fromObserver.Energy)
+	}
+}
+
+func testEnergyTraceEvent(ts time.Time) traceEvent {
+	pred := true
+	addr := uint64(8)
+	return traceEvent{
+		Timestamp: ts.Format(time.RFC3339Nano),
+		Msg:       "Inst",
+		Time:      testFloat64Ptr(0),
+		X:         testIntPtr(0),
+		Y:         testIntPtr(0),
+		ID:        testIntPtr(42),
+		OpCode:    "ADD",
+		Pred:      &pred,
+		Addr:      &addr,
+	}
+}
+
+func testEnergyObservation(ts time.Time) core.TraceObservation {
+	pred := true
+	addr := uint64(8)
+	return core.TraceObservation{
+		WallTime: ts,
 		Msg:      "Inst",
 		Time:     testFloat64Ptr(0),
 		X:        testIntPtr(0),
@@ -171,14 +189,6 @@ func TestObserverBuildMatchesGenerateFromLogWithEnergyMetadata(t *testing.T) {
 		OpCode:   "ADD",
 		Pred:     &pred,
 		Addr:     &addr,
-	})
-
-	fromObserver := observer.Build(opts)
-	if !reflect.DeepEqual(fromLog, fromObserver) {
-		t.Fatalf("expected observer report to match log report\nfrom log: %#v\nfrom observer: %#v", fromLog, fromObserver)
-	}
-	if fromObserver.Energy == nil || fromObserver.Energy.DynamicEnergyPJ != 2 {
-		t.Fatalf("energy report = %#v, want dynamic energy 2", fromObserver.Energy)
 	}
 }
 

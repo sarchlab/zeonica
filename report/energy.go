@@ -92,6 +92,13 @@ type energyAccumulator struct {
 	energy float64
 }
 
+type energyCountingResult struct {
+	actionCounts map[string]int64
+	byTile       map[tileCoord]float64
+	unknown      []EnergyIssue
+	unresolved   []EnergyIssue
+}
+
 // NormalizeEnergyModel fills defaults for an energy model.
 func NormalizeEnergyModel(model *EnergyModel) *EnergyModel {
 	if model == nil || !model.Enabled {
@@ -150,59 +157,29 @@ func ValidateEnergyModel(model *EnergyModel) error {
 }
 
 // BuildEnergyReport converts normalized action counts into energy totals.
-func BuildEnergyReport(model *EnergyModel, events []energyEvent, tiles []TileStats, totalCycles int64, width, height int) *EnergyReport {
+func BuildEnergyReport(
+	model *EnergyModel,
+	events []energyEvent,
+	tiles []TileStats,
+	totalCycles int64,
+	width int,
+	height int,
+) *EnergyReport {
 	model = NormalizeEnergyModel(model)
 	if model == nil {
 		return nil
 	}
 
-	actionCounts := map[string]int64{}
-	byTile := map[tileCoord]float64{}
-	var unknown []EnergyIssue
-	var unresolved []EnergyIssue
+	counts := countEnergyActions(model, events)
 
-	for _, item := range events {
-		action, ok := normalizeEnergyAction(item.event)
-		if !ok {
-			continue
-		}
-		if !item.hasCoord {
-			unresolved = append(unresolved, EnergyIssue{
-				Action: action,
-				Msg:    item.event.Msg,
-				Detail: "missing tile coordinate",
-			})
-			if model.UnknownActionPolicy == EnergyUnknownActionError {
-				continue
-			}
-		}
-		energyPerAction, known := model.Actions[action]
-		if !known {
-			unknown = append(unknown, EnergyIssue{
-				Action: action,
-				Msg:    item.event.Msg,
-				Detail: "missing energy action value",
-				Coord:  issueCoord(item),
-			})
-			if model.UnknownActionPolicy == EnergyUnknownActionError {
-				continue
-			}
-			energyPerAction = 0
-		}
-		actionCounts[action]++
-		if item.hasCoord {
-			byTile[item.coord] += energyPerAction
-		}
-	}
-
-	actionBreakdown := buildActionCountBreakdown(actionCounts, model.Actions)
+	actionBreakdown := buildActionCountBreakdown(counts.actionCounts, model.Actions)
 	dynamic := sumActionEnergy(actionBreakdown)
-	tileBreakdown := buildTileEnergyBreakdown(byTile)
+	tileBreakdown := buildTileEnergyBreakdown(counts.byTile)
 	staticEnergy := applyStaticEnergy(model.Static, tileBreakdown, tiles, totalCycles, width, height)
 	total := dynamic + staticEnergy
 	estimationOK := true
 	failureReason := ""
-	if model.UnknownActionPolicy == EnergyUnknownActionError && (len(unknown) > 0 || len(unresolved) > 0) {
+	if model.UnknownActionPolicy == EnergyUnknownActionError && (len(counts.unknown) > 0 || len(counts.unresolved) > 0) {
 		estimationOK = false
 		failureReason = "unknown or unresolved energy actions encountered"
 	}
@@ -225,37 +202,68 @@ func BuildEnergyReport(model *EnergyModel, events []energyEvent, tiles []TileSta
 		ByDataflowAction: buildPrefixBreakdown(actionBreakdown, "pe.dataflow.", false),
 		ByMemoryAction:   buildPrefixBreakdown(actionBreakdown, "pe.memory.", false),
 		ByTile:           tileBreakdown,
-		UnknownActions:   unknown,
-		UnresolvedEvents: unresolved,
+		UnknownActions:   counts.unknown,
+		UnresolvedEvents: counts.unresolved,
 		ModelFile:        modelFile,
 		StaticScope:      model.Static.Scope,
+	}
+}
+
+func countEnergyActions(model *EnergyModel, events []energyEvent) energyCountingResult {
+	result := energyCountingResult{
+		actionCounts: map[string]int64{},
+		byTile:       map[tileCoord]float64{},
+	}
+	for _, item := range events {
+		countEnergyEvent(model, item, &result)
+	}
+	return result
+}
+
+func countEnergyEvent(model *EnergyModel, item energyEvent, result *energyCountingResult) {
+	action, ok := normalizeEnergyAction(item.event)
+	if !ok {
+		return
+	}
+	if !item.hasCoord {
+		result.unresolved = append(result.unresolved, unresolvedEnergyIssue(action, item.event))
+		if model.UnknownActionPolicy == EnergyUnknownActionError {
+			return
+		}
+	}
+	energyPerAction, known := model.Actions[action]
+	if !known {
+		result.unknown = append(result.unknown, unknownEnergyIssue(action, item))
+		if model.UnknownActionPolicy == EnergyUnknownActionError {
+			return
+		}
+		energyPerAction = 0
+	}
+	result.actionCounts[action]++
+	if item.hasCoord {
+		result.byTile[item.coord] += energyPerAction
+	}
+}
+
+func unresolvedEnergyIssue(action string, event traceEvent) EnergyIssue {
+	return EnergyIssue{Action: action, Msg: event.Msg, Detail: "missing tile coordinate"}
+}
+
+func unknownEnergyIssue(action string, item energyEvent) EnergyIssue {
+	return EnergyIssue{
+		Action: action,
+		Msg:    item.event.Msg,
+		Detail: "missing energy action value",
+		Coord:  issueCoord(item),
 	}
 }
 
 func normalizeEnergyAction(event traceEvent) (string, bool) {
 	switch event.Msg {
 	case "Inst":
-		if event.Pred != nil && !*event.Pred {
-			return "pe.inst.predicate_suppressed", true
-		}
-		opcode := strings.ToUpper(strings.TrimSpace(event.OpCode))
-		if opcode == "" {
-			return "pe.inst.<unknown>", true
-		}
-		return "pe.inst." + opcode, true
+		return normalizeInstEnergyAction(event), true
 	case "DataFlow":
-		switch strings.ToLower(strings.TrimSpace(event.Behavior)) {
-		case "send":
-			return "pe.dataflow.send", true
-		case "recv":
-			return "pe.dataflow.recv", true
-		case "feedin":
-			return "pe.dataflow.feedin", true
-		case "collect":
-			return "pe.dataflow.collect", true
-		default:
-			return "pe.dataflow.<unknown>", true
-		}
+		return normalizeDataflowEnergyAction(event), true
 	case "Memory":
 		return normalizeMemoryEnergyAction(event), true
 	default:
@@ -263,33 +271,67 @@ func normalizeEnergyAction(event traceEvent) (string, bool) {
 	}
 }
 
+func normalizeInstEnergyAction(event traceEvent) string {
+	if event.Pred != nil && !*event.Pred {
+		return "pe.inst.predicate_suppressed"
+	}
+	opcode := strings.ToUpper(strings.TrimSpace(event.OpCode))
+	if opcode == "" {
+		return "pe.inst.<unknown>"
+	}
+	return "pe.inst." + opcode
+}
+
+func normalizeDataflowEnergyAction(event traceEvent) string {
+	actions := map[string]string{
+		"send":    "pe.dataflow.send",
+		"recv":    "pe.dataflow.recv",
+		"feedin":  "pe.dataflow.feedin",
+		"collect": "pe.dataflow.collect",
+	}
+	if action, ok := actions[strings.ToLower(strings.TrimSpace(event.Behavior))]; ok {
+		return action
+	}
+	return "pe.dataflow.<unknown>"
+}
+
 func normalizeMemoryEnergyAction(event traceEvent) string {
 	behavior := strings.ToLower(strings.TrimSpace(event.Behavior))
-	opcode := strings.ToUpper(strings.TrimSpace(event.OpCode))
 	switch behavior {
 	case "writememory":
 		return "pe.memory.local_write"
 	case "readmemory":
 		return "pe.memory.local_read"
 	case "send":
-		if opcode == "STORE" || opcode == "ST" || opcode == "STW" {
-			return "pe.memory.request_store"
-		}
-		if opcode == "LOAD" || opcode == "LD" || opcode == "LDW" {
-			return "pe.memory.request_load"
-		}
-		return "pe.memory.request_unknown"
+		return memoryTransferAction("request", event.OpCode)
 	case "recv":
-		if opcode == "STORE" || opcode == "ST" || opcode == "STW" {
-			return "pe.memory.response_store"
-		}
-		if opcode == "LOAD" || opcode == "LD" || opcode == "LDW" {
-			return "pe.memory.response_load"
-		}
-		return "pe.memory.response_unknown"
+		return memoryTransferAction("response", event.OpCode)
 	default:
 		return "pe.memory.<unknown>"
 	}
+}
+
+func memoryTransferAction(prefix, opcode string) string {
+	switch memoryOpcodeClass(opcode) {
+	case "store":
+		return "pe.memory." + prefix + "_store"
+	case "load":
+		return "pe.memory." + prefix + "_load"
+	default:
+		return "pe.memory." + prefix + "_unknown"
+	}
+}
+
+func memoryOpcodeClass(opcode string) string {
+	classes := map[string]string{
+		"STORE": "store",
+		"ST":    "store",
+		"STW":   "store",
+		"LOAD":  "load",
+		"LD":    "load",
+		"LDW":   "load",
+	}
+	return classes[strings.ToUpper(strings.TrimSpace(opcode))]
 }
 
 func buildActionCountBreakdown(counts map[string]int64, values map[string]float64) []EnergyActionCount {

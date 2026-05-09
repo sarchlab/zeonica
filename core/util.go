@@ -45,6 +45,30 @@ type TraceObservation struct {
 var traceEnabled atomic.Bool
 var traceObserver func(TraceObservation)
 
+var observationFieldAssigners = map[string]func(*TraceObservation, any){
+	"Behavior":  assignBehavior,
+	"Time":      assignTime,
+	"ID":        assignID,
+	"OpID":      assignID,
+	"OpCode":    assignOpCode,
+	"Pred":      assignPred,
+	"Addr":      assignAddr,
+	"PhysAddr":  assignAddr,
+	"Data":      assignData,
+	"X":         assignX,
+	"Y":         assignY,
+	"Src":       assignSrc,
+	"Dst":       assignDst,
+	"From":      assignFrom,
+	"To":        assignTo,
+	"Label":     assignLabel,
+	"Kind":      assignKind,
+	"Direction": assignDirection,
+	"Color":     assignColor,
+	"Occupancy": assignOccupancy,
+	"Capacity":  assignCapacity,
+}
+
 func init() {
 	traceEnabled.Store(true)
 }
@@ -203,63 +227,102 @@ func assignObservationFields(observation *TraceObservation, args ...any) {
 	}
 }
 
-//nolint:gocyclo
 func assignObservationField(observation *TraceObservation, key string, value any) {
-	switch key {
-	case "Behavior":
-		observation.Behavior = fmt.Sprint(value)
-	case "Time":
-		if converted, ok := toFloat64(value); ok {
-			observation.Time = float64Ptr(converted)
-		}
-	case "ID", "OpID":
-		if converted, ok := toInt(value); ok {
-			observation.ID = intPtr(converted)
-		}
-	case "OpCode":
-		observation.OpCode = fmt.Sprint(value)
-	case "Pred":
-		if converted, ok := toBool(value); ok {
-			observation.Pred = boolPtr(converted)
-		}
-	case "Addr", "PhysAddr":
-		if converted, ok := toUint64(value); ok {
-			observation.Addr = uint64Ptr(converted)
-		}
-	case "Data":
-		observation.Data = value
-	case "X":
-		if converted, ok := toInt(value); ok {
-			observation.X = intPtr(converted)
-		}
-	case "Y":
-		if converted, ok := toInt(value); ok {
-			observation.Y = intPtr(converted)
-		}
-	case "Src":
-		observation.Src = fmt.Sprint(value)
-	case "Dst":
-		observation.Dst = fmt.Sprint(value)
-	case "From":
-		observation.From = fmt.Sprint(value)
-	case "To":
-		observation.To = fmt.Sprint(value)
-	case "Label":
-		observation.Label = fmt.Sprint(value)
-	case "Kind":
-		observation.Kind = fmt.Sprint(value)
-	case "Direction":
-		observation.Direction = fmt.Sprint(value)
-	case "Color":
-		observation.Color = fmt.Sprint(value)
-	case "Occupancy":
-		if converted, ok := toInt(value); ok {
-			observation.Occupancy = intPtr(converted)
-		}
-	case "Capacity":
-		if converted, ok := toInt(value); ok {
-			observation.Capacity = intPtr(converted)
-		}
+	assigner, ok := observationFieldAssigners[key]
+	if ok {
+		assigner(observation, value)
+	}
+}
+
+func assignBehavior(observation *TraceObservation, value any) {
+	observation.Behavior = fmt.Sprint(value)
+}
+
+func assignTime(observation *TraceObservation, value any) {
+	if converted, ok := toFloat64(value); ok {
+		observation.Time = float64Ptr(converted)
+	}
+}
+
+func assignID(observation *TraceObservation, value any) {
+	if converted, ok := toInt(value); ok {
+		observation.ID = intPtr(converted)
+	}
+}
+
+func assignOpCode(observation *TraceObservation, value any) {
+	observation.OpCode = fmt.Sprint(value)
+}
+
+func assignPred(observation *TraceObservation, value any) {
+	if converted, ok := toBool(value); ok {
+		observation.Pred = boolPtr(converted)
+	}
+}
+
+func assignAddr(observation *TraceObservation, value any) {
+	if converted, ok := toUint64(value); ok {
+		observation.Addr = uint64Ptr(converted)
+	}
+}
+
+func assignData(observation *TraceObservation, value any) {
+	observation.Data = value
+}
+
+func assignX(observation *TraceObservation, value any) {
+	if converted, ok := toInt(value); ok {
+		observation.X = intPtr(converted)
+	}
+}
+
+func assignY(observation *TraceObservation, value any) {
+	if converted, ok := toInt(value); ok {
+		observation.Y = intPtr(converted)
+	}
+}
+
+func assignSrc(observation *TraceObservation, value any) {
+	observation.Src = fmt.Sprint(value)
+}
+
+func assignDst(observation *TraceObservation, value any) {
+	observation.Dst = fmt.Sprint(value)
+}
+
+func assignFrom(observation *TraceObservation, value any) {
+	observation.From = fmt.Sprint(value)
+}
+
+func assignTo(observation *TraceObservation, value any) {
+	observation.To = fmt.Sprint(value)
+}
+
+func assignLabel(observation *TraceObservation, value any) {
+	observation.Label = fmt.Sprint(value)
+}
+
+func assignKind(observation *TraceObservation, value any) {
+	observation.Kind = fmt.Sprint(value)
+}
+
+func assignDirection(observation *TraceObservation, value any) {
+	observation.Direction = fmt.Sprint(value)
+}
+
+func assignColor(observation *TraceObservation, value any) {
+	observation.Color = fmt.Sprint(value)
+}
+
+func assignOccupancy(observation *TraceObservation, value any) {
+	if converted, ok := toInt(value); ok {
+		observation.Occupancy = intPtr(converted)
+	}
+}
+
+func assignCapacity(observation *TraceObservation, value any) {
+	if converted, ok := toInt(value); ok {
+		observation.Capacity = intPtr(converted)
 	}
 }
 

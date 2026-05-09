@@ -607,22 +607,7 @@ func PrintSummaryToWriter(report Report, w io.Writer) {
 	if report.MismatchCount != nil {
 		fmt.Fprintf(w, "mismatch count: %d\n", *report.MismatchCount)
 	}
-	if report.Energy != nil {
-		fmt.Fprintf(
-			w,
-			"energy: ok=%t dynamic=%.6f pJ static=%.6f pJ total=%.6f pJ\n",
-			report.Energy.EstimationOK,
-			report.Energy.DynamicEnergyPJ,
-			report.Energy.StaticEnergyPJ,
-			report.Energy.TotalEnergyPJ,
-		)
-		if len(report.Energy.UnknownActions) > 0 {
-			fmt.Fprintf(w, "energy unknown actions: %d\n", len(report.Energy.UnknownActions))
-		}
-		if len(report.Energy.UnresolvedEvents) > 0 {
-			fmt.Fprintf(w, "energy unresolved events: %d\n", len(report.Energy.UnresolvedEvents))
-		}
-	}
+	printEnergySummary(report.Energy, w)
 
 	if len(report.TopHotTiles) > 0 {
 		fmt.Fprintln(w, "top hot tiles:")
@@ -655,6 +640,26 @@ func PrintSummaryToWriter(report Report, w io.Writer) {
 				queue.SampleCount,
 			)
 		}
+	}
+}
+
+func printEnergySummary(energy *EnergyReport, w io.Writer) {
+	if energy == nil {
+		return
+	}
+	fmt.Fprintf(
+		w,
+		"energy: ok=%t dynamic=%.6f pJ static=%.6f pJ total=%.6f pJ\n",
+		energy.EstimationOK,
+		energy.DynamicEnergyPJ,
+		energy.StaticEnergyPJ,
+		energy.TotalEnergyPJ,
+	)
+	if len(energy.UnknownActions) > 0 {
+		fmt.Fprintf(w, "energy unknown actions: %d\n", len(energy.UnknownActions))
+	}
+	if len(energy.UnresolvedEvents) > 0 {
+		fmt.Fprintf(w, "energy unresolved events: %d\n", len(energy.UnresolvedEvents))
 	}
 }
 
