@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/sarchlab/zeonica/core"
+	"github.com/sarchlab/zeonica/report"
 	"gopkg.in/yaml.v3"
 )
 
@@ -17,7 +18,19 @@ type ArchSpec struct {
 	TileDefaults TileDefaults   `yaml:"tile_defaults"`
 	LinkDefaults LinkDefaults   `yaml:"link_defaults"`
 	Simulator    Simulator      `yaml:"simulator"`
+	Energy       EnergySpec     `yaml:"energy"`
 	Extra        map[string]any `yaml:",inline"`
+}
+
+// EnergySpec captures optional action-based energy estimation settings.
+type EnergySpec struct {
+	Enabled             *bool                    `yaml:"enabled"`
+	Units               string                   `yaml:"units"`
+	ModelFile           string                   `yaml:"model_file"`
+	Actions             map[string]float64       `yaml:"actions"`
+	UnknownActionPolicy string                   `yaml:"unknown_action_policy"`
+	Static              report.EnergyStaticModel `yaml:"static"`
+	Extra               map[string]any           `yaml:",inline"`
 }
 
 // CGRADefaults contains default CGRA shape settings from arch spec.

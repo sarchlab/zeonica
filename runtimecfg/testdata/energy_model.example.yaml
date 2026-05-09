@@ -1,0 +1,20 @@
+# Illustrative action-based energy model for tests and examples only.
+# Values are not process-calibrated silicon measurements.
+units: pJ
+unknown_action_policy: error
+actions:
+  pe.inst.ADD: 1.0
+  pe.inst.MUL: 3.0
+  pe.inst.LOAD: 2.0
+  pe.inst.STORE: 2.0
+  pe.inst.predicate_suppressed: 0.0
+  pe.dataflow.send: 0.5
+  pe.dataflow.recv: 0.5
+  pe.dataflow.feedin: 0.5
+  pe.dataflow.collect: 0.5
+  pe.memory.local_read: 2.0
+  pe.memory.local_write: 2.5
+  pe.memory.request_load: 4.0
+  pe.memory.response_load: 4.0
+  pe.memory.request_store: 4.5
+  pe.memory.response_store: 1.0

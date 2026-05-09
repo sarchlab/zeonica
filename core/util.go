@@ -23,6 +23,11 @@ type TraceObservation struct {
 	Msg       string
 	Behavior  string
 	Time      *float64
+	ID        *int
+	OpCode    string
+	Pred      *bool
+	Addr      *uint64
+	Data      any
 	X         *int
 	Y         *int
 	Src       string
@@ -78,8 +83,8 @@ func Trace(msg string, args ...any) {
 }
 
 // ObserveDataFlow records a dataflow event for report generation without emitting trace output.
-func ObserveDataFlow(behavior string, timeValue float64, from, to, src, dst string) {
-	observeTrace(TraceObservation{
+func ObserveDataFlow(behavior string, timeValue float64, from, to, src, dst string, attrs ...any) {
+	observation := TraceObservation{
 		WallTime: time.Now(),
 		Msg:      "DataFlow",
 		Behavior: behavior,
@@ -88,12 +93,14 @@ func ObserveDataFlow(behavior string, timeValue float64, from, to, src, dst stri
 		To:       to,
 		Src:      src,
 		Dst:      dst,
-	})
+	}
+	assignObservationFields(&observation, attrs...)
+	observeTrace(observation)
 }
 
 // ObserveMemory records a memory event for report generation without emitting trace output.
-func ObserveMemory(behavior string, timeValue float64, x, y int, src, dst string) {
-	observeTrace(TraceObservation{
+func ObserveMemory(behavior string, timeValue float64, x, y int, src, dst string, attrs ...any) {
+	observation := TraceObservation{
 		WallTime: time.Now(),
 		Msg:      "Memory",
 		Behavior: behavior,
@@ -102,18 +109,22 @@ func ObserveMemory(behavior string, timeValue float64, x, y int, src, dst string
 		Y:        intPtr(y),
 		Src:      src,
 		Dst:      dst,
-	})
+	}
+	assignObservationFields(&observation, attrs...)
+	observeTrace(observation)
 }
 
 // ObserveInst records an instruction event for report generation without emitting trace output.
-func ObserveInst(timeValue float64, x, y int) {
-	observeTrace(TraceObservation{
+func ObserveInst(timeValue float64, x, y int, attrs ...any) {
+	observation := TraceObservation{
 		WallTime: time.Now(),
 		Msg:      "Inst",
 		Time:     float64Ptr(timeValue),
 		X:        intPtr(x),
 		Y:        intPtr(y),
-	})
+	}
+	assignObservationFields(&observation, attrs...)
+	observeTrace(observation)
 }
 
 // ObserveBackpressure records a backpressure event for report generation without emitting trace output.
@@ -177,6 +188,21 @@ func buildTraceObservation(msg string, args ...any) (TraceObservation, bool) {
 	return observation, true
 }
 
+func assignObservationFields(observation *TraceObservation, args ...any) {
+	for i := 0; i < len(args); i++ {
+		switch value := args[i].(type) {
+		case slog.Attr:
+			assignObservationField(observation, value.Key, value.Value.Any())
+		case string:
+			if i+1 >= len(args) {
+				continue
+			}
+			assignObservationField(observation, value, args[i+1])
+			i++
+		}
+	}
+}
+
 //nolint:gocyclo
 func assignObservationField(observation *TraceObservation, key string, value any) {
 	switch key {
@@ -186,6 +212,22 @@ func assignObservationField(observation *TraceObservation, key string, value any
 		if converted, ok := toFloat64(value); ok {
 			observation.Time = float64Ptr(converted)
 		}
+	case "ID", "OpID":
+		if converted, ok := toInt(value); ok {
+			observation.ID = intPtr(converted)
+		}
+	case "OpCode":
+		observation.OpCode = fmt.Sprint(value)
+	case "Pred":
+		if converted, ok := toBool(value); ok {
+			observation.Pred = boolPtr(converted)
+		}
+	case "Addr", "PhysAddr":
+		if converted, ok := toUint64(value); ok {
+			observation.Addr = uint64Ptr(converted)
+		}
+	case "Data":
+		observation.Data = value
 	case "X":
 		if converted, ok := toInt(value); ok {
 			observation.X = intPtr(converted)
@@ -218,6 +260,15 @@ func assignObservationField(observation *TraceObservation, key string, value any
 		if converted, ok := toInt(value); ok {
 			observation.Capacity = intPtr(converted)
 		}
+	}
+}
+
+func toBool(value any) (bool, bool) {
+	switch typed := value.(type) {
+	case bool:
+		return typed, true
+	default:
+		return false, false
 	}
 }
 
@@ -259,6 +310,34 @@ func toInt(value any) (int, bool) {
 	}
 }
 
+func toUint64(value any) (uint64, bool) {
+	switch typed := value.(type) {
+	case int:
+		if typed < 0 {
+			return 0, false
+		}
+		return uint64(typed), true
+	case int32:
+		if typed < 0 {
+			return 0, false
+		}
+		return uint64(typed), true
+	case int64:
+		if typed < 0 {
+			return 0, false
+		}
+		return uint64(typed), true
+	case uint:
+		return uint64(typed), true
+	case uint32:
+		return uint64(typed), true
+	case uint64:
+		return typed, true
+	default:
+		return 0, false
+	}
+}
+
 func intPtr(value int) *int {
 	ptr := new(int)
 	*ptr = value
@@ -267,6 +346,18 @@ func intPtr(value int) *int {
 
 func float64Ptr(value float64) *float64 {
 	ptr := new(float64)
+	*ptr = value
+	return ptr
+}
+
+func boolPtr(value bool) *bool {
+	ptr := new(bool)
+	*ptr = value
+	return ptr
+}
+
+func uint64Ptr(value uint64) *uint64 {
+	ptr := new(uint64)
 	*ptr = value
 	return ptr
 }

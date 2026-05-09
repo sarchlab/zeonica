@@ -24,6 +24,7 @@ type GenerateOptions struct {
 	TopN          int
 	Passed        *bool
 	MismatchCount *int
+	EnergyModel   *EnergyModel
 }
 
 // Report is the aggregate execution summary derived from a trace log.
@@ -55,6 +56,7 @@ type Report struct {
 	TopHotTiles              []TopHotTile          `json:"topHotTiles"`
 	TopBackpressureTiles     []TopBackpressureTile `json:"topBackpressureTiles"`
 	WatchedQueues            []QueueStats          `json:"watchedQueues,omitempty"`
+	Energy                   *EnergyReport         `json:"energy,omitempty"`
 }
 
 // GridInfo describes the grid size used by the workload.
@@ -120,6 +122,13 @@ type traceEvent struct {
 	Msg       string   `json:"msg"`
 	Behavior  string   `json:"Behavior"`
 	Time      *float64 `json:"Time"`
+	ID        *int     `json:"ID"`
+	OpID      *int     `json:"OpID"`
+	OpCode    string   `json:"OpCode"`
+	Pred      *bool    `json:"Pred"`
+	Addr      *uint64  `json:"Addr"`
+	PhysAddr  *uint64  `json:"PhysAddr"`
+	Data      any      `json:"Data,omitempty"`
 	X         *int     `json:"X"`
 	Y         *int     `json:"Y"`
 	Src       string   `json:"Src"`
@@ -172,6 +181,7 @@ type queueAccumulator struct {
 type collector struct {
 	tileData                 map[tileCoord]*tileAccumulator
 	queueData                map[queueKey]*queueAccumulator
+	energyEvents             []energyEvent
 	globalCycleSet           map[int64]struct{}
 	globalBackpressureCycles map[int64]struct{}
 	maxCycle                 int64
@@ -180,6 +190,12 @@ type collector struct {
 	globalBackpressureCount  int64
 	minWallTS                *time.Time
 	maxWallTS                *time.Time
+}
+
+type energyEvent struct {
+	event    traceEvent
+	coord    tileCoord
+	hasCoord bool
 }
 
 // Observer collects report statistics directly from runtime trace observations.
@@ -219,6 +235,11 @@ func (o *Observer) Observe(observation core.TraceObservation) {
 		Msg:       observation.Msg,
 		Behavior:  observation.Behavior,
 		Time:      observation.Time,
+		ID:        observation.ID,
+		OpCode:    observation.OpCode,
+		Pred:      observation.Pred,
+		Addr:      observation.Addr,
+		Data:      observation.Data,
 		X:         observation.X,
 		Y:         observation.Y,
 		Src:       observation.Src,
@@ -277,8 +298,10 @@ func (c *collector) observe(event traceEvent) {
 
 	coord, ok := resolveTileCoord(event)
 	if !ok {
+		c.observeEnergyEvent(event, tileCoord{}, false)
 		return
 	}
+	c.observeEnergyEvent(event, coord, true)
 
 	if coord.x > c.maxX {
 		c.maxX = coord.x
@@ -310,6 +333,13 @@ func (c *collector) observe(event traceEvent) {
 		if hasCycle {
 			c.globalBackpressureCycles[cycle] = struct{}{}
 		}
+	}
+}
+
+func (c *collector) observeEnergyEvent(event traceEvent, coord tileCoord, hasCoord bool) {
+	switch event.Msg {
+	case "Inst", "DataFlow", "Memory":
+		c.energyEvents = append(c.energyEvents, energyEvent{event: event, coord: coord, hasCoord: hasCoord})
 	}
 }
 
@@ -449,7 +479,7 @@ func (c *collector) build(opts GenerateOptions) Report {
 		instThroughputPerSec = float64(instTotal) / wallClockDurationSec
 	}
 
-	return Report{
+	result := Report{
 		TestName:                 opts.TestName,
 		LogPath:                  opts.LogPath,
 		Grid:                     GridInfo{Width: width, Height: height},
@@ -478,6 +508,10 @@ func (c *collector) build(opts GenerateOptions) Report {
 		TopBackpressureTiles:     topBackpressureTiles,
 		WatchedQueues:            watchedQueues,
 	}
+	if opts.EnergyModel != nil && opts.EnergyModel.Enabled {
+		result.Energy = BuildEnergyReport(opts.EnergyModel, c.energyEvents, tiles, totalCycles, width, height)
+	}
+	return result
 }
 
 // GenerateFromLog builds a report by parsing a JSON trace log.
@@ -572,6 +606,22 @@ func PrintSummaryToWriter(report Report, w io.Writer) {
 	}
 	if report.MismatchCount != nil {
 		fmt.Fprintf(w, "mismatch count: %d\n", *report.MismatchCount)
+	}
+	if report.Energy != nil {
+		fmt.Fprintf(
+			w,
+			"energy: ok=%t dynamic=%.6f pJ static=%.6f pJ total=%.6f pJ\n",
+			report.Energy.EstimationOK,
+			report.Energy.DynamicEnergyPJ,
+			report.Energy.StaticEnergyPJ,
+			report.Energy.TotalEnergyPJ,
+		)
+		if len(report.Energy.UnknownActions) > 0 {
+			fmt.Fprintf(w, "energy unknown actions: %d\n", len(report.Energy.UnknownActions))
+		}
+		if len(report.Energy.UnresolvedEvents) > 0 {
+			fmt.Fprintf(w, "energy unresolved events: %d\n", len(report.Energy.UnresolvedEvents))
+		}
 	}
 
 	if len(report.TopHotTiles) > 0 {

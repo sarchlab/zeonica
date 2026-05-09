@@ -27,6 +27,7 @@ func (r *Runtime) BuildReportOptions(topN int, passed *bool, mismatchCount *int)
 		TopN:          topN,
 		Passed:        passed,
 		MismatchCount: mismatchCount,
+		EnergyModel:   r.Config.EnergyModel,
 	}, nil
 }
 

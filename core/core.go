@@ -70,7 +70,7 @@ func (c *Core) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
 				"Addr", baseAddr,
 			)
 		} else {
-			ObserveMemory("WriteMemory", timeValue, x, y, "", "")
+			ObserveMemory("WriteMemory", timeValue, x, y, "", "", "Addr", baseAddr, "Data", data)
 		}
 	} else {
 		panic(fmt.Sprintf("Invalid Tile: Expect (%d, %d)，but get (%d, %d)", c.state.TileX, c.state.TileY, x, y))
@@ -220,7 +220,27 @@ func (c *Core) doSend() bool {
 					"Dst", msg.Dst,
 				)
 			} else {
-				ObserveMemory("Send", timeValue, int(c.state.TileX), int(c.state.TileY), string(msg.Src), string(msg.Dst))
+				opID := 0
+				addr := c.state.AddrBuf
+				if c.state.PendingMemoryOp != nil {
+					opID = c.state.PendingMemoryOp.OpID
+					addr = c.state.PendingMemoryOp.Address
+				}
+				ObserveMemory(
+					"Send",
+					timeValue,
+					int(c.state.TileX),
+					int(c.state.TileY),
+					string(msg.Src),
+					string(msg.Dst),
+					"OpID", opID,
+					"OpCode", "STORE",
+					"Addr", addr,
+					"PhysAddr", c.state.SharedMemoryBase+addr,
+					"Data", head.First(),
+					"Pred", head.Pred,
+					"Color", "R",
+				)
 			}
 			c.state.sendQueueConsume(routerColor, int(cgra.Router))
 			madeProgress = true
@@ -266,7 +286,26 @@ func (c *Core) doSend() bool {
 					"Dst", msg.Dst,
 				)
 			} else {
-				ObserveMemory("Send", timeValue, int(c.state.TileX), int(c.state.TileY), string(msg.Src), string(msg.Dst))
+				opID := 0
+				addr := c.state.AddrBuf
+				if c.state.PendingMemoryOp != nil {
+					opID = c.state.PendingMemoryOp.OpID
+					addr = c.state.PendingMemoryOp.Address
+				}
+				ObserveMemory(
+					"Send",
+					timeValue,
+					int(c.state.TileX),
+					int(c.state.TileY),
+					string(msg.Src),
+					string(msg.Dst),
+					"OpID", opID,
+					"OpCode", "LOAD",
+					"Addr", addr,
+					"PhysAddr", c.state.SharedMemoryBase+addr,
+					"Data", c.state.AddrBuf,
+					"Color", "R",
+				)
 			}
 			c.state.sendQueueConsume(routerColor, int(cgra.Router))
 			madeProgress = true
@@ -366,6 +405,22 @@ func (c *Core) doRecv() bool {
 					"X", c.state.TileX,
 					"Y", c.state.TileY,
 				)
+			} else {
+				ObserveMemory(
+					"Recv",
+					timeValue,
+					int(c.state.TileX),
+					int(c.state.TileY),
+					string(msg.Src),
+					string(msg.Dst),
+					"OpID", c.state.PendingMemoryOp.OpID,
+					"OpCode", c.state.PendingMemoryOp.OpCode,
+					"Addr", c.state.PendingMemoryOp.Address,
+					"PhysAddr", c.state.SharedMemoryBase+c.state.PendingMemoryOp.Address,
+					"Data", msg.Data,
+					"Pred", value.Pred,
+					"Color", "R",
+				)
 			}
 			madeProgress = true
 			return madeProgress
@@ -415,6 +470,22 @@ func (c *Core) doRecv() bool {
 					"Color", "R",
 					"X", c.state.TileX,
 					"Y", c.state.TileY,
+				)
+			} else {
+				ObserveMemory(
+					"Recv",
+					timeValue,
+					int(c.state.TileX),
+					int(c.state.TileY),
+					string(msg.Src),
+					string(msg.Dst),
+					"OpID", c.state.PendingMemoryOp.OpID,
+					"OpCode", c.state.PendingMemoryOp.OpCode,
+					"Addr", c.state.PendingMemoryOp.Address,
+					"PhysAddr", c.state.SharedMemoryBase+c.state.PendingMemoryOp.Address,
+					"Data", c.state.PendingMemoryOp.Value,
+					"Pred", c.state.PendingMemoryOp.Pred,
+					"Color", "R",
 				)
 			}
 			madeProgress = true

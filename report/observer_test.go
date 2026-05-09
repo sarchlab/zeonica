@@ -114,6 +114,74 @@ func TestObserverBuildMatchesGenerateFromLog(t *testing.T) {
 	}
 }
 
+func TestObserverBuildMatchesGenerateFromLogWithEnergyMetadata(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "trace.json.log")
+	ts0 := time.Date(2026, 3, 6, 0, 0, 0, 0, time.UTC)
+	pred := true
+	addr := uint64(8)
+	event := traceEvent{
+		Timestamp: ts0.Format(time.RFC3339Nano),
+		Msg:       "Inst",
+		Time:      testFloat64Ptr(0),
+		X:         testIntPtr(0),
+		Y:         testIntPtr(0),
+		ID:        testIntPtr(42),
+		OpCode:    "ADD",
+		Pred:      &pred,
+		Addr:      &addr,
+	}
+
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("Marshal returned error: %v", err)
+	}
+	if err := os.WriteFile(logPath, append(payload, '\n'), 0o644); err != nil {
+		t.Fatalf("WriteFile returned error: %v", err)
+	}
+
+	opts := GenerateOptions{
+		TestName:   "observer-energy-test",
+		LogPath:    logPath,
+		GridWidth:  1,
+		GridHeight: 1,
+		TopN:       5,
+		EnergyModel: &EnergyModel{
+			Enabled:             true,
+			Units:               "pJ",
+			UnknownActionPolicy: EnergyUnknownActionError,
+			Actions: map[string]float64{
+				"pe.inst.ADD": 2,
+			},
+		},
+	}
+
+	fromLog, err := GenerateFromLog(opts)
+	if err != nil {
+		t.Fatalf("GenerateFromLog returned error: %v", err)
+	}
+
+	observer := NewObserver()
+	observer.Observe(core.TraceObservation{
+		WallTime: ts0,
+		Msg:      "Inst",
+		Time:     testFloat64Ptr(0),
+		X:        testIntPtr(0),
+		Y:        testIntPtr(0),
+		ID:       testIntPtr(42),
+		OpCode:   "ADD",
+		Pred:     &pred,
+		Addr:     &addr,
+	})
+
+	fromObserver := observer.Build(opts)
+	if !reflect.DeepEqual(fromLog, fromObserver) {
+		t.Fatalf("expected observer report to match log report\nfrom log: %#v\nfrom observer: %#v", fromLog, fromObserver)
+	}
+	if fromObserver.Energy == nil || fromObserver.Energy.DynamicEnergyPJ != 2 {
+		t.Fatalf("energy report = %#v, want dynamic energy 2", fromObserver.Energy)
+	}
+}
+
 func testIntPtr(v int) *int {
 	return &v
 }

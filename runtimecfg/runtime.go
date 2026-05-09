@@ -93,6 +93,7 @@ type ResolvedConfig struct {
 	ReportName                    string
 	QueueWatches                  []core.QueueWatchSpec
 	BufferSweepDepths             []int
+	EnergyModel                   *report.EnergyModel
 }
 
 // BuildOverrides allows optional size override when not binding to architecture.
@@ -359,6 +360,11 @@ func ResolveWithSpecPath(spec ArchSpec, specPath, testName string) (ResolvedConf
 		defaultLinkBandwidth,
 		"link_defaults.bandwidth",
 	)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+
+	resolved.EnergyModel, err = resolveEnergyModel(spec.Energy, specPath)
 	if err != nil {
 		return ResolvedConfig{}, err
 	}
