@@ -1412,7 +1412,6 @@ func (i instEmulator) advancePendingMemoryOp(state *coreState) bool {
 			return true
 		}
 		state.PendingMemoryOp = nil
-		state.DirectSRAMCompleted = true
 		return true
 	}
 
@@ -1434,7 +1433,6 @@ func (i instEmulator) advancePendingMemoryOp(state *coreState) bool {
 		i.writeOperand(dst, *pending.DataReady, state)
 	}
 	state.PendingMemoryOp = nil
-	state.DirectSRAMCompleted = true
 	return true
 }
 

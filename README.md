@@ -48,6 +48,7 @@ go run ./verify/cmd/verify-histogram     # outputs histogram_verification_report
 ## Architecture (How it fits together)
 - **Tile/Core** (`core/`): Instruction emulator + cycle-accurate send/recv paths on Akita ports; traces dataflow/memory events. Opcodes implemented in `core/emu.go`, state in `core/core.go`.
 - **CGRA device** (`cgra/`, `config/`): Mesh wiring of tiles; configurable memory mode (`simple`, `shared`, `local`) via `config.DeviceBuilder`. Uses Akita direct connections and optional shared memory controllers.
+- **Shared SRAM** (`config/`, `core/`): `memory_mode: "shared"` with `shared_memory_model: "banked"` models a shared SRAM scratchpad with per-bank conflict timing for compiler-style blocking `LOAD`/`STORE`; see `docs/shared-memory.md`.
 - **Driver** (`api/driver.go`): Maps per-PE kernels, feeds inputs, collects outputs, and ticks the simulation engine. Supports preload/read of per-PE memory.
 - **Verification fast path** (`verify/`): Static lint (STRUCT/TIMING) + functional simulator + report generator. Mirrors opcode semantics without timing/backpressure; CLIs in `verify/cmd/`.
 - **Testbench** (`test/Zeonica_Testbench` submodule): Reference kernels (AXPY, histogram, etc.) consumed by verify and simulation tests.
