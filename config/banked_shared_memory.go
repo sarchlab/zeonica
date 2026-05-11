@@ -102,9 +102,13 @@ func (c *bankedSharedMemoryController) BankForAddress(addr uint64) int {
 }
 
 func (c *bankedSharedMemoryController) scheduleCycleForAddress(addr uint64) int64 {
-	bank := c.BankForAddress(addr)
 	nowCycle := int64(c.Freq.ThisTick(c.CurrentTime()) * sim.VTimeInSec(c.Freq))
-	startCycle := nowCycle
+	return c.ScheduleCycleForAddress(addr, nowCycle)
+}
+
+func (c *bankedSharedMemoryController) ScheduleCycleForAddress(addr uint64, issueCycle int64) int64 {
+	bank := c.BankForAddress(addr)
+	startCycle := issueCycle
 	if c.nextBankCycle[bank] > startCycle {
 		startCycle = c.nextBankCycle[bank]
 	}

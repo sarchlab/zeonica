@@ -6,12 +6,14 @@ import (
 	"github.com/sarchlab/akita/v4/mem/idealmemcontroller"
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
+	"github.com/sarchlab/zeonica/core"
 )
 
 type tileCore interface {
 	sim.Component
 	MapProgram(program interface{}, x int, y int)
 	SetRemotePort(side cgra.Side, port sim.RemotePort)
+	SetSharedSRAMAccessor(accessor core.SharedSRAMAccessor)
 	GetMemory(x int, y int, addr uint32) uint32
 	WriteMemory(x int, y int, data uint32, baseAddr uint32)
 	GetTileX() int

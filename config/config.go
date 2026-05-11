@@ -185,7 +185,7 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 	return dev
 }
 
-//nolint:funlen
+//nolint:funlen,gocyclo
 func (d DeviceBuilder) createSharedMemory(dev *device) {
 	if d.memoryMode == "shared" {
 		// Create shared memory controller
@@ -235,6 +235,9 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 					conn.PlugIn(tile.Core.GetPortByName("Router"))
 					connections[groupID] = conn
 					tile.SetRemotePort(cgra.Router, controller.GetPortByName("Top").AsRemote())
+					if accessor, ok := controller.(core.SharedSRAMAccessor); ok {
+						tile.Core.SetSharedSRAMAccessor(accessor)
+					}
 					tile.SharedMemoryController = controller
 					dev.SharedMemoryControllers = append(dev.SharedMemoryControllers, controller)
 
@@ -244,6 +247,9 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 					fmt.Println("Connect Tile (", x, ",", y, ") to SharedMemory Controller (", groupID, ") (already-created)")
 					connections[groupID].PlugIn(tile.Core.GetPortByName("Router"))
 					tile.SetRemotePort(cgra.Router, controllers[groupID].GetPortByName("Top").AsRemote())
+					if accessor, ok := controllers[groupID].(core.SharedSRAMAccessor); ok {
+						tile.Core.SetSharedSRAMAccessor(accessor)
+					}
 					tile.SharedMemoryController = controllers[groupID]
 					dev.SharedMemoryControllers = append(dev.SharedMemoryControllers, controllers[groupID])
 				}

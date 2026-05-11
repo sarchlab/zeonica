@@ -90,3 +90,32 @@ func TestBankedSharedMemorySerializesSameBankOnly(t *testing.T) {
 		t.Fatalf("different-bank request completed at cycle %d, want 3", firstBank1)
 	}
 }
+
+func TestBankedSharedSRAMSchedulesFromIssueCycle(t *testing.T) {
+	engine := sim.NewSerialEngine()
+	controller := newBankedSharedMemoryController(
+		"BankedSharedMemory",
+		engine,
+		1*sim.GHz,
+		BankedSharedMemoryConfig{
+			Banks:           2,
+			BaseLatency:     1,
+			InterleaveBytes: 4,
+			Capacity:        1024,
+		},
+	)
+
+	firstBank0 := controller.ScheduleCycleForAddress(0, 7)
+	secondBank0 := controller.ScheduleCycleForAddress(8, 7)
+	firstBank1 := controller.ScheduleCycleForAddress(4, 7)
+
+	if firstBank0 != 8 {
+		t.Fatalf("first bank-0 request completed at cycle %d, want 8", firstBank0)
+	}
+	if secondBank0 != 9 {
+		t.Fatalf("second same-bank request completed at cycle %d, want 9", secondBank0)
+	}
+	if firstBank1 != 8 {
+		t.Fatalf("different-bank request completed at cycle %d, want 8", firstBank1)
+	}
+}

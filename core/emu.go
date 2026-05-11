@@ -131,6 +131,7 @@ type coreState struct {
 	OpInputReadCache       map[string]cgra.Data
 	AddrBuf                uint32 // buffer for the address of the memory
 	SharedMemoryBase       uint32
+	SharedSRAMAccessor     SharedSRAMAccessor
 	IsToWriteMemory        bool
 	BlockingMemoryOps      bool
 	PendingMemoryOp        *pendingMemoryOp
@@ -150,6 +151,7 @@ type coreState struct {
 	StallReason           string
 	StallOpID             int
 	StallOpCode           string
+	DirectSRAMCompleted   bool
 }
 
 type pendingMemoryOp struct {
@@ -164,6 +166,8 @@ type pendingMemoryOp struct {
 	RequestSent bool
 	DataReady   *cgra.Data
 	WriteDone   bool
+	DirectSRAM  bool
+	DoneCycle   int64
 }
 
 type instEmulator struct {
@@ -1330,6 +1334,29 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 			slog.Info("Flow", "PCInBlock", "-1", "X", state.TileX, "Y", state.TileY)
 		}
 		state.NextPCInBlock = -1
+		if state.DirectSRAMCompleted &&
+			progressSync &&
+			!state.TimingWaitBlocked &&
+			state.SelectedBlock != nil &&
+			state.PCInBlock >= 0 {
+			state.DirectSRAMCompleted = false
+			iGroup := state.SelectedBlock.InstructionGroups[state.PCInBlock]
+			progressAgain := i.RunInstructionGroupWithSyncOps(iGroup, state, time)
+			progressSync = progressSync || progressAgain
+			if progressAgain && !state.TimingWaitBlocked {
+				if state.NextPCInBlock == -1 {
+					state.PCInBlock++
+				} else {
+					state.PCInBlock = state.NextPCInBlock
+				}
+			}
+			if state.SelectedBlock != nil && state.PCInBlock >= int32(len(state.SelectedBlock.InstructionGroups)) {
+				state.PCInBlock = -1
+				state.SelectedBlock = nil
+				slog.Info("Flow", "PCInBlock", "-1", "X", state.TileX, "Y", state.TileY)
+			}
+			state.NextPCInBlock = -1
+		}
 	} else {
 		panic("invalid mode")
 	}
@@ -1350,10 +1377,12 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 }
 
 func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, state *coreState, time float64) bool {
+	state.CurrentTime = time
 	state.TimingWaitBlocked = false
 	state.StallReason = ""
 	state.StallOpID = 0
 	state.StallOpCode = ""
+	state.DirectSRAMCompleted = false
 	state.OpInputReadCache = make(map[string]cgra.Data)
 	if state.PendingMemoryOp != nil {
 		return i.advancePendingMemoryOp(state)
@@ -1372,6 +1401,9 @@ func (i instEmulator) advancePendingMemoryOp(state *coreState) bool {
 	if pending == nil {
 		return false
 	}
+	if pending.DirectSRAM {
+		return i.advanceDirectSRAMMemoryOp(state, pending)
+	}
 
 	if pending.IsWrite {
 		if !pending.WriteDone {
@@ -1380,6 +1412,7 @@ func (i instEmulator) advancePendingMemoryOp(state *coreState) bool {
 			return true
 		}
 		state.PendingMemoryOp = nil
+		state.DirectSRAMCompleted = true
 		return true
 	}
 
@@ -1401,6 +1434,81 @@ func (i instEmulator) advancePendingMemoryOp(state *coreState) bool {
 		i.writeOperand(dst, *pending.DataReady, state)
 	}
 	state.PendingMemoryOp = nil
+	state.DirectSRAMCompleted = true
+	return true
+}
+
+func (i instEmulator) advanceDirectSRAMMemoryOp(state *coreState, pending *pendingMemoryOp) bool {
+	currentCycle := int64(math.Round(state.CurrentTime))
+	if currentCycle < pending.DoneCycle {
+		state.TimingWaitBlocked = true
+		state.StallReason = StallReasonOperandWait
+		return true
+	}
+
+	physAddr := state.SharedMemoryBase + pending.Address
+	byteAddr := physAddr * 4
+	if pending.IsWrite {
+		if !pending.WriteDone {
+			if err := state.SharedSRAMAccessor.WriteStorage(byteAddr, makeBytesFromUint32(pending.Value)); err != nil {
+				panic(fmt.Sprintf("shared SRAM write failed at byte address %d: %v", byteAddr, err))
+			}
+			pending.WriteDone = true
+			Trace("Memory",
+				"Behavior", "Recv",
+				"Time", state.CurrentTime,
+				"OpID", pending.OpID,
+				"OpCode", pending.OpCode,
+				"Addr", pending.Address,
+				"PhysAddr", physAddr,
+				"Data", pending.Value,
+				"Pred", pending.Pred,
+				"Color", "R",
+				"X", state.TileX,
+				"Y", state.TileY,
+			)
+		}
+		state.PendingMemoryOp = nil
+		state.DirectSRAMCompleted = true
+		return true
+	}
+
+	if pending.DataReady == nil {
+		data, err := state.SharedSRAMAccessor.ReadStorage(byteAddr, 4)
+		if err != nil {
+			panic(fmt.Sprintf("shared SRAM read failed at byte address %d: %v", byteAddr, err))
+		}
+		value := cgra.NewScalarWithPred(convert4BytesToUint32(data), pending.Pred)
+		pending.DataReady = &value
+		Trace("Memory",
+			"Behavior", "Recv",
+			"Time", state.CurrentTime,
+			"OpID", pending.OpID,
+			"OpCode", pending.OpCode,
+			"Addr", pending.Address,
+			"PhysAddr", physAddr,
+			"Data", data,
+			"Pred", value.Pred,
+			"Color", "R",
+			"X", state.TileX,
+			"Y", state.TileY,
+		)
+	}
+
+	for _, dst := range pending.Dst {
+		dstImpl := i.normalizeDirection(dst.Impl)
+		if state.Directions[dstImpl] &&
+			state.sendQueueIsFull(i.getColorIndex(dst.Color), i.getDirecIndex(dstImpl)) {
+			state.TimingWaitBlocked = true
+			state.StallReason = StallReasonOutputBlocked
+			return true
+		}
+	}
+	for _, dst := range pending.Dst {
+		i.writeOperand(dst, *pending.DataReady, state)
+	}
+	state.PendingMemoryOp = nil
+	state.DirectSRAMCompleted = true
 	return true
 }
 
@@ -1795,6 +1903,9 @@ func (i instEmulator) checkIssueReadinessDetails(inst Operation, state *coreStat
 	}
 
 	if state.BlockingMemoryOps && isBlockingMemoryShape(inst, state) {
+		if state.SharedSRAMAccessor != nil {
+			return readiness
+		}
 		routerColor := i.getColorIndex("R")
 		routerDir := int(cgra.Router)
 		if state.sendQueueIsFull(routerColor, routerDir) {
@@ -2318,6 +2429,37 @@ func (i instEmulator) runLoadDRAM(inst Operation, state *coreState) map[Operand]
 			Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 			return results
 		}
+		if state.SharedSRAMAccessor != nil {
+			physAddr := state.SharedMemoryBase + addr
+			byteAddr := uint64(physAddr) * 4
+			issueCycle := int64(math.Round(state.CurrentTime))
+			doneCycle := state.SharedSRAMAccessor.ScheduleCycleForAddress(byteAddr, issueCycle)
+			state.PendingMemoryOp = &pendingMemoryOp{
+				OpCode:     inst.OpCode,
+				OpID:       inst.ID,
+				Address:    addr,
+				Dst:        append([]Operand(nil), inst.DstOperands.Operands...),
+				Pred:       finalPred,
+				IsWrite:    false,
+				DirectSRAM: true,
+				DoneCycle:  doneCycle,
+			}
+			state.TimingWaitBlocked = true
+			Trace("Memory",
+				"Behavior", "Send",
+				"Time", state.CurrentTime,
+				"OpID", inst.ID,
+				"OpCode", inst.OpCode,
+				"Addr", addr,
+				"PhysAddr", physAddr,
+				"Data", addr,
+				"Color", "R",
+				"X", state.TileX,
+				"Y", state.TileY,
+			)
+			Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+			return make(map[Operand]cgra.Data)
+		}
 		state.PendingMemoryOp = &pendingMemoryOp{
 			OpCode:  inst.OpCode,
 			OpID:    inst.ID,
@@ -2414,6 +2556,38 @@ func (i instEmulator) runStoreDRAM(inst Operation, state *coreState) map[Operand
 		addr := addrStruct.First()
 		finalPred := addrStruct.Pred && valueStruct.Pred
 		if !finalPred {
+			Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+			return make(map[Operand]cgra.Data)
+		}
+		if state.SharedSRAMAccessor != nil {
+			physAddr := state.SharedMemoryBase + addr
+			byteAddr := uint64(physAddr) * 4
+			issueCycle := int64(math.Round(state.CurrentTime))
+			doneCycle := state.SharedSRAMAccessor.ScheduleCycleForAddress(byteAddr, issueCycle)
+			state.PendingMemoryOp = &pendingMemoryOp{
+				OpCode:     inst.OpCode,
+				OpID:       inst.ID,
+				Address:    addr,
+				Value:      value,
+				Pred:       finalPred,
+				IsWrite:    true,
+				DirectSRAM: true,
+				DoneCycle:  doneCycle,
+			}
+			state.TimingWaitBlocked = true
+			Trace("Memory",
+				"Behavior", "Send",
+				"Time", state.CurrentTime,
+				"OpID", inst.ID,
+				"OpCode", inst.OpCode,
+				"Addr", addr,
+				"PhysAddr", physAddr,
+				"Data", value,
+				"Pred", finalPred,
+				"Color", "R",
+				"X", state.TileX,
+				"Y", state.TileY,
+			)
 			Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
 			return make(map[Operand]cgra.Data)
 		}

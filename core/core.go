@@ -82,6 +82,10 @@ func (c *Core) SetRemotePort(side cgra.Side, remote sim.RemotePort) {
 	c.ports[side].remote = remote
 }
 
+func (c *Core) SetSharedSRAMAccessor(accessor SharedSRAMAccessor) {
+	c.state.SharedSRAMAccessor = accessor
+}
+
 // MapProgram sets the program that the core needs to run.
 func (c *Core) MapProgram(program interface{}, x int, y int) {
 	if prog, ok := program.(Program); ok {
