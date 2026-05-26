@@ -1,0 +1,337 @@
+array_config:
+  columns: 4
+  rows: 4
+  compiled_ii: 4
+  cores:
+    - column: 0
+      row: 0
+      core_id: "0"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 0
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+                - opcode: "NOP"
+                  id: 1
+                  time_step: 0
+                  invalid_iterations: 0
+    - column: 1
+      row: 0
+      core_id: "1"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 2
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+                - opcode: "NOP"
+                  id: 3
+                  time_step: 0
+                  invalid_iterations: 0
+    - column: 2
+      row: 0
+      core_id: "2"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 4
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+                - opcode: "NOP"
+                  id: 5
+                  time_step: 0
+                  invalid_iterations: 0
+    - column: 3
+      row: 0
+      core_id: "3"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "STORE"
+                  id: 6
+                  time_step: 3
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                    - operand: "#0"
+                      color: "RED"
+    - column: 0
+      row: 1
+      core_id: "4"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 7
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+                - opcode: "NOP"
+                  id: 8
+                  time_step: 0
+                  invalid_iterations: 0
+    - column: 1
+      row: 1
+      core_id: "5"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 9
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+                - opcode: "NOP"
+                  id: 10
+                  time_step: 0
+                  invalid_iterations: 0
+    - column: 2
+      row: 1
+      core_id: "6"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 11
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+                - opcode: "NOP"
+                  id: 12
+                  time_step: 0
+                  invalid_iterations: 0
+    - column: 3
+      row: 1
+      core_id: "7"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "STORE"
+                  id: 13
+                  time_step: 3
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                    - operand: "#0"
+                      color: "RED"
+    - column: 0
+      row: 2
+      core_id: "8"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 14
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+                - opcode: "NOP"
+                  id: 15
+                  time_step: 0
+                  invalid_iterations: 0
+    - column: 1
+      row: 2
+      core_id: "9"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 16
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+                - opcode: "NOP"
+                  id: 17
+                  time_step: 0
+                  invalid_iterations: 0
+    - column: 2
+      row: 2
+      core_id: "10"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 18
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+                - opcode: "NOP"
+                  id: 19
+                  time_step: 0
+                  invalid_iterations: 0
+    - column: 3
+      row: 2
+      core_id: "11"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "STORE"
+                  id: 20
+                  time_step: 3
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                    - operand: "#0"
+                      color: "RED"
+    - column: 0
+      row: 3
+      core_id: "12"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 21
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+                - opcode: "NOP"
+                  id: 22
+                  time_step: 0
+                  invalid_iterations: 0
+    - column: 1
+      row: 3
+      core_id: "13"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 23
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+                - opcode: "NOP"
+                  id: 24
+                  time_step: 0
+                  invalid_iterations: 0
+    - column: 2
+      row: 3
+      core_id: "14"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "DATA_MOV"
+                  id: 25
+                  time_step: 0
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                  dst_operands:
+                    - operand: "EAST"
+                      color: "RED"
+                - opcode: "NOP"
+                  id: 26
+                  time_step: 0
+                  invalid_iterations: 0
+    - column: 3
+      row: 3
+      core_id: "15"
+      entries:
+        - entry_id: "entry0"
+          instructions:
+            - index_per_ii: 0
+              operations:
+                - opcode: "STORE"
+                  id: 27
+                  time_step: 3
+                  invalid_iterations: 0
+                  src_operands:
+                    - operand: "WEST"
+                      color: "RED"
+                    - operand: "#0"
+                      color: "RED"

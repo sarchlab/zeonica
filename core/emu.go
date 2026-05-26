@@ -30,6 +30,12 @@ const (
 	ExecutionPolicyInOrderDataflow  = "in_order_dataflow"
 )
 
+const (
+	StallReasonScheduleBubble = "schedule_bubble"
+	StallReasonOperandWait    = "operand_wait"
+	StallReasonOutputBlocked  = "output_blocked"
+)
+
 type routingRule struct {
 	src   cgra.Side
 	dst   cgra.Side
@@ -108,22 +114,561 @@ type coreState struct {
 
 	Mode OpMode
 
-	RecvBufHead      [][]cgra.Data //[Color][Direction]
-	RecvBufHeadReady [][]bool
-	SendBufHead      [][]cgra.Data
-	SendBufHeadBusy  [][]bool
-	AddrBuf          uint32 // buffer for the address of the memory
-	IsToWriteMemory  bool
+	RecvBufHead            [][]cgra.Data //[Color][Direction]
+	RecvBufHeadReady       [][]bool
+	SendBufHead            [][]cgra.Data
+	SendBufHeadBusy        [][]bool
+	RecvBufQueue           [][][]cgra.Data // [Color][Direction]FIFO
+	SendBufQueue           [][][]cgra.Data // [Color][Direction]FIFO
+	RecvQueueCapacity      int
+	SendQueueCapacity      int
+	EnableFIFOModel        bool
+	EnableVectorPE         bool
+	VectorLanes            int
+	EnableQueueWatches     bool
+	ConfiguredQueueWatches []resolvedQueueWatch
+	WatchedQueues          []resolvedQueueWatch
+	OpInputReadCache       map[string]cgra.Data
+	AddrBuf                uint32 // buffer for the address of the memory
+	SharedMemoryBase       uint32
+	SharedSRAMAccessor     SharedSRAMAccessor
+	IsToWriteMemory        bool
+	BlockingMemoryOps      bool
+	PendingMemoryOp        *pendingMemoryOp
 
-	routingRules []*routingRule
-	triggers     []*Trigger
-	CurrentTime  float64 // current simulation time for logging
-	CurrentCycle int64
+	routingRules          []*routingRule
+	triggers              []*Trigger
+	CurrentTime           float64 // current simulation time for logging
+	CurrentCycle          int64
+	OpTimingCursor        map[int]int
+	OpTimingLate          map[int]bool
+	OpTimingRollCycle     map[int]int64
+	OpIssueCount          map[int]int
+	PendingSyncGroup      *pendingSyncGroup
+	ReadyHeldTraceEnabled bool
+	ReadyHeldRunMode      string
+	TimingWaitBlocked     bool
+	StallReason           string
+	StallOpID             int
+	StallOpCode           string
+	DirectSRAMCompleted   bool
+}
+
+type pendingMemoryOp struct {
+	OpCode      string
+	OpID        int
+	Address     uint32
+	Value       uint32
+	Dst         []Operand
+	Pred        bool
+	IsWrite     bool
+	RequestID   string
+	RequestSent bool
+	DataReady   *cgra.Data
+	WriteDone   bool
+	DirectSRAM  bool
+	DoneCycle   int64
 }
 
 type instEmulator struct {
-	CareFlags       bool
-	ExecutionPolicy string
+	CareFlags             bool
+	ExecutionPolicy       string
+	StrictMaxSlip         int64
+	StrictFailOnViolation bool
+}
+
+type issueReadiness struct {
+	OperandsReady        bool
+	PredicateReadyOrTrue bool
+	ResourcesAvailable   bool
+	Ready                bool
+	WaitReason           string
+}
+
+type issueDecision struct {
+	AnnotatedTimeT       *int64
+	OperandsReady        bool
+	PredicateReadyOrTrue bool
+	ResourcesAvailable   bool
+	TimingGateSatisfied  bool
+	FireableExceptTime   bool
+	BlockedByLowerBound  bool
+	CanIssue             bool
+	WaitReason           string
+	TimingWaitBlocked    bool
+}
+
+type readyHeldObservation struct {
+	RunMode              string
+	Cycle                int64
+	X                    int
+	Y                    int
+	OpID                 int
+	OccurrenceIndex      int
+	OpCode               string
+	AnnotatedTimeT       *int64
+	OperandsReady        bool
+	PredicateReadyOrTrue bool
+	ResourcesAvailable   bool
+	TimingGateSatisfied  bool
+	FireableExceptTime   bool
+	BlockedByLowerBound  bool
+	IssuedThisCycle      bool
+}
+
+type pendingSyncGroup struct {
+	RemainingCycles   int
+	BufferedResults   map[Operand]cgra.Data
+	InvalidDecrements []int
+	RepresentativeID  int
+	RepresentativeOp  string
+}
+
+func (s *coreState) recvFIFOEnabled() bool {
+	return s.EnableFIFOModel &&
+		len(s.RecvBufQueue) == 4 &&
+		len(s.RecvBufQueue[0]) > int(cgra.Router)
+}
+
+func (s *coreState) sendFIFOEnabled() bool {
+	return s.EnableFIFOModel &&
+		len(s.SendBufQueue) == 4 &&
+		len(s.SendBufQueue[0]) > int(cgra.Router)
+}
+
+func (s *coreState) recvQueueCap() int {
+	if s.RecvQueueCapacity > 0 {
+		return s.RecvQueueCapacity
+	}
+	return 1
+}
+
+func (s *coreState) sendQueueCap(color, direction int) int {
+	// Keep router-red as single outstanding request to preserve existing
+	// address/req-state coupling semantics.
+	if color == 0 && direction == int(cgra.Router) {
+		return 1
+	}
+	if s.SendQueueCapacity > 0 {
+		return s.SendQueueCapacity
+	}
+	return 1
+}
+
+func (s *coreState) syncRecvHead(color, direction int) {
+	if len(s.RecvBufHead) <= color || len(s.RecvBufHeadReady) <= color {
+		return
+	}
+	if len(s.RecvBufHead[color]) <= direction || len(s.RecvBufHeadReady[color]) <= direction {
+		return
+	}
+	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction && len(s.RecvBufQueue[color][direction]) > 0 {
+		s.RecvBufHead[color][direction] = s.RecvBufQueue[color][direction][0]
+		s.RecvBufHeadReady[color][direction] = true
+		return
+	}
+	s.RecvBufHeadReady[color][direction] = false
+}
+
+func (s *coreState) syncSendHead(color, direction int) {
+	if len(s.SendBufHead) <= color || len(s.SendBufHeadBusy) <= color {
+		return
+	}
+	if len(s.SendBufHead[color]) <= direction || len(s.SendBufHeadBusy[color]) <= direction {
+		return
+	}
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction && len(s.SendBufQueue[color][direction]) > 0 {
+		s.SendBufHead[color][direction] = s.SendBufQueue[color][direction][0]
+		s.SendBufHeadBusy[color][direction] = true
+		return
+	}
+	s.SendBufHeadBusy[color][direction] = false
+}
+
+func (s *coreState) recvQueueLen(color, direction int) int {
+	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction {
+		return len(s.RecvBufQueue[color][direction])
+	}
+	if s.RecvBufHeadReady[color][direction] {
+		return 1
+	}
+	return 0
+}
+
+func (s *coreState) sendQueueLen(color, direction int) int {
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction {
+		return len(s.SendBufQueue[color][direction])
+	}
+	if s.SendBufHeadBusy[color][direction] {
+		return 1
+	}
+	return 0
+}
+
+func (s *coreState) recvQueueIsFull(color, direction int) bool {
+	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction {
+		return len(s.RecvBufQueue[color][direction]) >= s.recvQueueCap()
+	}
+	return s.RecvBufHeadReady[color][direction]
+}
+
+func (s *coreState) recvQueuePush(color, direction int, data cgra.Data) bool {
+	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction {
+		if len(s.RecvBufQueue[color][direction]) >= s.recvQueueCap() {
+			return false
+		}
+		s.RecvBufQueue[color][direction] = append(s.RecvBufQueue[color][direction], data)
+		s.syncRecvHead(color, direction)
+		return true
+	}
+	if s.RecvBufHeadReady[color][direction] {
+		return false
+	}
+	s.RecvBufHead[color][direction] = data
+	s.RecvBufHeadReady[color][direction] = true
+	return true
+}
+
+func (s *coreState) recvQueuePeek(color, direction int) (cgra.Data, bool) {
+	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction {
+		if len(s.RecvBufQueue[color][direction]) == 0 {
+			return cgra.Data{}, false
+		}
+		return s.RecvBufQueue[color][direction][0], true
+	}
+	if !s.RecvBufHeadReady[color][direction] {
+		return cgra.Data{}, false
+	}
+	return s.RecvBufHead[color][direction], true
+}
+
+func (s *coreState) recvQueueConsume(color, direction int) (cgra.Data, bool) {
+	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction {
+		if len(s.RecvBufQueue[color][direction]) == 0 {
+			return cgra.Data{}, false
+		}
+		value := s.RecvBufQueue[color][direction][0]
+		s.RecvBufQueue[color][direction] = s.RecvBufQueue[color][direction][1:]
+		s.syncRecvHead(color, direction)
+		return value, true
+	}
+	if !s.RecvBufHeadReady[color][direction] {
+		return cgra.Data{}, false
+	}
+	value := s.RecvBufHead[color][direction]
+	s.RecvBufHeadReady[color][direction] = false
+	return value, true
+}
+
+func (s *coreState) sendQueueHasData(color, direction int) bool {
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction {
+		return len(s.SendBufQueue[color][direction]) > 0
+	}
+	return s.SendBufHeadBusy[color][direction]
+}
+
+func (s *coreState) sendQueueIsFull(color, direction int) bool {
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction {
+		return len(s.SendBufQueue[color][direction]) >= s.sendQueueCap(color, direction)
+	}
+	return s.SendBufHeadBusy[color][direction]
+}
+
+func (s *coreState) sendQueuePush(color, direction int, data cgra.Data) bool {
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction {
+		if len(s.SendBufQueue[color][direction]) >= s.sendQueueCap(color, direction) {
+			return false
+		}
+		s.SendBufQueue[color][direction] = append(s.SendBufQueue[color][direction], data)
+		s.syncSendHead(color, direction)
+		return true
+	}
+	if s.SendBufHeadBusy[color][direction] {
+		return false
+	}
+	s.SendBufHeadBusy[color][direction] = true
+	s.SendBufHead[color][direction] = data
+	return true
+}
+
+func (s *coreState) sendQueuePeek(color, direction int) (cgra.Data, bool) {
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction {
+		if len(s.SendBufQueue[color][direction]) == 0 {
+			return cgra.Data{}, false
+		}
+		return s.SendBufQueue[color][direction][0], true
+	}
+	if !s.SendBufHeadBusy[color][direction] {
+		return cgra.Data{}, false
+	}
+	return s.SendBufHead[color][direction], true
+}
+
+func (s *coreState) sendQueueConsume(color, direction int) (cgra.Data, bool) {
+	if s.sendFIFOEnabled() && len(s.SendBufQueue[color]) > direction {
+		if len(s.SendBufQueue[color][direction]) == 0 {
+			return cgra.Data{}, false
+		}
+		value := s.SendBufQueue[color][direction][0]
+		s.SendBufQueue[color][direction] = s.SendBufQueue[color][direction][1:]
+		s.syncSendHead(color, direction)
+		return value, true
+	}
+	if !s.SendBufHeadBusy[color][direction] {
+		return cgra.Data{}, false
+	}
+	value := s.SendBufHead[color][direction]
+	s.SendBufHeadBusy[color][direction] = false
+	return value, true
+}
+
+func (s *coreState) resetPortQueues() {
+	for color := range s.RecvBufHeadReady {
+		for direction := range s.RecvBufHeadReady[color] {
+			s.RecvBufHeadReady[color][direction] = false
+		}
+	}
+	for color := range s.SendBufHeadBusy {
+		for direction := range s.SendBufHeadBusy[color] {
+			s.SendBufHeadBusy[color][direction] = false
+		}
+	}
+	if s.recvFIFOEnabled() {
+		for color := range s.RecvBufQueue {
+			for direction := range s.RecvBufQueue[color] {
+				s.RecvBufQueue[color][direction] = s.RecvBufQueue[color][direction][:0]
+				s.syncRecvHead(color, direction)
+			}
+		}
+	}
+	if s.sendFIFOEnabled() {
+		for color := range s.SendBufQueue {
+			for direction := range s.SendBufQueue[color] {
+				s.SendBufQueue[color][direction] = s.SendBufQueue[color][direction][:0]
+				s.syncSendHead(color, direction)
+			}
+		}
+	}
+}
+
+func clone2DData(input [][]cgra.Data) [][]cgra.Data {
+	if input == nil {
+		return nil
+	}
+	out := make([][]cgra.Data, len(input))
+	for i := range input {
+		if input[i] == nil {
+			continue
+		}
+		out[i] = append([]cgra.Data(nil), input[i]...)
+	}
+	return out
+}
+
+func clone2DBool(input [][]bool) [][]bool {
+	if input == nil {
+		return nil
+	}
+	out := make([][]bool, len(input))
+	for i := range input {
+		if input[i] == nil {
+			continue
+		}
+		out[i] = append([]bool(nil), input[i]...)
+	}
+	return out
+}
+
+func clone3DData(input [][][]cgra.Data) [][][]cgra.Data {
+	if input == nil {
+		return nil
+	}
+	out := make([][][]cgra.Data, len(input))
+	for i := range input {
+		if input[i] == nil {
+			continue
+		}
+		out[i] = make([][]cgra.Data, len(input[i]))
+		for j := range input[i] {
+			if input[i][j] == nil {
+				continue
+			}
+			out[i][j] = append([]cgra.Data(nil), input[i][j]...)
+		}
+	}
+	return out
+}
+
+func cloneStringBoolMap(input map[string]bool) map[string]bool {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]bool, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneStringIntMap(input map[string]int) map[string]int {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]int, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneIntBoolMap(input map[int]bool) map[int]bool {
+	if input == nil {
+		return nil
+	}
+	out := make(map[int]bool, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneIntIntMap(input map[int]int) map[int]int {
+	if input == nil {
+		return nil
+	}
+	out := make(map[int]int, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneIntInt64Map(input map[int]int64) map[int]int64 {
+	if input == nil {
+		return nil
+	}
+	out := make(map[int]int64, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneOperandDataMap(input map[Operand]cgra.Data) map[Operand]cgra.Data {
+	if input == nil {
+		return nil
+	}
+	out := make(map[Operand]cgra.Data, len(input))
+	for operand, value := range input {
+		out[operand] = value
+	}
+	return out
+}
+
+func cloneIntSlice(input []int) []int {
+	if input == nil {
+		return nil
+	}
+	return append([]int(nil), input...)
+}
+
+func clonePendingSyncGroup(input *pendingSyncGroup) *pendingSyncGroup {
+	if input == nil {
+		return nil
+	}
+	return &pendingSyncGroup{
+		RemainingCycles:   input.RemainingCycles,
+		BufferedResults:   cloneOperandDataMap(input.BufferedResults),
+		InvalidDecrements: cloneIntSlice(input.InvalidDecrements),
+		RepresentativeID:  input.RepresentativeID,
+		RepresentativeOp:  input.RepresentativeOp,
+	}
+}
+
+func clonePendingMemoryOp(input *pendingMemoryOp) *pendingMemoryOp {
+	if input == nil {
+		return nil
+	}
+	clone := *input
+	clone.Dst = append([]Operand(nil), input.Dst...)
+	if input.DataReady != nil {
+		value := *input.DataReady
+		clone.DataReady = &value
+	}
+	return &clone
+}
+
+func cloneIntAnyMap(input map[string]interface{}) map[string]interface{} {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]interface{}, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
+}
+
+func (s *coreState) cloneForEval() *coreState {
+	clone := *s
+	clone.Registers = append([]cgra.Data(nil), s.Registers...)
+	clone.Memory = append([]uint32(nil), s.Memory...)
+	clone.States = cloneIntAnyMap(s.States)
+	clone.Directions = cloneStringBoolMap(s.Directions)
+	clone.RecvBufHead = clone2DData(s.RecvBufHead)
+	clone.RecvBufHeadReady = clone2DBool(s.RecvBufHeadReady)
+	clone.SendBufHead = clone2DData(s.SendBufHead)
+	clone.SendBufHeadBusy = clone2DBool(s.SendBufHeadBusy)
+	clone.RecvBufQueue = clone3DData(s.RecvBufQueue)
+	clone.SendBufQueue = clone3DData(s.SendBufQueue)
+	clone.ConfiguredQueueWatches = cloneQueueWatches(s.ConfiguredQueueWatches)
+	clone.WatchedQueues = cloneQueueWatches(s.WatchedQueues)
+	clone.OpInputReadCache = make(map[string]cgra.Data)
+	clone.OpTimingCursor = cloneIntIntMap(s.OpTimingCursor)
+	clone.OpTimingLate = cloneIntBoolMap(s.OpTimingLate)
+	clone.OpTimingRollCycle = cloneIntInt64Map(s.OpTimingRollCycle)
+	clone.OpIssueCount = cloneIntIntMap(s.OpIssueCount)
+	clone.PendingSyncGroup = clonePendingSyncGroup(s.PendingSyncGroup)
+	clone.PendingMemoryOp = clonePendingMemoryOp(s.PendingMemoryOp)
+	clone.CurrReservationState = ReservationState{
+		ReservationMap:  cloneIntBoolMap(s.CurrReservationState.ReservationMap),
+		OpToExec:        s.CurrReservationState.OpToExec,
+		RefCountRuntime: cloneStringIntMap(s.CurrReservationState.RefCountRuntime),
+	}
+	return &clone
+}
+
+func (s *coreState) observeWatchedQueues(timeValue float64) {
+	if s == nil || len(s.WatchedQueues) == 0 {
+		return
+	}
+
+	for _, watch := range s.WatchedQueues {
+		occupancy := 0
+		var capacity int
+		switch watch.Kind {
+		case "recv":
+			occupancy = s.recvQueueLen(watch.ColorIdx, watch.DirectionIdx)
+			capacity = s.recvQueueCap()
+		case "send":
+			occupancy = s.sendQueueLen(watch.ColorIdx, watch.DirectionIdx)
+			capacity = s.sendQueueCap(watch.ColorIdx, watch.DirectionIdx)
+		default:
+			continue
+		}
+
+		ObserveQueue(
+			watch.Label,
+			watch.Kind,
+			timeValue,
+			int(s.TileX),
+			int(s.TileY),
+			watch.Direction,
+			watch.Color,
+			occupancy,
+			capacity,
+		)
+	}
 }
 
 func normalizeExecutionPolicyString(policy string) string {
@@ -138,6 +683,27 @@ func normalizeExecutionPolicyString(policy string) string {
 	default:
 		// Fall back to in-order dataflow for backward compatibility.
 		return ExecutionPolicyInOrderDataflow
+	}
+}
+
+func isStrictControlSensitiveOp(opCode string) bool {
+	normalized := strings.ToUpper(strings.TrimSpace(opCode))
+	switch {
+	case normalized == "SEL",
+		normalized == "JMP",
+		normalized == "RET",
+		normalized == "CTRL_MOV",
+		normalized == "CMP_EXPORT",
+		normalized == "LT_EX":
+		return true
+	case strings.HasPrefix(normalized, "PHI"),
+		strings.HasPrefix(normalized, "GRANT"),
+		strings.HasPrefix(normalized, "ICMP"),
+		strings.HasPrefix(normalized, "RETURN"),
+		strings.HasPrefix(normalized, "B"):
+		return true
+	default:
+		return false
 	}
 }
 
@@ -190,43 +756,337 @@ func (i instEmulator) resolveScheduleStep(operation Operation, state *coreState)
 	return currentStep, targetStep, ii
 }
 
-func (i instEmulator) canIssue(operation Operation, state *coreState) bool {
-	if !i.CareFlags || operation.InvalidIterations > 0 {
-		return true
+func (i instEmulator) resolveDerivedSchedule(operation Operation, state *coreState) ([]int64, int, bool) {
+	if state == nil || state.Code.DerivedTiming == nil {
+		return nil, 0, false
 	}
 
-	ready := i.CheckFlags(operation, state)
+	schedule, exists := state.Code.DerivedTiming[operation.ID]
+	if !exists || len(schedule) == 0 {
+		return nil, 0, false
+	}
+
+	cursor := state.OpTimingCursor[operation.ID]
+	return schedule, cursor, true
+}
+
+func (i instEmulator) advanceDerivedTimingCursor(operation Operation, state *coreState) {
+	if state == nil || state.Code.DerivedTiming == nil {
+		return
+	}
+	if _, exists := state.Code.DerivedTiming[operation.ID]; !exists {
+		return
+	}
+	state.OpTimingCursor[operation.ID] = state.OpTimingCursor[operation.ID] + 1
+	delete(state.OpTimingLate, operation.ID)
+	delete(state.OpTimingRollCycle, operation.ID)
+}
+
+func (i instEmulator) setStallReason(state *coreState, operation Operation, reason string) {
+	if state == nil || reason == "" {
+		return
+	}
+	state.StallReason = reason
+	state.StallOpID = operation.ID
+	state.StallOpCode = operation.OpCode
+}
+
+func (i instEmulator) rollStrictExpectedCycle(expectedCycle, currentCycle int64, compiledII int) int64 {
+	ii := int64(compiledII)
+	if ii <= 0 {
+		ii = 1
+	}
+	// Move to the next window start strictly after the current cycle.
+	nextExpected := expectedCycle + ii
+	if nextExpected > currentCycle {
+		return nextExpected
+	}
+	delta := currentCycle - expectedCycle
+	steps := delta/ii + 1
+	return expectedCycle + steps*ii
+}
+
+func (s *coreState) readyHeldTraceActive() bool {
+	return s != nil && s.ReadyHeldTraceEnabled && strings.TrimSpace(s.ReadyHeldRunMode) != ""
+}
+
+func (s *coreState) nextOpOccurrenceIndex(opID int) int {
+	if s == nil || s.OpIssueCount == nil {
+		return 0
+	}
+	return s.OpIssueCount[opID]
+}
+
+func (s *coreState) advanceOpOccurrenceIndex(opID int) {
+	if s == nil {
+		return
+	}
+	if s.OpIssueCount == nil {
+		s.OpIssueCount = make(map[int]int)
+	}
+	s.OpIssueCount[opID] = s.OpIssueCount[opID] + 1
+}
+
+func (i instEmulator) applyIssueDecision(operation Operation, state *coreState, decision issueDecision) {
+	if state == nil {
+		return
+	}
+	if decision.TimingWaitBlocked {
+		state.TimingWaitBlocked = true
+	}
+	if decision.WaitReason != "" {
+		i.setStallReason(state, operation, decision.WaitReason)
+	}
+}
+
+func (i instEmulator) readyHeldObservationFor(
+	operation Operation,
+	state *coreState,
+	decision issueDecision,
+	occurrenceIndex int,
+	issuedThisCycle bool,
+) (readyHeldObservation, bool) {
+	if state == nil || !state.readyHeldTraceActive() {
+		return readyHeldObservation{}, false
+	}
+	if !decision.FireableExceptTime && !decision.BlockedByLowerBound && !issuedThisCycle {
+		return readyHeldObservation{}, false
+	}
+	return readyHeldObservation{
+		RunMode:              state.ReadyHeldRunMode,
+		Cycle:                state.CurrentCycle,
+		X:                    int(state.TileX),
+		Y:                    int(state.TileY),
+		OpID:                 operation.ID,
+		OccurrenceIndex:      occurrenceIndex,
+		OpCode:               operation.OpCode,
+		AnnotatedTimeT:       decision.AnnotatedTimeT,
+		OperandsReady:        decision.OperandsReady,
+		PredicateReadyOrTrue: decision.PredicateReadyOrTrue,
+		ResourcesAvailable:   decision.ResourcesAvailable,
+		TimingGateSatisfied:  decision.TimingGateSatisfied,
+		FireableExceptTime:   decision.FireableExceptTime,
+		BlockedByLowerBound:  decision.BlockedByLowerBound,
+		IssuedThisCycle:      issuedThisCycle,
+	}, true
+}
+
+func (i instEmulator) emitReadyHeldObservation(observation readyHeldObservation) {
+	var annotated any
+	if observation.AnnotatedTimeT != nil {
+		annotated = *observation.AnnotatedTimeT
+	}
+	Trace(
+		"ReadyHeld",
+		"run_mode", observation.RunMode,
+		"cycle", observation.Cycle,
+		"X", observation.X,
+		"Y", observation.Y,
+		"ID", observation.OpID,
+		"occurrence_index", observation.OccurrenceIndex,
+		"OpCode", observation.OpCode,
+		"annotated_time_t", annotated,
+		"operands_ready", observation.OperandsReady,
+		"predicate_ready_or_true", observation.PredicateReadyOrTrue,
+		"resources_available", observation.ResourcesAvailable,
+		"timing_gate_satisfied", observation.TimingGateSatisfied,
+		"fireable_except_time", observation.FireableExceptTime,
+		"blocked_by_lower_bound", observation.BlockedByLowerBound,
+		"issued_this_cycle", observation.IssuedThisCycle,
+	)
+}
+
+func (i instEmulator) issueDecision(operation Operation, state *coreState) issueDecision {
+	decision := issueDecision{
+		OperandsReady:        true,
+		PredicateReadyOrTrue: true,
+		ResourcesAvailable:   true,
+		TimingGateSatisfied:  true,
+		CanIssue:             true,
+	}
+
+	if !i.CareFlags || operation.InvalidIterations > 0 {
+		decision.FireableExceptTime = true
+		return decision
+	}
+
+	readiness := i.checkIssueReadinessDetails(operation, state)
+	decision.OperandsReady = readiness.OperandsReady
+	decision.PredicateReadyOrTrue = readiness.PredicateReadyOrTrue
+	decision.ResourcesAvailable = readiness.ResourcesAvailable
+	decision.FireableExceptTime = readiness.Ready
+
+	policy := normalizeExecutionPolicyString(i.ExecutionPolicy)
+	if schedule, cursor, hasDerived := i.resolveDerivedSchedule(operation, state); hasDerived &&
+		(policy == ExecutionPolicyStrictTimed || policy == ExecutionPolicyElasticScheduled) {
+		if cursor >= len(schedule) {
+			decision.TimingGateSatisfied = false
+			decision.FireableExceptTime = false
+			decision.CanIssue = false
+			return decision
+		}
+
+		annotatedTime := schedule[cursor]
+		decision.AnnotatedTimeT = int64Ptr(annotatedTime)
+		expectedCycle := annotatedTime
+
+		switch policy {
+		case ExecutionPolicyStrictTimed:
+			if rolledCycle, exists := state.OpTimingRollCycle[operation.ID]; exists {
+				expectedCycle = rolledCycle
+			}
+			decision.TimingGateSatisfied = state.CurrentCycle >= expectedCycle
+
+			if isStrictControlSensitiveOp(operation.OpCode) {
+				if state.CurrentCycle < expectedCycle {
+					decision.CanIssue = false
+					decision.WaitReason = StallReasonScheduleBubble
+					decision.TimingWaitBlocked = true
+					return decision
+				}
+				if readiness.Ready {
+					if state.CurrentCycle > annotatedTime {
+						state.OpTimingLate[operation.ID] = true
+					}
+					decision.CanIssue = true
+					return decision
+				}
+				if state.CurrentCycle > annotatedTime {
+					state.OpTimingLate[operation.ID] = true
+				}
+				decision.CanIssue = false
+				decision.WaitReason = readiness.WaitReason
+				return decision
+			}
+
+			if state.CurrentCycle < expectedCycle {
+				decision.CanIssue = false
+				decision.WaitReason = StallReasonScheduleBubble
+				decision.TimingWaitBlocked = true
+				return decision
+			}
+
+			lateness := state.CurrentCycle - expectedCycle
+			if lateness > 0 && i.StrictMaxSlip >= 0 && lateness > i.StrictMaxSlip {
+				reason := fmt.Sprintf(
+					"strict slip window violation: lateness=%d exceeds max_slip=%d (expected=%d current=%d)",
+					lateness,
+					i.StrictMaxSlip,
+					expectedCycle,
+					state.CurrentCycle,
+				)
+				if i.StrictFailOnViolation {
+					i.panicSynchronizationViolation(operation, state, reason)
+				}
+
+				nextExpected := i.rollStrictExpectedCycle(expectedCycle, state.CurrentCycle, state.Code.CompiledII)
+				state.OpTimingRollCycle[operation.ID] = nextExpected
+				Trace(
+					"TimingViolation",
+					"Policy", policy,
+					"OpCode", operation.OpCode,
+					"ID", operation.ID,
+					"X", state.TileX,
+					"Y", state.TileY,
+					"ExpectedCycle", expectedCycle,
+					"NextExpectedCycle", nextExpected,
+					"CurrentCycle", state.CurrentCycle,
+					"Lateness", lateness,
+					"MaxSlip", i.StrictMaxSlip,
+				)
+				decision.CanIssue = false
+				decision.WaitReason = StallReasonScheduleBubble
+				decision.TimingWaitBlocked = true
+				return decision
+			}
+
+			if !readiness.Ready {
+				if state.CurrentCycle > annotatedTime {
+					state.OpTimingLate[operation.ID] = true
+				}
+				decision.CanIssue = false
+				decision.WaitReason = readiness.WaitReason
+				return decision
+			}
+
+			if state.CurrentCycle > annotatedTime {
+				state.OpTimingLate[operation.ID] = true
+			}
+			decision.CanIssue = true
+			return decision
+		case ExecutionPolicyElasticScheduled:
+			decision.TimingGateSatisfied = state.CurrentCycle >= expectedCycle
+			decision.BlockedByLowerBound = readiness.Ready && !decision.TimingGateSatisfied
+			if !decision.TimingGateSatisfied {
+				decision.CanIssue = false
+				decision.WaitReason = StallReasonScheduleBubble
+				decision.TimingWaitBlocked = true
+				return decision
+			}
+			if readiness.Ready {
+				decision.CanIssue = true
+				return decision
+			}
+			decision.CanIssue = false
+			decision.WaitReason = readiness.WaitReason
+			return decision
+		}
+	}
+
 	currentStep, targetStep, ii := i.resolveScheduleStep(operation, state)
 
 	// No schedule (compiled_ii missing or 0): ignore time gating so existing workloads
 	// (e.g. histogram) that do not use II-based scheduling still run like in-order.
 	if ii <= 0 {
-		return ready
+		decision.CanIssue = readiness.Ready
+		decision.WaitReason = readiness.WaitReason
+		return decision
 	}
 
-	switch normalizeExecutionPolicyString(i.ExecutionPolicy) {
+	switch policy {
 	case ExecutionPolicyStrictTimed:
+		decision.TimingGateSatisfied = currentStep >= targetStep
 		if currentStep < targetStep {
-			return false
+			decision.CanIssue = false
+			decision.WaitReason = StallReasonScheduleBubble
+			decision.TimingWaitBlocked = true
+			return decision
 		}
 		if currentStep == targetStep {
-			if ready {
-				return true
+			if readiness.Ready {
+				decision.CanIssue = true
+				return decision
 			}
 			i.panicSynchronizationViolation(operation, state, "operand/credit not ready at scheduled step")
 		}
 		i.panicSynchronizationViolation(operation, state, "operation missed its exact scheduled step")
-		return false
+		return decision
 	case ExecutionPolicyElasticScheduled:
+		decision.TimingGateSatisfied = currentStep >= targetStep
 		if currentStep < targetStep {
-			return false
+			decision.CanIssue = false
+			decision.WaitReason = StallReasonScheduleBubble
+			decision.TimingWaitBlocked = true
+			return decision
 		}
-		return ready
+		decision.CanIssue = readiness.Ready
+		decision.WaitReason = readiness.WaitReason
+		return decision
 	case ExecutionPolicyInOrderDataflow:
-		return ready
+		decision.CanIssue = readiness.Ready
+		decision.WaitReason = readiness.WaitReason
+		return decision
 	default:
-		return ready
+		decision.CanIssue = readiness.Ready
+		decision.WaitReason = readiness.WaitReason
+		return decision
 	}
+}
+
+func (i instEmulator) canIssue(operation Operation, state *coreState) bool {
+	decision := i.issueDecision(operation, state)
+	i.applyIssueDecision(operation, state, decision)
+	return decision.CanIssue
 }
 
 // set up the necessary state for the instruction group
@@ -240,6 +1100,175 @@ func (i instEmulator) SetUpInstructionGroup(index int32, state *coreState) {
 	}
 	state.CurrReservationState.SetReservationMap(iGroup, state)
 	state.CurrReservationState.SetRefCount(iGroup, state)
+}
+
+func supportsDeferredLatency(opCode string) bool {
+	switch normalizeLatencyOpcode(opCode) {
+	case "LOAD", "STORE", "LDD", "STD", "LD", "LDW", "ST", "STW",
+		"TRIGGER", "JMP", "BEQ", "BNE", "BLT",
+		"RETURN_VALUE", "RETURN_VOID", "RET",
+		"PHI", "PHI_CONST", "PHI_START", "GRANT_PREDICATE", "GRANT_ONCE":
+		return false
+	default:
+		return true
+	}
+}
+
+func (i instEmulator) deferredSyncGroupLatency(cinst InstructionGroup, state *coreState) (int, int, string, bool) {
+	if state == nil {
+		return 1, 0, "", false
+	}
+
+	type sendKey struct {
+		color     int
+		direction int
+	}
+
+	maxLatency := 1
+	representativeID := 0
+	representativeOp := ""
+	requiredSends := make(map[sendKey]int)
+	executedOps := 0
+
+	for _, operation := range cinst.Operations {
+		if operation.InvalidIterations > 0 {
+			continue
+		}
+		executedOps++
+		if !supportsDeferredLatency(operation.OpCode) {
+			return 1, 0, "", false
+		}
+
+		latency := state.Code.OperationLatency(operation.OpCode)
+		if latency > maxLatency {
+			maxLatency = latency
+			representativeID = operation.ID
+			representativeOp = operation.OpCode
+		} else if representativeOp == "" {
+			representativeID = operation.ID
+			representativeOp = operation.OpCode
+		}
+
+		for _, dst := range operation.DstOperands.Operands {
+			normalized := i.normalizeDirection(dst.Impl)
+			if !state.Directions[normalized] {
+				continue
+			}
+			key := sendKey{
+				color:     i.getColorIndex(dst.Color),
+				direction: i.getDirecIndex(normalized),
+			}
+			requiredSends[key]++
+			if requiredSends[key] > state.sendQueueCap(key.color, key.direction) {
+				return 1, 0, "", false
+			}
+		}
+	}
+
+	if executedOps == 0 || maxLatency <= 1 {
+		return 1, 0, "", false
+	}
+
+	return maxLatency, representativeID, representativeOp, true
+}
+
+func (i instEmulator) canCommitPendingSyncGroup(state *coreState, pending *pendingSyncGroup) bool {
+	if state == nil || pending == nil {
+		return true
+	}
+
+	type sendKey struct {
+		color     int
+		direction int
+	}
+
+	requiredSends := make(map[sendKey]int)
+	for operand := range pending.BufferedResults {
+		normalized := i.normalizeDirection(operand.Impl)
+		if !state.Directions[normalized] {
+			continue
+		}
+		key := sendKey{
+			color:     i.getColorIndex(operand.Color),
+			direction: i.getDirecIndex(normalized),
+		}
+		requiredSends[key]++
+	}
+
+	for key, required := range requiredSends {
+		free := state.sendQueueCap(key.color, key.direction) - state.sendQueueLen(key.color, key.direction)
+		if free < required {
+			return false
+		}
+	}
+	return true
+}
+
+func (i instEmulator) advancePendingSyncGroup(state *coreState) bool {
+	if state == nil || state.PendingSyncGroup == nil {
+		return false
+	}
+
+	pending := state.PendingSyncGroup
+	if pending.RemainingCycles > 1 {
+		pending.RemainingCycles--
+		state.TimingWaitBlocked = true
+		return true
+	}
+
+	if pending.RemainingCycles == 1 {
+		pending.RemainingCycles = 0
+	}
+
+	if !i.canCommitPendingSyncGroup(state, pending) {
+		state.TimingWaitBlocked = true
+		state.StallReason = StallReasonOutputBlocked
+		state.StallOpID = pending.RepresentativeID
+		state.StallOpCode = pending.RepresentativeOp
+		return true
+	}
+
+	for operand, value := range pending.BufferedResults {
+		i.writeOperand(operand, value, state)
+	}
+	i.applyInvalidIterationDecrements(state, pending.InvalidDecrements)
+	state.PendingSyncGroup = nil
+	return true
+}
+
+func (i instEmulator) bufferDeferredResult(
+	operand Operand,
+	value cgra.Data,
+	workState *coreState,
+	bufferedResults map[Operand]cgra.Data,
+) {
+	bufferedResults[operand] = value
+	if workState == nil || !strings.HasPrefix(operand.Impl, "$") {
+		return
+	}
+	registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand.Impl, "$"))
+	if err != nil {
+		panic(fmt.Sprintf("invalid register index in deferred result buffering: %v", operand))
+	}
+	if registerIndex < 0 || registerIndex >= len(workState.Registers) {
+		panic(fmt.Sprintf("register index %d out of range in deferred result buffering", registerIndex))
+	}
+	workState.Registers[registerIndex] = value
+}
+
+func (i instEmulator) applyDeferredSyncIssueState(state *coreState, workState *coreState) {
+	if state == nil || workState == nil {
+		return
+	}
+
+	state.RecvBufHead = clone2DData(workState.RecvBufHead)
+	state.RecvBufHeadReady = clone2DBool(workState.RecvBufHeadReady)
+	state.RecvBufQueue = clone3DData(workState.RecvBufQueue)
+	state.OpTimingCursor = cloneIntIntMap(workState.OpTimingCursor)
+	state.OpTimingLate = cloneIntBoolMap(workState.OpTimingLate)
+	state.OpTimingRollCycle = cloneIntInt64Map(workState.OpTimingRollCycle)
+	state.OpIssueCount = cloneIntIntMap(workState.OpIssueCount)
+	state.CurrentTime = workState.CurrentTime
 }
 
 func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreState, time float64) bool {
@@ -285,13 +1314,17 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 		} // else, this group is not finished, PC stays the same
 	} else if state.Mode == SyncOp {
 		if progressSync {
-			if state.NextPCInBlock == -1 {
-				// print("PC+4 for PC=", state.PCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
-				// print("Instruction at PC=", state.PCInBlock, " is ", state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[0].OpCode, "\n")
-				state.PCInBlock++
-			} else {
-				// print("PC+Jump to ", state.NextPCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
-				state.PCInBlock = state.NextPCInBlock
+			// Timing wait means "advance cycle but keep the same instruction group",
+			// otherwise later groups may observe stale local registers.
+			if !state.TimingWaitBlocked {
+				if state.NextPCInBlock == -1 {
+					// print("PC+4 for PC=", state.PCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
+					// print("Instruction at PC=", state.PCInBlock, " is ", state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[0].OpCode, "\n")
+					state.PCInBlock++
+				} else {
+					// print("PC+Jump to ", state.NextPCInBlock, " X:", state.TileX, " Y:", state.TileY, "\n")
+					state.PCInBlock = state.NextPCInBlock
+				}
 			}
 		}
 		if state.SelectedBlock != nil && state.PCInBlock >= int32(len(state.SelectedBlock.InstructionGroups)) {
@@ -301,6 +1334,29 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 			slog.Info("Flow", "PCInBlock", "-1", "X", state.TileX, "Y", state.TileY)
 		}
 		state.NextPCInBlock = -1
+		if state.DirectSRAMCompleted &&
+			progressSync &&
+			!state.TimingWaitBlocked &&
+			state.SelectedBlock != nil &&
+			state.PCInBlock >= 0 {
+			state.DirectSRAMCompleted = false
+			iGroup := state.SelectedBlock.InstructionGroups[state.PCInBlock]
+			progressAgain := i.RunInstructionGroupWithSyncOps(iGroup, state, time)
+			progressSync = progressSync || progressAgain
+			if progressAgain && !state.TimingWaitBlocked {
+				if state.NextPCInBlock == -1 {
+					state.PCInBlock++
+				} else {
+					state.PCInBlock = state.NextPCInBlock
+				}
+			}
+			if state.SelectedBlock != nil && state.PCInBlock >= int32(len(state.SelectedBlock.InstructionGroups)) {
+				state.PCInBlock = -1
+				state.SelectedBlock = nil
+				slog.Info("Flow", "PCInBlock", "-1", "X", state.TileX, "Y", state.TileY)
+			}
+			state.NextPCInBlock = -1
+		}
 	} else {
 		panic("invalid mode")
 	}
@@ -321,37 +1377,247 @@ func (i instEmulator) RunInstructionGroup(cinst InstructionGroup, state *coreSta
 }
 
 func (i instEmulator) RunInstructionGroupWithSyncOps(cinst InstructionGroup, state *coreState, time float64) bool {
-	run := true
-	for _, operation := range cinst.Operations {
-		if i.canIssue(operation, state) {
-			continue
-		} else {
-			run = false
-			break
+	state.CurrentTime = time
+	state.TimingWaitBlocked = false
+	state.StallReason = ""
+	state.StallOpID = 0
+	state.StallOpCode = ""
+	state.DirectSRAMCompleted = false
+	state.OpInputReadCache = make(map[string]cgra.Data)
+	if state.PendingMemoryOp != nil {
+		return i.advancePendingMemoryOp(state)
+	}
+	if state.PendingSyncGroup != nil {
+		return i.advancePendingSyncGroup(state)
+	}
+	if state.EnableFIFOModel {
+		return i.runInstructionGroupWithSyncOpsTwoPhase(cinst, state, time)
+	}
+	return i.runInstructionGroupWithSyncOpsLegacy(cinst, state, time)
+}
+
+func (i instEmulator) advancePendingMemoryOp(state *coreState) bool {
+	pending := state.PendingMemoryOp
+	if pending == nil {
+		return false
+	}
+	if pending.DirectSRAM {
+		return i.advanceDirectSRAMMemoryOp(state, pending)
+	}
+
+	if pending.IsWrite {
+		if !pending.WriteDone {
+			state.TimingWaitBlocked = true
+			state.StallReason = StallReasonOperandWait
+			return true
+		}
+		state.PendingMemoryOp = nil
+		return true
+	}
+
+	if pending.DataReady == nil {
+		state.TimingWaitBlocked = true
+		state.StallReason = StallReasonOperandWait
+		return true
+	}
+	for _, dst := range pending.Dst {
+		dstImpl := i.normalizeDirection(dst.Impl)
+		if state.Directions[dstImpl] &&
+			state.sendQueueIsFull(i.getColorIndex(dst.Color), i.getDirecIndex(dstImpl)) {
+			state.TimingWaitBlocked = true
+			state.StallReason = StallReasonOutputBlocked
+			return true
 		}
 	}
+	for _, dst := range pending.Dst {
+		i.writeOperand(dst, *pending.DataReady, state)
+	}
+	state.PendingMemoryOp = nil
+	return true
+}
+
+func (i instEmulator) advanceDirectSRAMMemoryOp(state *coreState, pending *pendingMemoryOp) bool {
+	currentCycle := int64(math.Round(state.CurrentTime))
+	if currentCycle < pending.DoneCycle {
+		state.TimingWaitBlocked = true
+		state.StallReason = StallReasonOperandWait
+		return true
+	}
+
+	physAddr := state.SharedMemoryBase + pending.Address
+	byteAddr := physAddr * 4
+	if pending.IsWrite {
+		if !pending.WriteDone {
+			if err := state.SharedSRAMAccessor.WriteStorage(byteAddr, makeBytesFromUint32(pending.Value)); err != nil {
+				panic(fmt.Sprintf("shared SRAM write failed at byte address %d: %v", byteAddr, err))
+			}
+			pending.WriteDone = true
+			Trace("Memory",
+				"Behavior", "Recv",
+				"Time", state.CurrentTime,
+				"OpID", pending.OpID,
+				"OpCode", pending.OpCode,
+				"Addr", pending.Address,
+				"PhysAddr", physAddr,
+				"Data", pending.Value,
+				"Pred", pending.Pred,
+				"Color", "R",
+				"X", state.TileX,
+				"Y", state.TileY,
+			)
+		}
+		state.PendingMemoryOp = nil
+		state.DirectSRAMCompleted = true
+		return true
+	}
+
+	if pending.DataReady == nil {
+		data, err := state.SharedSRAMAccessor.ReadStorage(byteAddr, 4)
+		if err != nil {
+			panic(fmt.Sprintf("shared SRAM read failed at byte address %d: %v", byteAddr, err))
+		}
+		value := cgra.NewScalarWithPred(convert4BytesToUint32(data), pending.Pred)
+		pending.DataReady = &value
+		Trace("Memory",
+			"Behavior", "Recv",
+			"Time", state.CurrentTime,
+			"OpID", pending.OpID,
+			"OpCode", pending.OpCode,
+			"Addr", pending.Address,
+			"PhysAddr", physAddr,
+			"Data", data,
+			"Pred", value.Pred,
+			"Color", "R",
+			"X", state.TileX,
+			"Y", state.TileY,
+		)
+	}
+
+	for _, dst := range pending.Dst {
+		dstImpl := i.normalizeDirection(dst.Impl)
+		if state.Directions[dstImpl] &&
+			state.sendQueueIsFull(i.getColorIndex(dst.Color), i.getDirecIndex(dstImpl)) {
+			state.TimingWaitBlocked = true
+			state.StallReason = StallReasonOutputBlocked
+			return true
+		}
+	}
+	for _, dst := range pending.Dst {
+		i.writeOperand(dst, *pending.DataReady, state)
+	}
+	state.PendingMemoryOp = nil
+	state.DirectSRAMCompleted = true
+	return true
+}
+
+func (i instEmulator) runInstructionGroupWithSyncOpsLegacy(cinst InstructionGroup, state *coreState, time float64) bool {
+	run := true
+	type evaluatedDecision struct {
+		operation       Operation
+		decision        issueDecision
+		occurrenceIndex int
+	}
+	evaluated := make([]evaluatedDecision, 0, len(cinst.Operations))
+	for _, operation := range cinst.Operations {
+		decision := i.issueDecision(operation, state)
+		i.applyIssueDecision(operation, state, decision)
+		evaluated = append(evaluated, evaluatedDecision{
+			operation:       operation,
+			decision:        decision,
+			occurrenceIndex: state.nextOpOccurrenceIndex(operation.ID),
+		})
+		if decision.CanIssue {
+			continue
+		}
+		run = false
+		break
+	}
 	if run {
+		deferredLatency, representativeID, representativeOp, deferGroup := i.deferredSyncGroupLatency(cinst, state)
+		allResults := make(map[Operand]cgra.Data)
+		invalidDecrements := make([]int, 0)
 		for index := range cinst.Operations {
-			// Get reference to the original operation in state.SelectedBlock
 			operation := &state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations[index]
-			// Decrement InvalidIterations before running if needed
 			if operation.InvalidIterations > 0 {
-				// print("Invalid iteration for ", operation.OpCode, "@(", state.TileX, ",", state.TileY, ")\n")
-				operation.InvalidIterations--
+				if deferGroup {
+					invalidDecrements = append(invalidDecrements, index)
+				} else {
+					operation.InvalidIterations--
+				}
 				continue
 			}
+			occurrenceIndex := state.nextOpOccurrenceIndex(operation.ID)
+			decision := evaluated[index].decision
+			if observation, ok := i.readyHeldObservationFor(*operation, state, decision, occurrenceIndex, true); ok {
+				i.emitReadyHeldObservation(observation)
+			}
 			results := i.RunOperation(*operation, state, time)
-			// In Sync mode, apply each op result immediately so later ops in the
-			// same instruction group can observe updated registers/ports.
+			state.advanceOpOccurrenceIndex(operation.ID)
+			i.advanceDerivedTimingCursor(*operation, state)
 			for operand, value := range results {
-				i.writeOperand(operand, value, state)
+				allResults[operand] = value
 			}
 		}
+		if deferGroup {
+			state.PendingSyncGroup = &pendingSyncGroup{
+				RemainingCycles:   deferredLatency - 1,
+				BufferedResults:   allResults,
+				InvalidDecrements: invalidDecrements,
+				RepresentativeID:  representativeID,
+				RepresentativeOp:  representativeOp,
+			}
+			state.TimingWaitBlocked = true
+			return true
+		}
+		for operand, value := range allResults {
+			i.writeOperand(operand, value, state)
+		}
+	} else {
+		for _, eval := range evaluated {
+			if observation, ok := i.readyHeldObservationFor(eval.operation, state, eval.decision, eval.occurrenceIndex, false); ok {
+				i.emitReadyHeldObservation(observation)
+			}
+		}
+	}
+	if state.TimingWaitBlocked {
+		if !run && state.StallReason != "" {
+			Trace(
+				"Stall",
+				"Behavior", state.StallReason,
+				"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
+				"Time", float64(state.CurrentCycle),
+				"X", state.TileX,
+				"Y", state.TileY,
+				"ID", state.StallOpID,
+				"OpCode", state.StallOpCode,
+			)
+		}
+		return true
+	}
+	if !run && state.StallReason != "" {
+		Trace(
+			"Stall",
+			"Behavior", state.StallReason,
+			"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
+			"Time", float64(state.CurrentCycle),
+			"X", state.TileX,
+			"Y", state.TileY,
+			"ID", state.StallOpID,
+			"OpCode", state.StallOpCode,
+		)
 	}
 	return run
 }
 
 func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, state *coreState, time float64) {
+	if state.EnableFIFOModel {
+		i.runInstructionGroupWithAsyncOpsTwoPhase(cinst, state, time)
+		return
+	}
+	i.runInstructionGroupWithAsyncOpsLegacy(cinst, state, time)
+}
+
+func (i instEmulator) runInstructionGroupWithAsyncOpsLegacy(cinst InstructionGroup, state *coreState, time float64) {
 	// Collect all results first
 	allResults := make(map[Operand]cgra.Data)
 	for index := range cinst.Operations {
@@ -371,6 +1637,8 @@ func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, st
 				continue
 			}
 			results := i.RunOperation(*operation, state, time)
+			state.advanceOpOccurrenceIndex(operation.ID)
+			i.advanceDerivedTimingCursor(*operation, state)
 			// Merge results into allResults
 			for operand, value := range results {
 				allResults[operand] = value
@@ -383,6 +1651,166 @@ func (i instEmulator) RunInstructionGroupWithAsyncOps(cinst InstructionGroup, st
 	// Write all results at once
 	for operand, value := range allResults {
 		i.writeOperand(operand, value, state)
+	}
+}
+
+func (i instEmulator) runInstructionGroupWithSyncOpsTwoPhase(cinst InstructionGroup, state *coreState, time float64) bool {
+	workState := state.cloneForEval()
+	run := true
+	type evaluatedDecision struct {
+		operation       Operation
+		decision        issueDecision
+		occurrenceIndex int
+	}
+	evaluated := make([]evaluatedDecision, 0, len(cinst.Operations))
+	for _, operation := range cinst.Operations {
+		decision := i.issueDecision(operation, workState)
+		i.applyIssueDecision(operation, workState, decision)
+		evaluated = append(evaluated, evaluatedDecision{
+			operation:       operation,
+			decision:        decision,
+			occurrenceIndex: workState.nextOpOccurrenceIndex(operation.ID),
+		})
+		if decision.CanIssue {
+			continue
+		}
+		run = false
+		break
+	}
+
+	if !run {
+		for _, eval := range evaluated {
+			if observation, ok := i.readyHeldObservationFor(eval.operation, workState, eval.decision, eval.occurrenceIndex, false); ok {
+				i.emitReadyHeldObservation(observation)
+			}
+		}
+		state.TimingWaitBlocked = workState.TimingWaitBlocked
+		state.StallReason = workState.StallReason
+		state.StallOpID = workState.StallOpID
+		state.StallOpCode = workState.StallOpCode
+		if state.TimingWaitBlocked {
+			if state.StallReason != "" {
+				Trace(
+					"Stall",
+					"Behavior", state.StallReason,
+					"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
+					"Time", float64(state.CurrentCycle),
+					"X", state.TileX,
+					"Y", state.TileY,
+					"ID", state.StallOpID,
+					"OpCode", state.StallOpCode,
+				)
+			}
+			return true
+		}
+		if state.StallReason != "" {
+			Trace(
+				"Stall",
+				"Behavior", state.StallReason,
+				"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
+				"Time", float64(state.CurrentCycle),
+				"X", state.TileX,
+				"Y", state.TileY,
+				"ID", state.StallOpID,
+				"OpCode", state.StallOpCode,
+			)
+		}
+		return false
+	}
+
+	deferredLatency, representativeID, representativeOp, deferGroup := i.deferredSyncGroupLatency(cinst, state)
+	invalidDecrements := make([]int, 0)
+	issuedObservations := make([]readyHeldObservation, 0, len(cinst.Operations))
+	bufferedResults := make(map[Operand]cgra.Data)
+	for index, operation := range cinst.Operations {
+		if operation.InvalidIterations > 0 {
+			invalidDecrements = append(invalidDecrements, index)
+			continue
+		}
+		occurrenceIndex := workState.nextOpOccurrenceIndex(operation.ID)
+		decision := evaluated[index].decision
+		if observation, ok := i.readyHeldObservationFor(operation, workState, decision, occurrenceIndex, true); ok {
+			issuedObservations = append(issuedObservations, observation)
+		}
+		results := i.RunOperation(operation, workState, time)
+		workState.advanceOpOccurrenceIndex(operation.ID)
+		i.advanceDerivedTimingCursor(operation, workState)
+		for operand, value := range results {
+			if deferGroup {
+				i.bufferDeferredResult(operand, value, workState, bufferedResults)
+				continue
+			}
+			i.writeOperand(operand, value, workState)
+		}
+	}
+	if deferGroup {
+		i.applyDeferredSyncIssueState(state, workState)
+		for _, observation := range issuedObservations {
+			i.emitReadyHeldObservation(observation)
+		}
+		state.PendingSyncGroup = &pendingSyncGroup{
+			RemainingCycles:   deferredLatency - 1,
+			BufferedResults:   bufferedResults,
+			InvalidDecrements: invalidDecrements,
+			RepresentativeID:  representativeID,
+			RepresentativeOp:  representativeOp,
+		}
+		state.TimingWaitBlocked = true
+		return true
+	}
+	*state = *workState
+	for _, observation := range issuedObservations {
+		i.emitReadyHeldObservation(observation)
+	}
+	i.applyInvalidIterationDecrements(state, invalidDecrements)
+	return true
+}
+
+func (i instEmulator) runInstructionGroupWithAsyncOpsTwoPhase(cinst InstructionGroup, state *coreState, time float64) {
+	workState := state.cloneForEval()
+	allResults := make(map[Operand]cgra.Data)
+	invalidDecrements := make([]int, 0)
+	for index, operation := range cinst.Operations {
+		if !workState.CurrReservationState.ReservationMap[index] {
+			continue
+		}
+		if i.canIssue(operation, workState) {
+			workState.CurrReservationState.ReservationMap[index] = false
+			workState.CurrReservationState.OpToExec--
+			if operation.InvalidIterations > 0 {
+				invalidDecrements = append(invalidDecrements, index)
+				continue
+			}
+			results := i.RunOperation(operation, workState, time)
+			workState.advanceOpOccurrenceIndex(operation.ID)
+			i.advanceDerivedTimingCursor(operation, workState)
+			for operand, value := range results {
+				allResults[operand] = value
+			}
+		}
+	}
+	for operand, value := range allResults {
+		i.writeOperand(operand, value, workState)
+	}
+	*state = *workState
+	i.applyInvalidIterationDecrements(state, invalidDecrements)
+}
+
+func (i instEmulator) applyInvalidIterationDecrements(state *coreState, indices []int) {
+	if len(indices) == 0 || state == nil || state.SelectedBlock == nil {
+		return
+	}
+	if state.PCInBlock < 0 || int(state.PCInBlock) >= len(state.SelectedBlock.InstructionGroups) {
+		return
+	}
+	operations := state.SelectedBlock.InstructionGroups[state.PCInBlock].Operations
+	for _, idx := range indices {
+		if idx < 0 || idx >= len(operations) {
+			continue
+		}
+		if operations[idx].InvalidIterations > 0 {
+			operations[idx].InvalidIterations--
+		}
 	}
 }
 
@@ -412,34 +1840,38 @@ func (i instEmulator) normalizeDirection(s string) string {
 	}
 }
 
-func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
-	//PrintState(state)
-	flag := true
+func (i instEmulator) checkIssueReadinessDetails(inst Operation, state *coreState) issueReadiness {
+	readiness := issueReadiness{
+		OperandsReady:        true,
+		PredicateReadyOrTrue: true,
+		ResourcesAvailable:   true,
+		Ready:                true,
+	}
+
 	for index, src := range inst.SrcOperands.Operands {
 		if index == 1 {
 			if inst.OpCode == "PHI_CONST" || inst.OpCode == "PHI_START" {
-				// Track PHI_CONST per instruction to avoid cross-interference.
 				var stateKey string
 				if inst.OpCode == "PHI_CONST" {
 					stateKey = fmt.Sprintf("PhiConst_%d", inst.ID)
 				} else if inst.OpCode == "PHI_START" {
 					stateKey = fmt.Sprintf("PhiStart_%d", inst.ID)
 				}
-				if state.States[stateKey] == nil || state.States[stateKey] == false { // first execution
+				if state.States[stateKey] == nil || state.States[stateKey] == false {
 					if len(inst.SrcOperands.Operands) > 1 {
-						// fmt.Println("ID", inst.ID, "bypass check")
 						continue
-					} else {
-						panic("PHI_CONST or PHI_START must have two sources")
 					}
+					panic("PHI_CONST or PHI_START must have two sources")
 				}
 			}
 		}
 		srcImpl := i.normalizeDirection(src.Impl)
 		if state.Directions[srcImpl] {
-			if !state.RecvBufHeadReady[i.getColorIndex(src.Color)][i.getDirecIndex(srcImpl)] {
-				flag = false
-				break
+			if state.recvQueueLen(i.getColorIndex(src.Color), i.getDirecIndex(srcImpl)) == 0 {
+				readiness.OperandsReady = false
+				readiness.Ready = false
+				readiness.WaitReason = StallReasonOperandWait
+				return readiness
 			}
 		}
 	}
@@ -447,10 +1879,10 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 	for _, dst := range inst.DstOperands.Operands {
 		dstImpl := i.normalizeDirection(dst.Impl)
 		if state.Directions[dstImpl] {
-			if state.SendBufHeadBusy[i.getColorIndex(dst.Color)][i.getDirecIndex(dstImpl)] {
+			if state.sendQueueIsFull(i.getColorIndex(dst.Color), i.getDirecIndex(dstImpl)) {
 				Trace(
 					"Backpressure",
-					"Time", state.CurrentTime,
+					"Time", float64(state.CurrentCycle),
 					"X", state.TileX,
 					"Y", state.TileY,
 					"OpCode", inst.OpCode,
@@ -460,14 +1892,53 @@ func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
 					"Color", dst.Color,
 					"Policy", normalizeExecutionPolicyString(i.ExecutionPolicy),
 				)
-				flag = false
-				break
+				readiness.ResourcesAvailable = false
+				readiness.Ready = false
+				readiness.WaitReason = StallReasonOutputBlocked
+				return readiness
 			}
 		}
 	}
-	//fmt.Println("[CheckFlags] checking flags for inst", inst.OpCode, "@(", state.TileX, ",", state.TileY, "):", flag)
-	// fmt.Println("Check", inst.OpCode, "ID", inst.ID, "@(", state.TileX, ",", state.TileY, "):", flag)
-	return flag
+
+	if state.BlockingMemoryOps && isBlockingMemoryShape(inst, state) {
+		if state.SharedSRAMAccessor != nil {
+			return readiness
+		}
+		routerColor := i.getColorIndex("R")
+		routerDir := int(cgra.Router)
+		if state.sendQueueIsFull(routerColor, routerDir) {
+			readiness.ResourcesAvailable = false
+			readiness.Ready = false
+			readiness.WaitReason = StallReasonOutputBlocked
+			return readiness
+		}
+	}
+
+	return readiness
+}
+
+func (i instEmulator) checkIssueReadiness(inst Operation, state *coreState) (bool, string) {
+	readiness := i.checkIssueReadinessDetails(inst, state)
+	return readiness.Ready, readiness.WaitReason
+}
+
+func isBlockingMemoryShape(inst Operation, state *coreState) bool {
+	if state == nil || !state.BlockingMemoryOps {
+		return false
+	}
+	switch inst.OpCode {
+	case "LD", "LOAD":
+		return len(inst.DstOperands.Operands) > 0 && inst.DstOperands.Operands[0].Impl != "Router"
+	case "ST", "STORE":
+		return len(inst.DstOperands.Operands) == 0
+	default:
+		return false
+	}
+}
+
+func (i instEmulator) CheckFlags(inst Operation, state *coreState) bool {
+	ready, _ := i.checkIssueReadiness(inst, state)
+	return ready
 }
 
 func (i instEmulator) RunOperation(inst Operation, state *coreState, time float64) map[Operand]cgra.Data {
@@ -488,79 +1959,17 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 	// 	i.runAlwaysSendRec(tokens, state)
 	// }
 
-	instFuncs := map[string]func(Operation, *coreState) map[Operand]cgra.Data{
-		"ADD":       i.runAdd, // ADD, ADDI, INC, SUB, DEC
-		"SUB":       i.runSub,
-		"SHL":       i.runSHL,
-		"LRS":       i.runLRS,
-		"MUL":       i.runMul,    // MULI
-		"MUL_ADD":   i.runMulAdd, // dst = src0 * src1 + src2
-		"DIV":       i.runDiv,
-		"OR":        i.runOR,
-		"XOR":       i.runXOR, // XOR XORI
-		"AND":       i.runAND,
-		"MOV":       i.runMov,
-		"JMP":       i.runJmp,
-		"BNE":       i.runBne,
-		"BEQ":       i.runBeq, // BEQI
-		"BLT":       i.runBlt,
-		"PHI_CONST": i.runPhiConst, // backward compatibility
-		"SEXT":      i.runMov,      // identity operation by now
-		"ZEXT":      i.runMov,      // identity operation by now
+	instFuncs := i.scalarOpcodeFuncs()
+	vectorFuncs := i.vectorOpcodeFuncs()
+	retFuncs := i.returnOpcodeFuncs()
 
-		"FADD": i.runFAdd, // FADDI
-		"FSUB": i.runFSub,
-		"FMUL": i.runFMul,
-		"NOP":  i.runNOP,
-
-		"PHI":             i.runPhi,
-		"PHI_START":       i.runPhiStart,
-		"GRANT_PREDICATE": i.runGrantPred,
-		"GRANT_ONCE":      i.runGrantOnce,
-		"SEL":             i.runSel,
-
-		// comparisons
-		"ICMP_EQ":  i.runCmpExport,
-		"ICMP_SLT": i.runLTExport,
-		"ICMP_SGT": i.runGTExport,
-		"ICMP_SGE": i.runSGEExport,
-
-		// do not distinguish between data_mov and control mov
-		"DATA_MOV": i.runMov,
-		"CTRL_MOV": i.runMov,
-		"CONSTANT": i.runMov,
-
-		"GEP": i.runGep,
-
-		"CMP_EXPORT": i.runCmpExport,
-
-		"LT_EX": i.runLTExport,
-
-		"LOAD":  i.runLoadDirect,
-		"STORE": i.runStoreDirect,
-		"LDD":   i.runLoadDirect,  // backward compatibility
-		"STD":   i.runStoreDirect, // backward compatibility
-
-		"LD":  i.runLoadDRAM,
-		"LDW": i.runLoadWaitDRAM,
-
-		"ST":  i.runStoreDRAM,
-		"STW": i.runStoreWaitDRAM,
-
-		"TRIGGER": i.runTrigger,
-
-		"NOT": i.runNot,
-	}
-
-	retFuncs := map[string]func(Operation, *coreState, float64) map[Operand]cgra.Data{
-		"RETURN_VALUE": i.runRetImm,
-		"RETURN_VOID":  i.runRetDelay,
-		"RET":          i.runRetImm, // backward compatibility
-	}
-
-	if instFunc, ok := instFuncs[instName]; ok {
+	if instFunc, ok := vectorFuncs[instName]; ok {
+		return instFunc(inst, state)
+	} else if instFunc, ok := instFuncs[instName]; ok {
+		i.rejectVectorSourcesForScalarOp(inst, state)
 		return instFunc(inst, state)
 	} else if retFunc, ok := retFuncs[instName]; ok {
+		i.rejectVectorSourcesForScalarOp(inst, state)
 		return retFunc(inst, state, time)
 	} else {
 		panic(fmt.Sprintf("unknown instruction '%s' at PC %d", instName, state.PCInBlock))
@@ -586,13 +1995,39 @@ func (i instEmulator) readOperand(operand Operand, state *coreState) (value cgra
 			//fmt.Println("operand.Impl", operand.Impl)
 			// must first check it is ready
 			color, direction := i.getColorIndex(operand.Color), i.getDirecIndex(normalizedImpl)
-			value = state.RecvBufHead[color][direction]
-			// set the ready flag to false
+			cacheKey := fmt.Sprintf("%d:%d", color, direction)
 			if state.Mode == SyncOp {
-				state.RecvBufHeadReady[color][direction] = false
+				if cached, ok := state.OpInputReadCache[cacheKey]; ok {
+					return cached
+				}
+			}
+			peek, ok := state.recvQueuePeek(color, direction)
+			if !ok {
+				if state.Mode == SyncOp {
+					// In sync mode, all ops in the same instruction group share one
+					// snapshot of input heads. If a previous op consumed this queue
+					// head earlier in the same tick, keep returning the snapshot.
+					fallback := state.RecvBufHead[color][direction]
+					state.OpInputReadCache[cacheKey] = fallback
+					return fallback
+				}
+				panic(fmt.Sprintf("operand queue unexpectedly empty in async mode: %v", operand))
+			}
+			value = peek
+			// consume queue head according to existing sync/async rules
+			if state.Mode == SyncOp {
+				consumed, ok := state.recvQueueConsume(color, direction)
+				if !ok {
+					panic(fmt.Sprintf("operand queue consume failed in sync mode: %v", operand))
+				}
+				value = consumed
+				state.OpInputReadCache[cacheKey] = value
 			} else {
 				if !state.CurrReservationState.DecrementRefCount(operand, state) {
-					state.RecvBufHeadReady[color][direction] = false // no longer used, closed
+					// no longer used, pop queue head
+					if _, ok := state.recvQueueConsume(color, direction); !ok {
+						panic(fmt.Sprintf("operand queue consume failed in async mode: %v", operand))
+					}
 					//fmt.Println("Reduce {", operand.Impl, "} to zero")
 				} else {
 					//fmt.Println("Reduce {", operand.Impl, "} to ", state.CurrReservationState.RefCountRuntime[operand.Impl], "@(", state.TileX, ",", state.TileY, ")")
@@ -642,16 +2077,153 @@ func (i instEmulator) writeOperand(operand Operand, value cgra.Data, state *core
 	} else {
 		normalizedImpl := i.normalizeDirection(operand.Impl)
 		if state.Directions[normalizedImpl] {
-			if state.SendBufHeadBusy[i.getColorIndex(operand.Color)][i.getDirecIndex(normalizedImpl)] {
+			color := i.getColorIndex(operand.Color)
+			direction := i.getDirecIndex(normalizedImpl)
+			if state.sendQueueIsFull(color, direction) {
 				//fmt.Printf("sendbufhead busy\n")
 				return
 			}
-			state.SendBufHeadBusy[i.getColorIndex(operand.Color)][i.getDirecIndex(normalizedImpl)] = true
-			state.SendBufHead[i.getColorIndex(operand.Color)][i.getDirecIndex(normalizedImpl)] = value
+			state.sendQueuePush(color, direction, value)
 		} else {
 			panic(fmt.Sprintf("Invalid operand %v in writeOperand; expected register", operand))
 		}
 	}
+}
+
+func (i instEmulator) rejectVectorSourcesForScalarOp(inst Operation, state *coreState) {
+	for _, src := range inst.SrcOperands.Operands {
+		value := i.peekScalarGuardOperand(src, state)
+		if value.LaneCount() > 1 {
+			panic(fmt.Sprintf("scalar opcode %s cannot consume vector src operand", inst.OpCode))
+		}
+	}
+}
+
+func (i instEmulator) peekScalarGuardOperand(operand Operand, state *coreState) cgra.Data {
+	if strings.HasPrefix(operand.Impl, "$") {
+		registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand.Impl, "$"))
+		if err != nil || registerIndex < 0 || registerIndex >= len(state.Registers) {
+			return cgra.Data{}
+		}
+		return state.Registers[registerIndex]
+	}
+	normalizedImpl := i.normalizeDirection(operand.Impl)
+	if state.Directions[normalizedImpl] {
+		value, _ := state.recvQueuePeek(i.getColorIndex(operand.Color), i.getDirecIndex(normalizedImpl))
+		return value
+	}
+	return cgra.NewScalar(0)
+}
+
+func (i instEmulator) vectorLanes(state *coreState) int {
+	if state.VectorLanes <= 0 {
+		return 1
+	}
+	return state.VectorLanes
+}
+
+func (i instEmulator) requireVectorEnabled(state *coreState) int {
+	lanes := i.vectorLanes(state)
+	if !state.EnableVectorPE || lanes <= 1 {
+		panic("vector opcode requires simulator.device.enable_vector_pe=true")
+	}
+	return lanes
+}
+
+func (i instEmulator) requireVectorOperand(opCode string, value cgra.Data, lanes int) cgra.Data {
+	if value.LaneCount() != lanes {
+		panic(fmt.Sprintf("%s expects %d-lane vector", opCode, lanes))
+	}
+	return value
+}
+
+func (i instEmulator) runVBroadcast(inst Operation, state *coreState) map[Operand]cgra.Data {
+	lanes := i.requireVectorEnabled(state)
+	src := i.readOperand(inst.SrcOperands.Operands[0], state)
+	out := make([]uint32, lanes)
+	for idx := range out {
+		out[idx] = src.First()
+	}
+	results := make(map[Operand]cgra.Data)
+	for _, dst := range inst.DstOperands.Operands {
+		results[dst] = cgra.FromSlice(out, src.Pred)
+	}
+	return results
+}
+
+func (i instEmulator) runVectorBinary(inst Operation, state *coreState, fn func(uint32, uint32) uint32) map[Operand]cgra.Data {
+	lanes := i.requireVectorEnabled(state)
+	src1 := i.requireVectorOperand(inst.OpCode, i.readOperand(inst.SrcOperands.Operands[0], state), lanes)
+	src2 := i.requireVectorOperand(inst.OpCode, i.readOperand(inst.SrcOperands.Operands[1], state), lanes)
+	out := make([]uint32, lanes)
+	for idx := range out {
+		out[idx] = fn(src1.Data[idx], src2.Data[idx])
+	}
+	results := make(map[Operand]cgra.Data)
+	for _, dst := range inst.DstOperands.Operands {
+		results[dst] = cgra.FromSlice(out, src1.Pred && src2.Pred)
+	}
+	return results
+}
+
+func (i instEmulator) runVAdd(inst Operation, state *coreState) map[Operand]cgra.Data {
+	return i.runVectorBinary(inst, state, func(a, b uint32) uint32 { return a + b })
+}
+
+func (i instEmulator) runVMul(inst Operation, state *coreState) map[Operand]cgra.Data {
+	return i.runVectorBinary(inst, state, func(a, b uint32) uint32 { return a * b })
+}
+
+func (i instEmulator) runVectorReduceAdd(inst Operation, state *coreState) map[Operand]cgra.Data {
+	lanes := i.requireVectorEnabled(state)
+	src := i.requireVectorOperand(inst.OpCode, i.readOperand(inst.SrcOperands.Operands[0], state), lanes)
+	var sum uint32
+	for _, lane := range src.Data {
+		sum += lane
+	}
+	results := make(map[Operand]cgra.Data)
+	for _, dst := range inst.DstOperands.Operands {
+		results[dst] = cgra.NewScalarWithPred(sum, src.Pred)
+	}
+	return results
+}
+
+func (i instEmulator) runVExtract(inst Operation, state *coreState) map[Operand]cgra.Data {
+	lanes := i.requireVectorEnabled(state)
+	src := i.requireVectorOperand(inst.OpCode, i.readOperand(inst.SrcOperands.Operands[0], state), lanes)
+	index := int(i.readOperand(inst.SrcOperands.Operands[1], state).First())
+	if index < 0 || index >= lanes {
+		panic(fmt.Sprintf("vector extract index out of bounds: %d", index))
+	}
+	results := make(map[Operand]cgra.Data)
+	for _, dst := range inst.DstOperands.Operands {
+		results[dst] = cgra.NewScalarWithPred(src.Data[index], src.Pred)
+	}
+	return results
+}
+
+func (i instEmulator) runVLoadContig(inst Operation, state *coreState) map[Operand]cgra.Data {
+	lanes := i.requireVectorEnabled(state)
+	base := int(i.readOperand(inst.SrcOperands.Operands[0], state).First())
+	if base < 0 || base+lanes > len(state.Memory) {
+		panic("vector load out of bounds")
+	}
+	results := make(map[Operand]cgra.Data)
+	for _, dst := range inst.DstOperands.Operands {
+		results[dst] = cgra.FromSlice(state.Memory[base:base+lanes], true)
+	}
+	return results
+}
+
+func (i instEmulator) runVStoreContig(inst Operation, state *coreState) map[Operand]cgra.Data {
+	lanes := i.requireVectorEnabled(state)
+	src := i.requireVectorOperand(inst.OpCode, i.readOperand(inst.SrcOperands.Operands[0], state), lanes)
+	base := int(i.readOperand(inst.SrcOperands.Operands[1], state).First())
+	if base < 0 || base+lanes > len(state.Memory) {
+		panic("vector store out of bounds")
+	}
+	copy(state.Memory[base:base+lanes], src.Data)
+	return nil
 }
 
 func (i instEmulator) getDirecIndex(side string) int {
@@ -797,6 +2369,13 @@ func (i instEmulator) runNot(inst Operation, state *coreState) map[Operand]cgra.
 	return results
 }
 
+func (i instEmulator) runLoad(inst Operation, state *coreState) map[Operand]cgra.Data {
+	if state.BlockingMemoryOps {
+		return i.runLoadDRAM(inst, state)
+	}
+	return i.runLoadDirect(inst, state)
+}
+
 func (i instEmulator) runLoadDirect(inst Operation, state *coreState) map[Operand]cgra.Data {
 	src1 := inst.SrcOperands.Operands[0]
 	addrStruct := i.readOperand(src1, state)
@@ -817,6 +2396,7 @@ func (i instEmulator) runLoadDirect(inst Operation, state *coreState) map[Operan
 	}
 	value := state.Memory[addr]
 	slog.Warn("Memory",
+		"Time", state.CurrentTime,
 		"Behavior", "LoadDirect",
 		"ID", inst.ID,
 		"Value", value,
@@ -837,6 +2417,63 @@ func (i instEmulator) runLoadDRAM(inst Operation, state *coreState) map[Operand]
 	addrStruct := i.readOperand(src1, state)
 	addr := addrStruct.First()
 	dst := inst.DstOperands.Operands[0]
+	if state.BlockingMemoryOps && i.normalizeDirection(dst.Impl) != "Router" {
+		finalPred := addrStruct.Pred
+		if !finalPred {
+			results := make(map[Operand]cgra.Data)
+			for _, dst := range inst.DstOperands.Operands {
+				results[dst] = cgra.NewScalarWithPred(0, false)
+			}
+			Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+			return results
+		}
+		if state.SharedSRAMAccessor != nil {
+			physAddr := state.SharedMemoryBase + addr
+			byteAddr := uint64(physAddr) * 4
+			issueCycle := int64(math.Round(state.CurrentTime))
+			doneCycle := state.SharedSRAMAccessor.ScheduleCycleForAddress(byteAddr, issueCycle)
+			state.PendingMemoryOp = &pendingMemoryOp{
+				OpCode:     inst.OpCode,
+				OpID:       inst.ID,
+				Address:    addr,
+				Dst:        append([]Operand(nil), inst.DstOperands.Operands...),
+				Pred:       finalPred,
+				IsWrite:    false,
+				DirectSRAM: true,
+				DoneCycle:  doneCycle,
+			}
+			state.TimingWaitBlocked = true
+			Trace("Memory",
+				"Behavior", "Send",
+				"Time", state.CurrentTime,
+				"OpID", inst.ID,
+				"OpCode", inst.OpCode,
+				"Addr", addr,
+				"PhysAddr", physAddr,
+				"Data", addr,
+				"Color", "R",
+				"X", state.TileX,
+				"Y", state.TileY,
+			)
+			Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+			return make(map[Operand]cgra.Data)
+		}
+		state.PendingMemoryOp = &pendingMemoryOp{
+			OpCode:  inst.OpCode,
+			OpID:    inst.ID,
+			Address: addr,
+			Dst:     append([]Operand(nil), inst.DstOperands.Operands...),
+			Pred:    finalPred,
+			IsWrite: false,
+		}
+		state.AddrBuf = addr
+		state.IsToWriteMemory = false
+		state.TimingWaitBlocked = true
+		Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+		return map[Operand]cgra.Data{
+			{Impl: "Router", Color: "R"}: cgra.NewScalarWithPred(addr, finalPred),
+		}
+	}
 	if dst.Impl != "Router" {
 		panic("the destination of a LOAD_DRAM instruction must be Router")
 	}
@@ -902,7 +2539,73 @@ func (i instEmulator) runStoreDirect(inst Operation, state *coreState) map[Opera
 	return make(map[Operand]cgra.Data)
 }
 
+func (i instEmulator) runStore(inst Operation, state *coreState) map[Operand]cgra.Data {
+	if state.BlockingMemoryOps {
+		return i.runStoreDRAM(inst, state)
+	}
+	return i.runStoreDirect(inst, state)
+}
+
 func (i instEmulator) runStoreDRAM(inst Operation, state *coreState) map[Operand]cgra.Data {
+	if state.BlockingMemoryOps && len(inst.DstOperands.Operands) == 0 {
+		valueStruct := i.readOperand(inst.SrcOperands.Operands[0], state)
+		value := valueStruct.First()
+		addrStruct := i.readOperand(inst.SrcOperands.Operands[1], state)
+		addr := addrStruct.First()
+		finalPred := addrStruct.Pred && valueStruct.Pred
+		if !finalPred {
+			Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+			return make(map[Operand]cgra.Data)
+		}
+		if state.SharedSRAMAccessor != nil {
+			physAddr := state.SharedMemoryBase + addr
+			byteAddr := uint64(physAddr) * 4
+			issueCycle := int64(math.Round(state.CurrentTime))
+			doneCycle := state.SharedSRAMAccessor.ScheduleCycleForAddress(byteAddr, issueCycle)
+			state.PendingMemoryOp = &pendingMemoryOp{
+				OpCode:     inst.OpCode,
+				OpID:       inst.ID,
+				Address:    addr,
+				Value:      value,
+				Pred:       finalPred,
+				IsWrite:    true,
+				DirectSRAM: true,
+				DoneCycle:  doneCycle,
+			}
+			state.TimingWaitBlocked = true
+			Trace("Memory",
+				"Behavior", "Send",
+				"Time", state.CurrentTime,
+				"OpID", inst.ID,
+				"OpCode", inst.OpCode,
+				"Addr", addr,
+				"PhysAddr", physAddr,
+				"Data", value,
+				"Pred", finalPred,
+				"Color", "R",
+				"X", state.TileX,
+				"Y", state.TileY,
+			)
+			Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+			return make(map[Operand]cgra.Data)
+		}
+		state.PendingMemoryOp = &pendingMemoryOp{
+			OpCode:  inst.OpCode,
+			OpID:    inst.ID,
+			Address: addr,
+			Value:   value,
+			Pred:    finalPred,
+			IsWrite: true,
+		}
+		state.AddrBuf = addr
+		state.IsToWriteMemory = true
+		state.TimingWaitBlocked = true
+		Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+		return map[Operand]cgra.Data{
+			{Impl: "Router", Color: "R"}: cgra.NewScalarWithPred(value, finalPred),
+		}
+	}
+
 	src1 := inst.SrcOperands.Operands[0]
 	addrStruct := i.readOperand(src1, state)
 	addr := addrStruct.First()
@@ -1606,6 +3309,34 @@ func (i instEmulator) runSGEExport(inst Operation, state *coreState) map[Operand
 	return results
 }
 
+func (i instEmulator) runULTExport(inst Operation, state *coreState) map[Operand]cgra.Data {
+	src1 := inst.SrcOperands.Operands[0]
+	src2 := inst.SrcOperands.Operands[1]
+
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
+	src1Pred := src1Struct.Pred
+	src2Pred := src2Struct.Pred
+	resultPred := src1Pred && src2Pred
+
+	resultVal := uint32(0)
+	results := make(map[Operand]cgra.Data)
+	if src1Val < src2Val {
+		resultVal = 1
+		for _, dst := range inst.DstOperands.Operands {
+			results[dst] = cgra.NewScalarWithPred(1, resultPred)
+		}
+	} else {
+		for _, dst := range inst.DstOperands.Operands {
+			results[dst] = cgra.NewScalarWithPred(0, resultPred)
+		}
+	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Src1", fmt.Sprintf("%d(%t)", src1Val, src1Pred), "Src2", fmt.Sprintf("%d(%t)", src2Val, src2Pred), "Result", fmt.Sprintf("%d(%t)", resultVal, resultPred))
+	return results
+}
+
 func (i instEmulator) runPhi(inst Operation, state *coreState) map[Operand]cgra.Data {
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
@@ -1687,9 +3418,9 @@ func (i instEmulator) runPhiStart(inst Operation, state *coreState) map[Operand]
 	results := make(map[Operand]cgra.Data)
 
 	if state.States[stateKey] == nil || state.States[stateKey] == false { // first execution
-		if !src1Pred {
-			panic("Predicate of first time PHI_START must be true at (" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ") instruction " + strconv.Itoa(inst.ID))
-		}
+		// if !src1Pred {
+		// 	panic("Predicate of first time PHI_START must be true at (" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ") instruction " + strconv.Itoa(inst.ID))
+		// }
 		result = src1Val
 		finalPred = src1Pred
 		state.States[stateKey] = true

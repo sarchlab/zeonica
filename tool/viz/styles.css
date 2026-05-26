@@ -323,6 +323,24 @@ button {
   stroke-linecap: round;
 }
 
+.bp-path-link {
+  fill: none;
+  stroke: #b91c1c;
+  stroke-width: 4.2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-opacity: 0.95;
+  filter: drop-shadow(0 0 1px rgba(185, 28, 28, 0.35));
+  pointer-events: none;
+}
+
+.bp-tile-outline {
+  fill: none;
+  stroke: #b91c1c;
+  stroke-width: 3px;
+  pointer-events: none;
+}
+
 .flow-data-tag {
   pointer-events: none;
 }

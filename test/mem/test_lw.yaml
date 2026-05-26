@@ -13,28 +13,28 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 0
       - operations:
         - opcode: LD
           src_operands:
-          - operand: '0'
-            color: R
+          - operand: "#0"
+            color: RED
           dst_operands:
           - operand: Router
-            color: R
+            color: RED
           id: 1
       - operations:
         - opcode: LDW
           src_operands:
           - operand: Router
-            color: R
+            color: RED
           dst_operands:
           - operand: East
-            color: R
+            color: RED
           id: 2
   - row: 1
     column: 0
@@ -47,28 +47,28 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: $0
-            color: R
+            color: RED
           id: 3
       - operations:
         - opcode: LD
           src_operands:
-          - operand: '0'
-            color: R
+          - operand: "#0"
+            color: RED
           dst_operands:
           - operand: Router
-            color: R
+            color: RED
           id: 4
       - operations:
         - opcode: LDW
           src_operands:
           - operand: Router
-            color: R
+            color: RED
           dst_operands:
           - operand: East
-            color: R
+            color: RED
           id: 5
   - row: 0
     column: 1
@@ -81,10 +81,10 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: East
-            color: R
+            color: RED
           id: 6
   - row: 1
     column: 1
@@ -97,8 +97,8 @@ array_config:
         - opcode: MOV
           src_operands:
           - operand: West
-            color: R
+            color: RED
           dst_operands:
           - operand: East
-            color: R
+            color: RED
           id: 7

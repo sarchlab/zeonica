@@ -1,0 +1,57 @@
+{
+  "testName": "disable-trace",
+  "logPath": "/tmp/TestInitTraceLoggerDisableTraceCreatesEmptyLogAndReport326622658/001/trace.log",
+  "grid": {
+    "width": 1,
+    "height": 1
+  },
+  "totalCycles": 1,
+  "activeCyclesGlobal": 1,
+  "idleCyclesGlobal": 0,
+  "passed": true,
+  "mismatchCount": 0,
+  "instCount": 1,
+  "sendCount": 0,
+  "recvCount": 0,
+  "memoryCount": 0,
+  "totalEvents": 1,
+  "wallClockDurationSec": 0,
+  "instThroughputPerCycle": 1,
+  "eventThroughputPerCycle": 1,
+  "instThroughputPerSec": 0,
+  "backpressureCount": 0,
+  "backpressureCycles": 0,
+  "scheduleBubbleStallCount": 0,
+  "operandWaitStallCount": 0,
+  "outputBlockedStallCount": 0,
+  "activeTileCount": 1,
+  "tiles": [
+    {
+      "x": 0,
+      "y": 0,
+      "coord": "(0,0)",
+      "activeCycles": 1,
+      "utilizationPct": 100,
+      "instCount": 1,
+      "sendCount": 0,
+      "recvCount": 0,
+      "memoryCount": 0,
+      "totalEvents": 1,
+      "backpressureCount": 0,
+      "scheduleBubbleStallCount": 0,
+      "operandWaitStallCount": 0,
+      "outputBlockedStallCount": 0
+    }
+  ],
+  "topHotTiles": [
+    {
+      "x": 0,
+      "y": 0,
+      "coord": "(0,0)",
+      "utilizationPct": 100,
+      "activeCycles": 1,
+      "totalEvents": 1
+    }
+  ],
+  "topBackpressureTiles": []
+}

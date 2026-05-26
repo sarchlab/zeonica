@@ -3,7 +3,6 @@ package config
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/sarchlab/akita/v4/mem/idealmemcontroller"
 	"github.com/sarchlab/akita/v4/mem/mem"
@@ -20,10 +19,26 @@ type DeviceBuilder struct {
 	freq    sim.Freq
 	monitor *monitoring.Monitor
 	//portFactory   portFactory
-	width, height   int
-	memoryMode      string         // simple or shared or local
-	memoryShare     map[[2]int]int //map[[x, y]]GroupID
-	executionPolicy string
+	width, height          int
+	memoryMode             string         // simple or shared or local
+	memoryShare            map[[2]int]int //map[[x, y]]GroupID
+	sharedMemoryBase       map[[2]int]uint32
+	sharedMemoryModel      string
+	sharedMemoryBanks      int
+	sharedMemoryLatency    int
+	sharedMemoryInterleave uint64
+	executionPolicy        string
+	strictMaxSlip          int64
+	strictFailOnViolation  bool
+	corePortIncomingCap    int
+	corePortOutgoingCap    int
+	enableFIFOModel        bool
+	enableQueueWatches     bool
+	queueWatches           []core.QueueWatchSpec
+	numRegisters           int
+	localMemoryWords       int
+	enableVectorPE         bool
+	vectorLanes            int
 }
 
 // type portFactory interface {
@@ -75,9 +90,82 @@ func (d DeviceBuilder) WithMemoryShare(share map[[2]int]int) DeviceBuilder {
 	return d
 }
 
+// WithSharedMemoryBase sets per-tile logical-to-shared address offsets.
+func (d DeviceBuilder) WithSharedMemoryBase(bases map[[2]int]uint32) DeviceBuilder {
+	d.sharedMemoryBase = bases
+	return d
+}
+
+func (d DeviceBuilder) WithSharedMemoryModel(model string) DeviceBuilder {
+	d.sharedMemoryModel = model
+	return d
+}
+
+func (d DeviceBuilder) WithSharedMemoryBankConfig(banks, baseLatency int, interleaveBytes uint64) DeviceBuilder {
+	d.sharedMemoryBanks = banks
+	d.sharedMemoryLatency = baseLatency
+	d.sharedMemoryInterleave = interleaveBytes
+	return d
+}
+
 // WithExecutionPolicy sets core execution policy.
 func (d DeviceBuilder) WithExecutionPolicy(policy string) DeviceBuilder {
 	d.executionPolicy = policy
+	return d
+}
+
+// WithStrictTimingConfig sets strict timing replay controls.
+func (d DeviceBuilder) WithStrictTimingConfig(maxSlip int64, failOnViolation bool) DeviceBuilder {
+	d.strictMaxSlip = maxSlip
+	d.strictFailOnViolation = failOnViolation
+	return d
+}
+
+// WithCorePortBufferDepth sets core port incoming/outgoing capacities.
+func (d DeviceBuilder) WithCorePortBufferDepth(incoming, outgoing int) DeviceBuilder {
+	d.corePortIncomingCap = incoming
+	d.corePortOutgoingCap = outgoing
+	return d
+}
+
+// WithEnableFIFOModel toggles FIFO-based core execution model.
+func (d DeviceBuilder) WithEnableFIFOModel(enabled bool) DeviceBuilder {
+	d.enableFIFOModel = enabled
+	return d
+}
+
+// WithEnableQueueWatches toggles optional queue-occupancy instrumentation.
+func (d DeviceBuilder) WithEnableQueueWatches(enabled bool) DeviceBuilder {
+	d.enableQueueWatches = enabled
+	return d
+}
+
+// WithQueueWatches sets optional queue watch definitions for all cores.
+func (d DeviceBuilder) WithQueueWatches(queueWatches []core.QueueWatchSpec) DeviceBuilder {
+	if len(queueWatches) == 0 {
+		d.queueWatches = nil
+		return d
+	}
+	d.queueWatches = append([]core.QueueWatchSpec(nil), queueWatches...)
+	return d
+}
+
+// WithRegisterCount sets register-file size per core.
+func (d DeviceBuilder) WithRegisterCount(num int) DeviceBuilder {
+	d.numRegisters = num
+	return d
+}
+
+// WithLocalMemoryWords sets local memory size (in words) per core.
+func (d DeviceBuilder) WithLocalMemoryWords(words int) DeviceBuilder {
+	d.localMemoryWords = words
+	return d
+}
+
+// WithVectorConfig configures optional vector PE execution.
+func (d DeviceBuilder) WithVectorConfig(enabled bool, lanes int) DeviceBuilder {
+	d.enableVectorPE = enabled
+	d.vectorLanes = lanes
 	return d
 }
 
@@ -97,29 +185,44 @@ func (d DeviceBuilder) Build(name string) cgra.Device {
 	return dev
 }
 
-//nolint:funlen
+//nolint:funlen,gocyclo
 func (d DeviceBuilder) createSharedMemory(dev *device) {
 	if d.memoryMode == "shared" {
 		// Create shared memory controller
 
-		controllers := make(map[int]*idealmemcontroller.Comp)
+		controllers := make(map[int]sim.Component)
 		connections := make(map[int]*directconnection.Comp)
 
 		for x := 0; x < d.width; x++ {
 			for y := 0; y < d.height; y++ {
 				tile := dev.Tiles[y][x]
-				// if has mapping
-				if _, ok := d.memoryShare[[2]int{x, y}]; !ok {
-					panic("No mapping for tile " + strconv.Itoa(x) + "," + strconv.Itoa(y))
+				groupID, ok := d.memoryShare[[2]int{x, y}]
+				if !ok {
+					continue
 				}
-				groupID := d.memoryShare[[2]int{x, y}]
+				tile.SharedMemoryBase = d.sharedMemoryBase[[2]int{x, y}]
 				if _, ok := controllers[groupID]; !ok {
 					// has not been created yet, create it
-					controller := idealmemcontroller.MakeBuilder().
-						WithEngine(d.engine).
-						WithNewStorage(4 * mem.GB).
-						WithLatency(5).
-						Build("SharedMemory")
+					var controller sim.Component
+					if d.sharedMemoryModel == "banked" {
+						controller = newBankedSharedMemoryController(
+							"SharedMemory",
+							d.engine,
+							d.freq,
+							BankedSharedMemoryConfig{
+								Banks:           d.sharedMemoryBanks,
+								BaseLatency:     d.sharedMemoryLatency,
+								InterleaveBytes: d.sharedMemoryInterleave,
+								Capacity:        4 * mem.GB,
+							},
+						)
+					} else {
+						controller = idealmemcontroller.MakeBuilder().
+							WithEngine(d.engine).
+							WithNewStorage(4 * mem.GB).
+							WithLatency(5).
+							Build("SharedMemory")
+					}
 					controllers[groupID] = controller
 
 					name := fmt.Sprintf("SharedMemory%d%d", x, y)
@@ -132,6 +235,9 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 					conn.PlugIn(tile.Core.GetPortByName("Router"))
 					connections[groupID] = conn
 					tile.SetRemotePort(cgra.Router, controller.GetPortByName("Top").AsRemote())
+					if accessor, ok := controller.(core.SharedSRAMAccessor); ok {
+						tile.Core.SetSharedSRAMAccessor(accessor)
+					}
 					tile.SharedMemoryController = controller
 					dev.SharedMemoryControllers = append(dev.SharedMemoryControllers, controller)
 
@@ -141,6 +247,9 @@ func (d DeviceBuilder) createSharedMemory(dev *device) {
 					fmt.Println("Connect Tile (", x, ",", y, ") to SharedMemory Controller (", groupID, ") (already-created)")
 					connections[groupID].PlugIn(tile.Core.GetPortByName("Router"))
 					tile.SetRemotePort(cgra.Router, controllers[groupID].GetPortByName("Top").AsRemote())
+					if accessor, ok := controllers[groupID].(core.SharedSRAMAccessor); ok {
+						tile.Core.SetSharedSRAMAccessor(accessor)
+					}
 					tile.SharedMemoryController = controllers[groupID]
 					dev.SharedMemoryControllers = append(dev.SharedMemoryControllers, controllers[groupID])
 				}
@@ -196,6 +305,16 @@ func (d DeviceBuilder) createTiles(
 				WithRetValAddr(&retVal).
 				WithExitReqAddr(&exitReqTimestamp).
 				WithExecutionPolicy(d.executionPolicy).
+				WithStrictTimingConfig(d.strictMaxSlip, d.strictFailOnViolation).
+				WithPortBufferDepth(d.corePortIncomingCap, d.corePortOutgoingCap).
+				WithEnableFIFOModel(d.enableFIFOModel).
+				WithEnableQueueWatches(d.enableQueueWatches).
+				WithQueueWatches(d.queueWatches).
+				WithRegisterCount(d.numRegisters).
+				WithLocalMemoryWords(d.localMemoryWords).
+				WithVectorConfig(d.enableVectorPE, d.vectorLanes).
+				WithBlockingMemoryOps(d.memoryMode == "shared").
+				WithSharedMemoryBase(d.sharedMemoryBase[[2]int{x, y}]).
 				Build(coreName)
 
 			if d.monitor != nil {

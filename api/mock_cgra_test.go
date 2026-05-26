@@ -114,6 +114,20 @@ func (mr *MockTileMockRecorder) GetMemory(arg0, arg1, arg2 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMemory", reflect.TypeOf((*MockTile)(nil).GetMemory), arg0, arg1, arg2)
 }
 
+// ReadSharedMemory mocks base method.
+func (m *MockTile) ReadSharedMemory(arg0, arg1 int, arg2 uint32) uint32 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadSharedMemory", arg0, arg1, arg2)
+	ret0, _ := ret[0].(uint32)
+	return ret0
+}
+
+// ReadSharedMemory indicates an expected call of ReadSharedMemory.
+func (mr *MockTileMockRecorder) ReadSharedMemory(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadSharedMemory", reflect.TypeOf((*MockTile)(nil).ReadSharedMemory), arg0, arg1, arg2)
+}
+
 // GetPort mocks base method.
 func (m *MockTile) GetPort(arg0 cgra.Side) sim.Port {
 	m.ctrl.T.Helper()

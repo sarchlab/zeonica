@@ -75,6 +75,7 @@ const colors = {
   Collect: "#8338ec",
   Inst: "#f77f00",
   Memory: "#d62828",
+  Backpressure: "#b91c1c",
 };
 
 const svg = d3.select("#canvas");
@@ -295,6 +296,68 @@ function endpointPoint(ep) {
       const r = tileRect(state.maxX, idx);
       return { x: r.x + r.w + layout.driverOffset, y: r.y + r.h / 2 };
     }
+  }
+  return null;
+}
+
+function normalizePortName(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "north" || raw === "n") return "North";
+  if (raw === "south" || raw === "s") return "South";
+  if (raw === "east" || raw === "e") return "East";
+  if (raw === "west" || raw === "w") return "West";
+  return null;
+}
+
+function oppositePort(port) {
+  if (port === "North") return "South";
+  if (port === "South") return "North";
+  if (port === "East") return "West";
+  if (port === "West") return "East";
+  return null;
+}
+
+function tilePortEndpoint(x, y, port) {
+  return {
+    kind: "tilePort",
+    x,
+    y,
+    port,
+    raw: `Device.Tile[${y}][${x}].Core.${port}`,
+  };
+}
+
+function driverEndpoint(side, idx) {
+  return {
+    kind: "driver",
+    side,
+    idx,
+    raw: `Driver.Device${side}[${idx}]`,
+  };
+}
+
+function neighborEndpointFromTilePort(x, y, port) {
+  const opposite = oppositePort(port);
+  if (!opposite) return null;
+  if (port === "North") {
+    const ny = y + 1;
+    if (ny <= state.maxY) return tilePortEndpoint(x, ny, opposite);
+    return driverEndpoint("North", x);
+  }
+  if (port === "South") {
+    const ny = y - 1;
+    if (ny >= 0) return tilePortEndpoint(x, ny, opposite);
+    return driverEndpoint("South", x);
+  }
+  if (port === "East") {
+    const nx = x + 1;
+    if (nx <= state.maxX) return tilePortEndpoint(nx, y, opposite);
+    return driverEndpoint("East", y);
+  }
+  if (port === "West") {
+    const nx = x - 1;
+    if (nx >= 0) return tilePortEndpoint(nx, y, opposite);
+    return driverEndpoint("West", y);
   }
   return null;
 }
@@ -2401,6 +2464,7 @@ function renderMeshLegend() {
     ["Recv", colors.Recv],
     ["FeedIn", colors.FeedIn],
     ["Collect", colors.Collect],
+    ["Backpressure path", colors.Backpressure],
     ["Inst", colors.Inst],
     ["Memory", colors.Memory],
   ];
@@ -2503,7 +2567,7 @@ function drawStaticScene() {
   bindMeshZoom();
 }
 
-function drawLink(type, srcPoint, dstPoint, payload = null) {
+function buildLinkPath(srcPoint, dstPoint) {
   const path = d3.path();
   path.moveTo(srcPoint.x, srcPoint.y);
   const dx = dstPoint.x - srcPoint.x;
@@ -2517,11 +2581,156 @@ function drawLink(type, srcPoint, dstPoint, payload = null) {
     dstPoint.x,
     dstPoint.y,
   );
+  return path.toString();
+}
+
+function resolveDataFlowEndpoints(event) {
+  if (!event || event.msg !== "DataFlow") return null;
+  let src = null;
+  let dst = null;
+  if (event.Behavior === "FeedIn") {
+    src = parseEndpoint(event.From);
+    dst = parseEndpoint(event.To);
+  } else if (event.Behavior === "Collect") {
+    src = parseEndpoint(event.From);
+    dst = parseEndpoint(event.To || event.Dst);
+  } else {
+    src = parseEndpoint(event.Src);
+    dst = parseEndpoint(event.Dst);
+  }
+  const srcPoint = endpointPoint(src);
+  const dstPoint = endpointPoint(dst);
+  return {
+    type: event.Behavior,
+    src,
+    dst,
+    srcPoint,
+    dstPoint,
+  };
+}
+
+function collectBackpressureOverlay(events) {
+  const blockedTileKeys = new Set();
+  const blockedLinks = [];
+  const incomingByDstTile = new Map();
+
+  const addIncomingEdge = (edge) => {
+    if (!edge?.dstTileKey) return;
+    if (!incomingByDstTile.has(edge.dstTileKey)) incomingByDstTile.set(edge.dstTileKey, []);
+    incomingByDstTile.get(edge.dstTileKey).push(edge);
+  };
+
+  for (const e of events) {
+    if (e.msg === "Backpressure" && Number.isFinite(Number(e.X)) && Number.isFinite(Number(e.Y))) {
+      const x = Math.round(Number(e.X));
+      const y = Math.round(Number(e.Y));
+      const tile = tileKey(x, y);
+      blockedTileKeys.add(tile);
+
+      const outPort = normalizePortName(e.DstDir || e.Dir || e.Port || "");
+      if (outPort) {
+        const src = tilePortEndpoint(x, y, outPort);
+        const dst = neighborEndpointFromTilePort(x, y, outPort);
+        const srcPoint = endpointPoint(src);
+        const dstPoint = endpointPoint(dst);
+        if (srcPoint && dstPoint) {
+          blockedLinks.push({
+            key: `${src.raw}->${dst.raw}`,
+            srcPoint,
+            dstPoint,
+            title: `blocked wire: ${src.raw} -> ${dst.raw}`,
+          });
+        }
+      }
+      continue;
+    }
+
+    const flow = resolveDataFlowEndpoints(e);
+    if (!flow?.srcPoint || !flow?.dstPoint) continue;
+    if (!flow.srcPoint.tile || !flow.dstPoint.tile) continue;
+    addIncomingEdge({
+      key: `${flow.src?.raw || flow.srcPoint.tile}->${flow.dst?.raw || flow.dstPoint.tile}`,
+      srcTileKey: flow.srcPoint.tile,
+      dstTileKey: flow.dstPoint.tile,
+      srcPoint: flow.srcPoint,
+      dstPoint: flow.dstPoint,
+      behavior: flow.type,
+    });
+  }
+
+  const propagatedTileKeys = new Set(blockedTileKeys);
+  const propagatedLinks = [];
+  const visitedEdges = new Set();
+  const queue = [...blockedTileKeys];
+  while (queue.length > 0) {
+    const tile = queue.shift();
+    const incoming = incomingByDstTile.get(tile) || [];
+    for (const edge of incoming) {
+      if (visitedEdges.has(edge.key)) continue;
+      visitedEdges.add(edge.key);
+      propagatedLinks.push(edge);
+      if (edge.srcTileKey && !propagatedTileKeys.has(edge.srcTileKey)) {
+        propagatedTileKeys.add(edge.srcTileKey);
+        queue.push(edge.srcTileKey);
+      }
+    }
+  }
+
+  return {
+    tileKeys: propagatedTileKeys,
+    blockedLinks,
+    propagatedLinks,
+  };
+}
+
+function drawBackpressureOverlay(overlay) {
+  if (!overlay) return;
+  const drawnPathKeys = new Set();
+  for (const link of overlay.propagatedLinks || []) {
+    if (!link?.srcPoint || !link?.dstPoint) continue;
+    if (drawnPathKeys.has(link.key)) continue;
+    drawnPathKeys.add(link.key);
+    dynamicLayer.append("path")
+      .attr("class", "bp-path-link")
+      .attr("d", buildLinkPath(link.srcPoint, link.dstPoint))
+      .append("title")
+      .text(`backpressure path (${link.behavior || "DataFlow"})`);
+  }
+  for (const link of overlay.blockedLinks || []) {
+    if (!link?.srcPoint || !link?.dstPoint) continue;
+    if (drawnPathKeys.has(link.key)) continue;
+    drawnPathKeys.add(link.key);
+    dynamicLayer.append("path")
+      .attr("class", "bp-path-link")
+      .attr("d", buildLinkPath(link.srcPoint, link.dstPoint))
+      .append("title")
+      .text(link.title || "blocked wire");
+  }
+  for (const key of overlay.tileKeys || []) {
+    const [x, y] = String(key).split(",").map(Number);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    const r = tileRect(x, y);
+    dynamicLayer.append("rect")
+      .attr("class", "bp-tile-outline")
+      .attr("x", r.x + 1.5)
+      .attr("y", r.y + 1.5)
+      .attr("width", Math.max(2, r.w - 3))
+      .attr("height", Math.max(2, r.h - 3))
+      .attr("rx", 9)
+      .append("title")
+      .text(`backpressure tile (${x},${y})`);
+  }
+}
+
+function drawLink(type, srcPoint, dstPoint, payload = null) {
+  const pathData = buildLinkPath(srcPoint, dstPoint);
+  const dx = dstPoint.x - srcPoint.x;
+  const dy = dstPoint.y - srcPoint.y;
 
   const link = dynamicLayer
     .append("path")
     .attr("class", "event-link")
-    .attr("d", path.toString())
+    .attr("d", pathData)
     .attr("stroke", colors[type] || "#555")
     .attr("stroke-opacity", 0.78);
 
@@ -2779,23 +2988,19 @@ function renderTime(t) {
   const events = state.byTime.get(cycle) || [];
   const activeTiles = new Set();
   const linkLabelSeen = new Set();
+  const bpOverlay = collectBackpressureOverlay(events);
+  for (const tile of bpOverlay.tileKeys || []) {
+    activeTiles.add(tile);
+  }
 
   for (const e of events) {
     if (e.msg === "DataFlow" && state.showDataFlow) {
-      let src = null;
-      let dst = null;
-      let type = e.Behavior;
-      if (e.Behavior === "FeedIn") {
-        src = parseEndpoint(e.From);
-        dst = parseEndpoint(e.To);
-      } else if (e.Behavior === "Collect") {
-        src = parseEndpoint(e.From);
-      } else {
-        src = parseEndpoint(e.Src);
-        dst = parseEndpoint(e.Dst);
-      }
-      const srcPoint = endpointPoint(src);
-      const dstPoint = endpointPoint(dst);
+      const flow = resolveDataFlowEndpoints(e);
+      const src = flow?.src;
+      const dst = flow?.dst;
+      const type = flow?.type || e.Behavior;
+      const srcPoint = flow?.srcPoint;
+      const dstPoint = flow?.dstPoint;
       if (srcPoint && dstPoint) {
         const dataText = e.Data == null ? "" : String(e.Data);
         const labelKey = `${src?.raw || srcPoint.tile || "?"}|${dst?.raw || dstPoint.tile || "?"}|${dataText}`;
@@ -2829,8 +3034,11 @@ function renderTime(t) {
 
   applyTileActivity(activeTiles);
   drawTileBadges(events);
+  drawBackpressureOverlay(bpOverlay);
   // Keep link arrows above tile overlay cards.
   dynamicLayer.selectAll(".event-link").raise();
+  dynamicLayer.selectAll(".bp-path-link").raise();
+  dynamicLayer.selectAll(".bp-tile-outline").raise();
   // Keep transfer data labels/pulses above tile cards for readability.
   dynamicLayer.selectAll(".flow-data-tag").raise();
   dynamicLayer.selectAll(".pulse").raise();

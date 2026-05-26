@@ -82,6 +82,10 @@ func (c *Core) SetRemotePort(side cgra.Side, remote sim.RemotePort) {
 	c.ports[side].remote = remote
 }
 
+func (c *Core) SetSharedSRAMAccessor(accessor SharedSRAMAccessor) {
+	c.state.SharedSRAMAccessor = accessor
+}
+
 // MapProgram sets the program that the core needs to run.
 func (c *Core) MapProgram(program interface{}, x int, y int) {
 	if prog, ok := program.(Program); ok {
@@ -91,8 +95,19 @@ func (c *Core) MapProgram(program interface{}, x int, y int) {
 	}
 	c.state.PCInBlock = -1
 	c.state.CurrentCycle = 0
+	c.state.OpTimingCursor = make(map[int]int)
+	c.state.OpTimingLate = make(map[int]bool)
+	c.state.OpTimingRollCycle = make(map[int]int64)
+	c.state.PendingSyncGroup = nil
+	c.state.TimingWaitBlocked = false
+	c.state.StallReason = ""
+	c.state.StallOpID = 0
+	c.state.StallOpCode = ""
+	c.state.OpInputReadCache = make(map[string]cgra.Data)
+	c.state.resetPortQueues()
 	c.state.TileX = uint32(x)
 	c.state.TileY = uint32(y)
+	c.state.WatchedQueues = matchingQueueWatchesForTile(c.state.EnableQueueWatches, c.state.ConfiguredQueueWatches, x, y)
 }
 
 // Tick runs the program for one cycle.
@@ -102,6 +117,7 @@ func (c *Core) Tick() (madeProgress bool) {
 	// madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
 	madeProgress = c.runProgram() || madeProgress
 	madeProgress = c.doSend() || madeProgress
+	c.state.observeWatchedQueues(float64(c.Engine.CurrentTime() * 1e9))
 	c.state.CurrentCycle++
 	return madeProgress
 }
@@ -115,8 +131,11 @@ func (c *Core) doSend() bool {
 	madeProgress := false
 	for i := 0; i < 8; i++ { // only 8 directions
 		for color := 0; color < 4; color++ {
-
-			if !c.state.SendBufHeadBusy[color][i] {
+			if !c.state.sendQueueHasData(color, i) {
+				continue
+			}
+			head, ok := c.state.sendQueuePeek(color, i)
+			if !ok {
 				continue
 			}
 
@@ -125,7 +144,7 @@ func (c *Core) doSend() bool {
 			msg := cgra.MoveMsgBuilder{}.
 				WithDst(c.ports[cgra.Side(i)].remote).
 				WithSrc(c.ports[cgra.Side(i)].local.AsRemote()).
-				WithData(c.state.SendBufHead[color][i]).
+				WithData(head).
 				WithSendTime(c.Engine.CurrentTime()).
 				WithColor(color).
 				Build()
@@ -141,7 +160,7 @@ func (c *Core) doSend() bool {
 					"Behavior", "Send",
 					slog.Float64("Time", timeValue),
 					"Data", msg.Data.First(),
-					"Pred", c.state.SendBufHead[color][i].Pred,
+					"Pred", head.Pred,
 					"Color", color,
 					"Src", msg.Src,
 					"Dst", msg.Dst,
@@ -149,17 +168,24 @@ func (c *Core) doSend() bool {
 			} else {
 				ObserveDataFlow("Send", timeValue, "", "", string(msg.Src), string(msg.Dst))
 			}
-			c.state.SendBufHeadBusy[color][i] = false
+			c.state.sendQueueConsume(color, i)
+			madeProgress = true
 		}
 	}
 
 	// handle the memory request
 
-	if c.state.SendBufHeadBusy[c.emu.getColorIndex("R")][cgra.Router] { // only one port, must be Router-red
+	routerColor := c.emu.getColorIndex("R")
+	if c.state.sendQueueHasData(routerColor, int(cgra.Router)) { // only one port, must be Router-red
+		head, ok := c.state.sendQueuePeek(routerColor, int(cgra.Router))
+		if !ok {
+			return madeProgress
+		}
 		if c.state.IsToWriteMemory {
+			physAddr := c.state.SharedMemoryBase + c.state.AddrBuf
 			msg := mem.WriteReqBuilder{}.
-				WithAddress(uint64(c.state.AddrBuf)).
-				WithData(makeBytesFromUint32(c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router].First())).
+				WithAddress(uint64(physAddr) * 4).
+				WithData(makeBytesFromUint32(head.First())).
 				WithSrc(c.ports[cgra.Router].local.AsRemote()).
 				WithDst(c.ports[cgra.Router].remote).
 				Build()
@@ -168,25 +194,44 @@ func (c *Core) doSend() bool {
 			if err != nil {
 				return madeProgress
 			}
+			if c.state.PendingMemoryOp != nil && c.state.PendingMemoryOp.IsWrite && !c.state.PendingMemoryOp.RequestSent {
+				c.state.PendingMemoryOp.RequestID = msg.ID
+				c.state.PendingMemoryOp.RequestSent = true
+			}
 
 			timeValue := float64(c.Engine.CurrentTime() * 1e9)
 			if TraceEnabled() {
+				opID := 0
+				addr := c.state.AddrBuf
+				if c.state.PendingMemoryOp != nil {
+					opID = c.state.PendingMemoryOp.OpID
+					addr = c.state.PendingMemoryOp.Address
+				}
+				physAddr = c.state.SharedMemoryBase + addr
 				Trace("Memory",
 					"Behavior", "Send",
 					slog.Float64("Time", timeValue),
-					"Data", c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router].First(),
-					"Pred", c.state.SendBufHead[c.emu.getColorIndex("R")][cgra.Router].Pred,
+					"OpID", opID,
+					"OpCode", "STORE",
+					"Addr", addr,
+					"PhysAddr", physAddr,
+					"Data", head.First(),
+					"Pred", head.Pred,
 					"Color", "R",
+					"X", c.state.TileX,
+					"Y", c.state.TileY,
 					"Src", msg.Src,
 					"Dst", msg.Dst,
 				)
 			} else {
 				ObserveMemory("Send", timeValue, int(c.state.TileX), int(c.state.TileY), string(msg.Src), string(msg.Dst))
 			}
-			c.state.SendBufHeadBusy[c.emu.getColorIndex("R")][cgra.Router] = false
+			c.state.sendQueueConsume(routerColor, int(cgra.Router))
+			madeProgress = true
 		} else {
+			physAddr := c.state.SharedMemoryBase + c.state.AddrBuf
 			msg := mem.ReadReqBuilder{}.
-				WithAddress(uint64(c.state.AddrBuf)).
+				WithAddress(uint64(physAddr) * 4).
 				WithSrc(c.ports[cgra.Router].local.AsRemote()).
 				WithDst(c.ports[cgra.Router].remote).
 				WithByteSize(4).
@@ -196,21 +241,39 @@ func (c *Core) doSend() bool {
 			if err != nil {
 				return madeProgress
 			}
+			if c.state.PendingMemoryOp != nil && !c.state.PendingMemoryOp.IsWrite && !c.state.PendingMemoryOp.RequestSent {
+				c.state.PendingMemoryOp.RequestID = msg.ID
+				c.state.PendingMemoryOp.RequestSent = true
+			}
 
 			timeValue := float64(c.Engine.CurrentTime() * 1e9)
 			if TraceEnabled() {
+				opID := 0
+				addr := c.state.AddrBuf
+				if c.state.PendingMemoryOp != nil {
+					opID = c.state.PendingMemoryOp.OpID
+					addr = c.state.PendingMemoryOp.Address
+				}
+				physAddr = c.state.SharedMemoryBase + addr
 				Trace("Memory",
 					"Behavior", "Send",
 					slog.Float64("Time", timeValue),
+					"OpID", opID,
+					"OpCode", "LOAD",
+					"Addr", addr,
+					"PhysAddr", physAddr,
 					"Data", c.state.AddrBuf,
 					"Color", "R",
+					"X", c.state.TileX,
+					"Y", c.state.TileY,
 					"Src", msg.Src,
 					"Dst", msg.Dst,
 				)
 			} else {
 				ObserveMemory("Send", timeValue, int(c.state.TileX), int(c.state.TileY), string(msg.Src), string(msg.Dst))
 			}
-			c.state.SendBufHeadBusy[c.emu.getColorIndex("R")][cgra.Router] = false
+			c.state.sendQueueConsume(routerColor, int(cgra.Router))
+			madeProgress = true
 		}
 	}
 
@@ -238,7 +301,7 @@ func (c *Core) doRecv() bool {
 		for color := 0; color < 4; color++ {
 			//fmt.Printf("%s Receiving Data with color %d. Recv buffer head: %+v\n",
 			//	c.Name(), color, c.state.RecvBufHeadReady[color][i])
-			if c.state.RecvBufHeadReady[color][i] {
+			if c.state.recvQueueIsFull(color, i) {
 				continue
 			}
 
@@ -247,8 +310,9 @@ func (c *Core) doRecv() bool {
 				continue
 			}
 
-			c.state.RecvBufHeadReady[color][i] = true
-			c.state.RecvBufHead[color][i] = msg.Data
+			if !c.state.recvQueuePush(color, i, msg.Data) {
+				continue
+			}
 
 			timeValue := float64(c.Engine.CurrentTime() * 1e9)
 			if TraceEnabled() {
@@ -256,7 +320,7 @@ func (c *Core) doRecv() bool {
 					"Behavior", "Recv",
 					"Time", timeValue,
 					"Data", msg.Data.First(),
-					"Pred", c.state.RecvBufHead[color][i].Pred,
+					"Pred", msg.Data.Pred,
 					"Src", msg.Src,
 					"Dst", msg.Dst,
 					"Color", color,
@@ -274,14 +338,46 @@ func (c *Core) doRecv() bool {
 	if item == nil {
 		return madeProgress
 	}
-	if c.state.RecvBufHeadReady[c.emu.getColorIndex("R")][cgra.Router] {
+	routerColor := c.emu.getColorIndex("R")
+	routerDir := int(cgra.Router)
+	if c.state.recvQueueIsFull(routerColor, routerDir) {
 		return madeProgress
 	}
 
 	// if msg is DataReadyRsp, then the data is ready
 	if msg, ok := item.(*mem.DataReadyRsp); ok {
-		c.state.RecvBufHeadReady[c.emu.getColorIndex("R")][cgra.Router] = true
-		c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router] = cgra.NewScalar(convert4BytesToUint32(msg.Data))
+		if c.state.PendingMemoryOp != nil &&
+			!c.state.PendingMemoryOp.IsWrite &&
+			c.state.PendingMemoryOp.RequestSent &&
+			msg.RespondTo == c.state.PendingMemoryOp.RequestID {
+			value := cgra.NewScalar(convert4BytesToUint32(msg.Data))
+			c.state.PendingMemoryOp.DataReady = &value
+			c.ports[cgra.Router].local.RetrieveIncoming()
+			timeValue := float64(c.Engine.CurrentTime() * 1e9)
+			if TraceEnabled() {
+				Trace("Memory",
+					"Behavior", "Recv",
+					"Time", timeValue,
+					"OpID", c.state.PendingMemoryOp.OpID,
+					"OpCode", c.state.PendingMemoryOp.OpCode,
+					"Addr", c.state.PendingMemoryOp.Address,
+					"PhysAddr", c.state.SharedMemoryBase+c.state.PendingMemoryOp.Address,
+					"Data", msg.Data,
+					"Src", msg.Src,
+					"Dst", msg.Dst,
+					"Pred", value.Pred,
+					"Color", "R",
+					"X", c.state.TileX,
+					"Y", c.state.TileY,
+				)
+			}
+			madeProgress = true
+			return madeProgress
+		}
+		value := cgra.NewScalar(convert4BytesToUint32(msg.Data))
+		if !c.state.recvQueuePush(routerColor, routerDir, value) {
+			return madeProgress
+		}
 
 		timeValue := float64(c.Engine.CurrentTime() * 1e9)
 		if TraceEnabled() {
@@ -291,7 +387,7 @@ func (c *Core) doRecv() bool {
 				"Data", msg.Data,
 				"Src", msg.Src,
 				"Dst", msg.Dst,
-				"Pred", c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router].Pred,
+				"Pred", value.Pred,
 				"Color", "R",
 			)
 		} else {
@@ -301,8 +397,37 @@ func (c *Core) doRecv() bool {
 		c.ports[cgra.Router].local.RetrieveIncoming()
 		madeProgress = true
 	} else if msg, ok := item.(*mem.WriteDoneRsp); ok {
-		c.state.RecvBufHeadReady[c.emu.getColorIndex("R")][cgra.Router] = true
-		c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router] = cgra.NewScalar(0)
+		if c.state.PendingMemoryOp != nil &&
+			c.state.PendingMemoryOp.IsWrite &&
+			c.state.PendingMemoryOp.RequestSent &&
+			msg.RespondTo == c.state.PendingMemoryOp.RequestID {
+			c.state.PendingMemoryOp.WriteDone = true
+			c.ports[cgra.Router].local.RetrieveIncoming()
+			timeValue := float64(c.Engine.CurrentTime() * 1e9)
+			if TraceEnabled() {
+				Trace("Memory",
+					"Behavior", "Recv",
+					"Time", timeValue,
+					"OpID", c.state.PendingMemoryOp.OpID,
+					"OpCode", c.state.PendingMemoryOp.OpCode,
+					"Addr", c.state.PendingMemoryOp.Address,
+					"PhysAddr", c.state.SharedMemoryBase+c.state.PendingMemoryOp.Address,
+					"Data", c.state.PendingMemoryOp.Value,
+					"Src", msg.Src,
+					"Dst", msg.Dst,
+					"Pred", c.state.PendingMemoryOp.Pred,
+					"Color", "R",
+					"X", c.state.TileX,
+					"Y", c.state.TileY,
+				)
+			}
+			madeProgress = true
+			return madeProgress
+		}
+		value := cgra.NewScalar(0)
+		if !c.state.recvQueuePush(routerColor, routerDir, value) {
+			return madeProgress
+		}
 
 		timeValue := float64(c.Engine.CurrentTime() * 1e9)
 		if TraceEnabled() {
@@ -311,7 +436,7 @@ func (c *Core) doRecv() bool {
 				"Time", timeValue,
 				"Src", msg.Src,
 				"Dst", msg.Dst,
-				"Pred", c.state.RecvBufHead[c.emu.getColorIndex("R")][cgra.Router].Pred,
+				"Pred", value.Pred,
 				"Color", "R",
 			)
 		} else {

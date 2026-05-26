@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
-Convert Zeonica asm files to YAML compatible with core.LoadProgramFileFromYAML.
+Convert Zeonica asm files to YAML for core.LoadProgramFileFromYAML.
 
-Assumptions:
-- ASM uses PE(x,y) blocks and { ... } (idx_per_ii=N) instruction groups.
-- Operation lines contain "(t=..., inv_iters=...)" metadata.
+PE(*,*) + # Array Size: R x C broadcasts the template to an R x C mesh.
+
+Optional tiling / unrolling (same expansion for GEMM and GEMV):
+  # GEMM Shape: M=... N=... K=...
+  # GEMV Shape: M=... N=... [K=...]   # K defaults to N (reduction length)
+
+Requires M % R == 0 and N % C == 0. See expand_simd_template.
 """
 
 from __future__ import annotations
@@ -26,7 +30,12 @@ ARRAY_SIZE_RE = re.compile(r"#\s*Array\s*Size:\s*(\d+)\s*[xX]\s*(\d+)")
 GEMM_HEADER_RE = re.compile(
     r"#\s*GEMM\s+(?:Shape\s*)?:\s*M\s*=\s*(\d+)\s*[,\s]+\s*N\s*=\s*(\d+)\s*[,\s]+\s*K\s*=\s*(\d+)"
 )
+# GEMV: A is M x N; K optional (inner dim), defaults to N — K is stored in GemmMeta for consistency.
+GEMV_HEADER_RE = re.compile(
+    r"#\s*GEMV\s+(?:Shape\s*)?:\s*M\s*=\s*(\d+)\s*[,\s]+\s*N\s*=\s*(\d+)(?:\s*[,\s]+\s*K\s*=\s*(\d+))?"
+)
 REGISTER_RE = re.compile(r"^\$(\d+)$")
+LINE_PREFIX_RE = re.compile(r"^\d+\|\s*")
 
 
 @dataclass
@@ -99,14 +108,27 @@ def parse_operands(segment: str) -> List[Dict[str, str]]:
     return [parse_operand(match.group(1)) for match in OPERAND_RE.finditer(segment)]
 
 
-def parse_operation_line(line: str) -> Optional[Tuple[str, int, int, List[Dict[str, str]], List[Dict[str, str]]]]:
-    meta_match = OP_META_RE.search(line)
-    if not meta_match:
+def parse_operation_line(
+    line: str,
+    default_time_step: Optional[int] = None,
+    default_invalid_iterations: int = 0,
+) -> Optional[Tuple[str, int, int, List[Dict[str, str]], List[Dict[str, str]]]]:
+    line = LINE_PREFIX_RE.sub("", line).strip()
+    if not line:
         return None
-    time_step = int(meta_match.group(1))
-    invalid_iters = int(meta_match.group(2))
 
-    op_part = line[: meta_match.start()].strip()
+    meta_match = OP_META_RE.search(line)
+    if meta_match:
+        time_step = int(meta_match.group(1))
+        invalid_iters = int(meta_match.group(2))
+        op_part = line[: meta_match.start()].strip()
+    else:
+        # Some asm files omit "(t=..., inv_iters=...)" for secondary ops in a group.
+        # Keep those ops by falling back to the group index as time_step.
+        time_step = default_time_step if default_time_step is not None else 0
+        invalid_iters = default_invalid_iterations
+        op_part = line
+
     if not op_part:
         return None
 
@@ -238,13 +260,26 @@ def parse_asm(lines: Iterable[str]) -> Tuple[List[CoreProgram], int, int, int]:
             gemm_header_match = GEMM_HEADER_RE.match(line)
             if gemm_header_match:
                 if gemm_meta is not None:
-                    raise ValueError("Multiple '# GEMM:' headers are not supported.")
+                    raise ValueError("Shape header already set (use only one GEMM or GEMV line).")
                 gemm_m = int(gemm_header_match.group(1))
                 gemm_n = int(gemm_header_match.group(2))
                 gemm_k = int(gemm_header_match.group(3))
                 if gemm_m <= 0 or gemm_n <= 0 or gemm_k <= 0:
                     raise ValueError("GEMM dimensions must be positive in '# GEMM: M= N= K='.")
                 gemm_meta = GemmMeta(m=gemm_m, n=gemm_n, k=gemm_k)
+
+            gemv_header_match = GEMV_HEADER_RE.match(line)
+            if gemv_header_match:
+                if gemm_meta is not None:
+                    raise ValueError("Shape header already set (use only one GEMM or GEMV line).")
+                gemv_m = int(gemv_header_match.group(1))
+                gemv_n = int(gemv_header_match.group(2))
+                k_opt = gemv_header_match.group(3)
+                gemv_k = int(k_opt) if k_opt is not None else gemv_n
+                if gemv_m <= 0 or gemv_n <= 0 or gemv_k <= 0:
+                    raise ValueError("GEMV dimensions must be positive in '# GEMV Shape: M= N= [K=]'.")
+                # Same tiling as GEMM on the M x N face of A; K is carried for tooling / validation.
+                gemm_meta = GemmMeta(m=gemv_m, n=gemv_n, k=gemv_k)
             continue
 
         pe_broadcast_match = PE_BROADCAST_RE.match(line)
@@ -293,7 +328,7 @@ def parse_asm(lines: Iterable[str]) -> Tuple[List[CoreProgram], int, int, int]:
             for op_line in group_lines:
                 if not op_line or op_line.startswith("#"):
                     continue
-                parsed = parse_operation_line(op_line)
+                parsed = parse_operation_line(op_line, default_time_step=0, default_invalid_iterations=0)
                 if not parsed:
                     continue
                 opcode, time_step, invalid_iters, src_ops, dst_ops = parsed
@@ -336,7 +371,7 @@ def parse_asm(lines: Iterable[str]) -> Tuple[List[CoreProgram], int, int, int]:
         ordered_cores = expand_simd_template(template_groups, columns, rows, gemm_meta)
     else:
         if gemm_meta is not None:
-            raise ValueError("GEMM header currently requires PE(*,*) template input.")
+            raise ValueError("GEMM/GEMV shape header requires PE(*,*) template input.")
         if max_x < 0 or max_y < 0:
             raise ValueError("No PE blocks found in asm.")
         columns = max_x + 1
@@ -383,7 +418,9 @@ def emit_yaml(
             lines.append("              operations:")
             for op in group.operations:
                 lines.append(f"                - opcode: {quote(op.opcode)}")
-                lines.append(f"                  id: {op.op_id}")
+                # Keep op ID uniform to match the ASM loader behavior and avoid
+                # large per-op bookkeeping overhead in long unrolled programs.
+                lines.append("                  id: 0")
                 lines.append(f"                  time_step: {op.time_step}")
                 lines.append(f"                  invalid_iterations: {op.invalid_iterations}")
                 if op.src_operands:

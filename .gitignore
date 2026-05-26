@@ -23,6 +23,22 @@ output/
 
 # logs
 *.log
+*.json.log
+
+# generated reports and traces
+*.report.json
+tmp-generated-*
+**/collected_reports*/
+**/sweep_reports*/
+**/sweep_reports_micro*/
+latest_collected_reports
+
+# local build artifacts
+/main
+
+# Python caches
+__pycache__/
+*.pyc
 
 .venv/
 venv/

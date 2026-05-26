@@ -2,6 +2,8 @@ package runtimecfg
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/sarchlab/zeonica/report"
 )
@@ -30,7 +32,17 @@ func (r *Runtime) BuildReportOptions(topN int, passed *bool, mismatchCount *int)
 
 // DefaultReportPath returns the default output path for report JSON.
 func (r *Runtime) DefaultReportPath() string {
-	return fmt.Sprintf("%s.report.json", r.Config.TestName)
+	reportName := fmt.Sprintf("%s.report.json", r.Config.TestName)
+	if r.Config.LogPath == "" {
+		return reportName
+	}
+
+	dir := filepath.Dir(r.Config.LogPath)
+	if dir == "." || dir == "" {
+		return reportName
+	}
+
+	return filepath.Join(dir, reportName)
 }
 
 // GenerateAndSaveReport generates report data and persists it as JSON.
@@ -51,6 +63,11 @@ func (r *Runtime) GenerateAndSaveReport(topN int, passed *bool, mismatchCount *i
 	}
 
 	reportPath := r.DefaultReportPath()
+	if dir := filepath.Dir(reportPath); dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return report.Report{}, "", fmt.Errorf("create report directory: %w", err)
+		}
+	}
 	if err := report.SaveJSON(result, reportPath); err != nil {
 		return report.Report{}, "", fmt.Errorf("save report json: %w", err)
 	}

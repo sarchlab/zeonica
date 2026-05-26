@@ -1,0 +1,3 @@
+default_latency: 1
+opcodes:
+    CTRL_MOV: 2

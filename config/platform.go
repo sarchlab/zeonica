@@ -6,12 +6,14 @@ import (
 	"github.com/sarchlab/akita/v4/mem/idealmemcontroller"
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/cgra"
+	"github.com/sarchlab/zeonica/core"
 )
 
 type tileCore interface {
 	sim.Component
 	MapProgram(program interface{}, x int, y int)
 	SetRemotePort(side cgra.Side, port sim.RemotePort)
+	SetSharedSRAMAccessor(accessor core.SharedSRAMAccessor)
 	GetMemory(x int, y int, addr uint32) uint32
 	WriteMemory(x int, y int, data uint32, baseAddr uint32)
 	GetTileX() int
@@ -22,7 +24,8 @@ type tileCore interface {
 
 type tile struct {
 	Core                   tileCore
-	SharedMemoryController *idealmemcontroller.Comp
+	SharedMemoryController sim.Component
+	SharedMemoryBase       uint32
 }
 
 func (t tile) GetTickingComponent() sim.Component {
@@ -78,10 +81,41 @@ func (t tile) WriteMemory(x int, y int, data uint32, baseAddr uint32) {
 
 func (t tile) WriteSharedMemory(x int, y int, data []byte, baseAddr uint32) { // x, y is useless here
 	fmt.Println("WriteSharedMemory(", x, ",", y, ") ", baseAddr, " <- ", data)
-	err := t.SharedMemoryController.Storage.Write(uint64(baseAddr), data)
+	var err error
+	byteAddr := (t.SharedMemoryBase + baseAddr) * 4
+	switch controller := t.SharedMemoryController.(type) {
+	case *idealmemcontroller.Comp:
+		err = controller.Storage.Write(uint64(byteAddr), data)
+	case interface {
+		WriteStorage(addr uint32, data []byte) error
+	}:
+		err = controller.WriteStorage(byteAddr, data)
+	default:
+		panic("shared memory controller does not support preload")
+	}
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (t tile) ReadSharedMemory(x int, y int, addr uint32) uint32 { // x, y is useless here
+	var data []byte
+	var err error
+	byteAddr := (t.SharedMemoryBase + addr) * 4
+	switch controller := t.SharedMemoryController.(type) {
+	case *idealmemcontroller.Comp:
+		data, err = controller.Storage.Read(uint64(byteAddr), 4)
+	case interface {
+		ReadStorage(addr uint32, size uint64) ([]byte, error)
+	}:
+		data, err = controller.ReadStorage(byteAddr, 4)
+	default:
+		panic("shared memory controller does not support readback")
+	}
+	if err != nil {
+		panic(err)
+	}
+	return uint32(data[0])<<24 | uint32(data[1])<<16 | uint32(data[2])<<8 | uint32(data[3])
 }
 
 // SetRemotePort sets the port that the core can send data to.
@@ -104,7 +138,7 @@ type device struct {
 	Name                    string
 	Width, Height           int
 	Tiles                   [][]*tile
-	SharedMemoryControllers []*idealmemcontroller.Comp
+	SharedMemoryControllers []sim.Component
 }
 
 // GetSize returns the width and height of the device.

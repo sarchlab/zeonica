@@ -64,8 +64,11 @@ type YAMLRoot struct {
 
 // Program is the internal executable representation for one core.
 type Program struct {
-	EntryBlocks []EntryBlock
-	CompiledII  int
+	EntryBlocks             []EntryBlock
+	CompiledII              int
+	DerivedTiming           map[int][]int64
+	OperationLatencies      map[string]int
+	DefaultOperationLatency int
 }
 
 // EntryBlock is one entry block in a core program.
@@ -136,6 +139,15 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 	}
 
 	config := root.ArrayConfig
+
+	derivedTimingByCoord, err := loadDerivedTimingFromEnv()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load timing sidecar: %v", err))
+	}
+	operationLatencies, defaultOperationLatency, err := loadOperationLatencyProfileFromEnv()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load operation latency sidecar: %v", err))
+	}
 
 	if DebugEnabled() {
 		slog.Debug("ParsedProgramConfig", "rows", config.Rows, "cols", config.Cols, "cores", len(config.Cores))
@@ -212,14 +224,31 @@ func LoadProgramFileFromYAML(programFilePath string) map[string]Program {
 		}
 
 		program := Program{
-			EntryBlocks: entryBlocks,
-			CompiledII:  config.CompiledII,
+			EntryBlocks:             entryBlocks,
+			CompiledII:              config.CompiledII,
+			DerivedTiming:           cloneDerivedTimingMap(derivedTimingByCoord[coordKey]),
+			OperationLatencies:      cloneOperationLatencyMap(operationLatencies),
+			DefaultOperationLatency: defaultOperationLatency,
 		}
 
 		programMap[coordKey] = program
 	}
 
 	return programMap
+}
+
+// OperationLatency returns the configured latency for an opcode, defaulting to 1.
+func (p Program) OperationLatency(opCode string) int {
+	normalized := normalizeLatencyOpcode(opCode)
+	if normalized != "" && len(p.OperationLatencies) > 0 {
+		if latency, ok := p.OperationLatencies[normalized]; ok && latency > 0 {
+			return latency
+		}
+	}
+	if p.DefaultOperationLatency > 0 {
+		return p.DefaultOperationLatency
+	}
+	return 1
 }
 
 // splitRespectingBrackets splits a string by delimiter, but respects brackets
