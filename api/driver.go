@@ -30,6 +30,12 @@ type Driver interface {
 	// cycle.
 	Collect(data []uint32, side cgra.Side, portRange [2]int, stride int, color string)
 
+	// FeedInDataToCore injects vector/scalar data tokens into a specific core port.
+	FeedInDataToCore(data []cgra.Data, core [2]int, side cgra.Side, color string)
+
+	// CollectDataFromCore collects vector/scalar data tokens from a specific core port.
+	CollectDataFromCore(data []cgra.Data, core [2]int, side cgra.Side, color string)
+
 	// MapProgram maps to the provided program to a core at the given coordinate.
 	MapProgram(program interface{}, core [2]int)
 
@@ -59,8 +65,10 @@ type driverImpl struct {
 	device      cgra.Device
 	portFactory portFactory
 
-	feedInTasks  [4][]*feedInTask  //Four Directions, every direction has a task queue.
-	collectTasks [4][]*collectTask //Four Directions
+	feedInTasks      [4][]*feedInTask  //Four Directions, every direction has a task queue.
+	collectTasks     [4][]*collectTask //Four Directions
+	dataFeedTasks    []*dataFeedTask
+	dataCollectTasks []*dataCollectTask
 }
 
 // PerPEKernels maps each PE coordinate to a kernel/program payload.
@@ -90,6 +98,8 @@ func (d *driverImpl) ReadSharedMemory(x int, y int, addr uint32) uint32 {
 func (d *driverImpl) Tick() (madeProgress bool) {
 	madeProgress = d.doFeedIn() || madeProgress
 	madeProgress = d.doCollect() || madeProgress
+	madeProgress = d.doDataFeedIn() || madeProgress
+	madeProgress = d.doDataCollect() || madeProgress
 
 	return madeProgress
 }
@@ -474,6 +484,102 @@ func (d *driverImpl) Collect(
 	sideIndex := int(side)
 	//fmt.Println(color)
 	d.collectTasks[sideIndex] = append(d.collectTasks[sideIndex], task)
+}
+
+type dataFeedTask struct {
+	data  []cgra.Data
+	core  [2]int
+	side  cgra.Side
+	color int
+	next  int
+}
+
+func (t *dataFeedTask) isFinished() bool {
+	return t.next >= len(t.data)
+}
+
+type dataCollectTask struct {
+	data  []cgra.Data
+	core  [2]int
+	side  cgra.Side
+	color int
+	next  int
+}
+
+func (t *dataCollectTask) isFinished() bool {
+	return t.next >= len(t.data)
+}
+
+func (d *driverImpl) FeedInDataToCore(data []cgra.Data, coreCoord [2]int, side cgra.Side, color string) {
+	d.dataFeedTasks = append(d.dataFeedTasks, &dataFeedTask{
+		data:  data,
+		core:  coreCoord,
+		side:  side,
+		color: d.getColorIndex(color),
+	})
+}
+
+func (d *driverImpl) CollectDataFromCore(data []cgra.Data, coreCoord [2]int, side cgra.Side, color string) {
+	d.device.GetTile(coreCoord[0], coreCoord[1]).EnableHostDrain(side)
+	d.dataCollectTasks = append(d.dataCollectTasks, &dataCollectTask{
+		data:  data,
+		core:  coreCoord,
+		side:  side,
+		color: d.getColorIndex(color),
+	})
+}
+
+func (d *driverImpl) doDataFeedIn() bool {
+	madeProgress := false
+	for _, task := range d.dataFeedTasks {
+		if task.isFinished() {
+			continue
+		}
+		tile := d.device.GetTile(task.core[0], task.core[1])
+		if !tile.InjectData(task.side, task.color, task.data[task.next]) {
+			continue
+		}
+		d.Engine.Schedule(sim.MakeTickEvent(tile.GetTickingComponent(), d.Engine.CurrentTime()))
+		task.next++
+		madeProgress = true
+	}
+	d.removeFinishedDataFeedTasks()
+	return madeProgress
+}
+
+func (d *driverImpl) removeFinishedDataFeedTasks() {
+	for idx := len(d.dataFeedTasks) - 1; idx >= 0; idx-- {
+		if d.dataFeedTasks[idx].isFinished() {
+			d.dataFeedTasks = append(d.dataFeedTasks[:idx], d.dataFeedTasks[idx+1:]...)
+		}
+	}
+}
+
+func (d *driverImpl) doDataCollect() bool {
+	madeProgress := false
+	for _, task := range d.dataCollectTasks {
+		if task.isFinished() {
+			continue
+		}
+		tile := d.device.GetTile(task.core[0], task.core[1])
+		data, ok := tile.DrainData(task.side, task.color)
+		if !ok {
+			continue
+		}
+		task.data[task.next] = data.Clone()
+		task.next++
+		madeProgress = true
+	}
+	d.removeFinishedDataCollectTasks()
+	return madeProgress
+}
+
+func (d *driverImpl) removeFinishedDataCollectTasks() {
+	for idx := len(d.dataCollectTasks) - 1; idx >= 0; idx-- {
+		if d.dataCollectTasks[idx].isFinished() {
+			d.dataCollectTasks = append(d.dataCollectTasks[:idx], d.dataCollectTasks[idx+1:]...)
+		}
+	}
 }
 
 // MapProgram dispatches a program to a core.

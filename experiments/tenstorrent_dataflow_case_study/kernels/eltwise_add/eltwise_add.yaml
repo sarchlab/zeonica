@@ -1,0 +1,22 @@
+array_config:
+  rows: 1
+  columns: 1
+  cores:
+  - row: 0
+    column: 0
+    core_id: core_0_0
+    entries:
+    - entry_id: entry0
+      type: loop
+      instructions:
+      - operations:
+        - opcode: ADD
+          src_operands:
+          - operand: West
+            color: R
+          - operand: North
+            color: R
+          dst_operands:
+          - operand: East
+            color: R
+          id: 0

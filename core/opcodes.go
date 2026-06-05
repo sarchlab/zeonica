@@ -8,24 +8,25 @@ type returnOpcodeFunc func(Operation, *coreState, float64) map[Operand]cgra.Data
 
 func (i instEmulator) scalarOpcodeFuncs() map[string]opcodeFunc {
 	return map[string]opcodeFunc{
-		"ADD":       i.runAdd, // ADD, ADDI, INC, SUB, DEC
-		"SUB":       i.runSub,
-		"SHL":       i.runSHL,
-		"LRS":       i.runLRS,
-		"MUL":       i.runMul,    // MULI
-		"MUL_ADD":   i.runMulAdd, // dst = src0 * src1 + src2
-		"DIV":       i.runDiv,
-		"OR":        i.runOR,
-		"XOR":       i.runXOR, // XOR XORI
-		"AND":       i.runAND,
-		"MOV":       i.runMov,
-		"JMP":       i.runJmp,
-		"BNE":       i.runBne,
-		"BEQ":       i.runBeq, // BEQI
-		"BLT":       i.runBlt,
-		"PHI_CONST": i.runPhiConst, // backward compatibility
-		"SEXT":      i.runMov,      // identity operation by now
-		"ZEXT":      i.runMov,      // identity operation by now
+		"ADD":        i.runAdd, // ADD, ADDI, INC, SUB, DEC
+		"SUB":        i.runSub,
+		"SHL":        i.runSHL,
+		"LRS":        i.runLRS,
+		"MUL":        i.runMul,    // MULI
+		"MUL_ADD":    i.runMulAdd, // dst = src0 * src1 + src2
+		"DIV":        i.runDiv,
+		"OR":         i.runOR,
+		"XOR":        i.runXOR, // XOR XORI
+		"AND":        i.runAND,
+		"MOV":        i.runMov,
+		"JMP":        i.runJmp,
+		"BNE":        i.runBne,
+		"BEQ":        i.runBeq, // BEQI
+		"BLT":        i.runBlt,
+		"PHI_CONST":  i.runPhiConst, // backward compatibility
+		"SEXT":       i.runMov,      // identity operation by now
+		"ZEXT":       i.runMov,      // identity operation by now
+		"CAST_TRUNC": i.runMov,      // scalar data path is uint32, so truncation is identity
 
 		"FADD": i.runFAdd, // FADDI
 		"FSUB": i.runFSub,
@@ -75,13 +76,14 @@ func (i instEmulator) scalarOpcodeFuncs() map[string]opcodeFunc {
 
 func (i instEmulator) vectorOpcodeFuncs() map[string]opcodeFunc {
 	return map[string]opcodeFunc{
-		"VBROADCAST":        i.runVBroadcast,
-		"VADD":              i.runVAdd,
-		"VMUL":              i.runVMul,
-		"VECTOR.REDUCE.ADD": i.runVectorReduceAdd,
-		"VEXTRACT":          i.runVExtract,
-		"VLOAD_CONTIG":      i.runVLoadContig,
-		"VSTORE_CONTIG":     i.runVStoreContig,
+		"VBROADCAST":         i.runVBroadcast,
+		"VADD":               i.runVAdd,
+		"VMUL":               i.runVMul,
+		"VECTOR.REDUCE.ADD":  i.runVectorReduceAdd,
+		"VEXTRACT":           i.runVExtract,
+		"VLOAD_CONTIG":       i.runVLoadContig,
+		"VSTORE_CONTIG":      i.runVStoreContig,
+		"TT_MATMUL_TILE_U32": i.runTTMatmulTileU32,
 	}
 }
 
