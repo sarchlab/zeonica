@@ -29,6 +29,7 @@ type Builder struct {
 	vectorLanes           int
 	blockingMemoryOps     bool
 	sharedMemoryBase      uint32
+	coreExecutionModel    string
 }
 
 // WithEngine sets the engine.
@@ -132,6 +133,11 @@ func (b Builder) WithBlockingMemoryOps(enabled bool) Builder {
 	return b
 }
 
+func (b Builder) WithCoreExecutionModel(name string) Builder {
+	b.coreExecutionModel = name
+	return b
+}
+
 func readyHeldTraceEnabledFromEnv() bool {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv("ZEONICA_TRACE_READY_HELD")))
 	return value == "1" || value == "true" || value == "yes" || value == "on"
@@ -175,6 +181,7 @@ func (b Builder) Build(name string) *Core {
 		StrictMaxSlip:         b.strictMaxSlip,
 		StrictFailOnViolation: b.strictFailOnViolation,
 	}
+	c.executionModel = newCoreExecutionModel(b.coreExecutionModel)
 	c.state = coreState{
 		exit:                 b.exitAddr,
 		retVal:               b.retValAddr,

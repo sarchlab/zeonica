@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sarchlab/akita/v4/sim"
+	"github.com/sarchlab/zeonica/core"
 )
 
 func TestDeviceBuilderLocalMemoryWordsPropagatesToTile(t *testing.T) {
@@ -31,6 +32,24 @@ func TestDeviceBuilderLocalMemoryWordsPropagatesToTile(t *testing.T) {
 	}()
 	if !didPanic {
 		t.Fatal("expected out-of-range panic at address 32 with local_memory_words=32")
+	}
+}
+
+func TestDeviceBuilderCoreExecutionModelPropagatesToTile(t *testing.T) {
+	engine := sim.NewSerialEngine()
+	dev := DeviceBuilder{}.
+		WithEngine(engine).
+		WithFreq(1 * sim.GHz).
+		WithWidth(1).
+		WithHeight(1).
+		WithMemoryMode("simple").
+		WithCoreExecutionModel(core.LegacyCGRAPEExecutionModel).
+		Build("Device")
+
+	deviceImpl := dev.(*device)
+	coreImpl := deviceImpl.Tiles[0][0].Core.(*core.Core)
+	if got := coreImpl.CoreExecutionModelName(); got != core.LegacyCGRAPEExecutionModel {
+		t.Fatalf("unexpected core execution model: got %q want %q", got, core.LegacyCGRAPEExecutionModel)
 	}
 }
 

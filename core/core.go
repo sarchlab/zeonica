@@ -21,8 +21,9 @@ type Core struct {
 
 	ports map[cgra.Side]*portPair
 
-	state coreState
-	emu   instEmulator
+	state          coreState
+	emu            instEmulator
+	executionModel CoreExecutionModel
 }
 
 // GetRetVal returns the shared return value.
@@ -43,6 +44,13 @@ func (c *Core) GetTileY() int {
 // GetTickingComponent returns the ticking component wrapper.
 func (c *Core) GetTickingComponent() sim.Component {
 	return c.TickingComponent
+}
+
+func (c *Core) CoreExecutionModelName() string {
+	if c.executionModel == nil {
+		return ""
+	}
+	return c.executionModel.Name()
 }
 
 // GetMemory returns the memory value at addr for this core.
@@ -108,18 +116,17 @@ func (c *Core) MapProgram(program interface{}, x int, y int) {
 	c.state.TileX = uint32(x)
 	c.state.TileY = uint32(y)
 	c.state.WatchedQueues = matchingQueueWatchesForTile(c.state.EnableQueueWatches, c.state.ConfiguredQueueWatches, x, y)
+	if c.executionModel != nil {
+		c.executionModel.Reset(c)
+	}
 }
 
 // Tick runs the program for one cycle.
 func (c *Core) Tick() (madeProgress bool) {
-	madeProgress = c.doRecv() || madeProgress
-	// madeProgress = c.AlwaysPart() || madeProgress
-	// madeProgress = c.emu.runRoutingRules(&c.state) || madeProgress
-	madeProgress = c.runProgram() || madeProgress
-	madeProgress = c.doSend() || madeProgress
-	c.state.observeWatchedQueues(float64(c.Engine.CurrentTime() * 1e9))
-	c.state.CurrentCycle++
-	return madeProgress
+	if c.executionModel == nil {
+		c.executionModel = newCoreExecutionModel("")
+	}
+	return c.executionModel.Tick(c)
 }
 
 func makeBytesFromUint32(data uint32) []byte {

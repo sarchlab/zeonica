@@ -116,6 +116,9 @@ func TestResolveMicroarchitectureDefaults(t *testing.T) {
 	if cfg.NumRegisters != 64 || cfg.LocalMemoryWords != 1024 {
 		t.Fatalf("unexpected tile defaults: regs=%d mem=%d", cfg.NumRegisters, cfg.LocalMemoryWords)
 	}
+	if cfg.CoreExecutionModel != core.LegacyCGRAPEExecutionModel {
+		t.Fatalf("unexpected core execution model default: %q", cfg.CoreExecutionModel)
+	}
 	if cfg.MemoryMode != "simple" {
 		t.Fatalf("unexpected memory mode default: %q", cfg.MemoryMode)
 	}
@@ -220,6 +223,42 @@ func TestResolveVectorModeOverrides(t *testing.T) {
 	}
 	if cfg.VectorLanes != 8 {
 		t.Fatalf("unexpected vector lanes: got %d want 8", cfg.VectorLanes)
+	}
+}
+
+func TestResolveCoreExecutionModelOverride(t *testing.T) {
+	spec := ArchSpec{
+		Simulator: Simulator{
+			Device: DeviceComponent{
+				CoreExecutionModel: core.LegacyCGRAPEExecutionModel,
+			},
+		},
+	}
+
+	cfg, err := Resolve(spec, "core-execution-model")
+	if err != nil {
+		t.Fatalf("Resolve returned error: %v", err)
+	}
+	if cfg.CoreExecutionModel != core.LegacyCGRAPEExecutionModel {
+		t.Fatalf("unexpected core execution model: got %q want %q", cfg.CoreExecutionModel, core.LegacyCGRAPEExecutionModel)
+	}
+}
+
+func TestResolveInvalidCoreExecutionModel(t *testing.T) {
+	spec := ArchSpec{
+		Simulator: Simulator{
+			Device: DeviceComponent{
+				CoreExecutionModel: "unknown_core_model",
+			},
+		},
+	}
+
+	_, err := Resolve(spec, "core-execution-model-invalid")
+	if err == nil {
+		t.Fatal("expected invalid core execution model error")
+	}
+	if !strings.Contains(err.Error(), "unsupported core_execution_model") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

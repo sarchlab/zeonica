@@ -39,6 +39,7 @@ type DeviceBuilder struct {
 	localMemoryWords       int
 	enableVectorPE         bool
 	vectorLanes            int
+	coreExecutionModel     string
 }
 
 // type portFactory interface {
@@ -166,6 +167,11 @@ func (d DeviceBuilder) WithLocalMemoryWords(words int) DeviceBuilder {
 func (d DeviceBuilder) WithVectorConfig(enabled bool, lanes int) DeviceBuilder {
 	d.enableVectorPE = enabled
 	d.vectorLanes = lanes
+	return d
+}
+
+func (d DeviceBuilder) WithCoreExecutionModel(name string) DeviceBuilder {
+	d.coreExecutionModel = name
 	return d
 }
 
@@ -315,6 +321,7 @@ func (d DeviceBuilder) createTiles(
 				WithVectorConfig(d.enableVectorPE, d.vectorLanes).
 				WithBlockingMemoryOps(d.memoryMode == "shared").
 				WithSharedMemoryBase(d.sharedMemoryBase[[2]int{x, y}]).
+				WithCoreExecutionModel(d.coreExecutionModel).
 				Build(coreName)
 
 			if d.monitor != nil {

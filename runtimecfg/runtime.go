@@ -39,6 +39,7 @@ const (
 	defaultLocalMemoryWords              = 1024
 	defaultEnableVectorPE                = false
 	defaultVectorLanes                   = 1
+	defaultCoreExecutionModel            = core.LegacyCGRAPEExecutionModel
 	defaultMemoryMode                    = "simple"
 	defaultSharedMemoryModel             = "ideal"
 	defaultSharedMemoryBanks             = 1
@@ -77,6 +78,7 @@ type ResolvedConfig struct {
 	CorePortOutgoingBufferDepth   int
 	NumRegisters                  int
 	LocalMemoryWords              int
+	CoreExecutionModel            string
 	EnableVectorPE                bool
 	VectorLanes                   int
 	MemoryMode                    string
@@ -183,6 +185,7 @@ func ResolveWithSpecPath(spec ArchSpec, specPath, testName string) (ResolvedConf
 		CorePortOutgoingBufferDepth:   defaultCorePortOutgoingBufferDepth,
 		NumRegisters:                  defaultNumRegisters,
 		LocalMemoryWords:              defaultLocalMemoryWords,
+		CoreExecutionModel:            defaultOrString(spec.Simulator.Device.CoreExecutionModel, defaultCoreExecutionModel),
 		EnableVectorPE:                defaultOrBool(spec.Simulator.Device.EnableVectorPE, defaultEnableVectorPE),
 		VectorLanes:                   defaultVectorLanes,
 		MemoryMode:                    defaultMemoryMode,
@@ -203,6 +206,12 @@ func ResolveWithSpecPath(spec ArchSpec, specPath, testName string) (ResolvedConf
 		return ResolvedConfig{}, err
 	}
 	resolved.ExecutionPolicy = normalizedPolicy
+
+	normalizedCoreExecutionModel, err := core.NormalizeCoreExecutionModelName(resolved.CoreExecutionModel)
+	if err != nil {
+		return ResolvedConfig{}, err
+	}
+	resolved.CoreExecutionModel = normalizedCoreExecutionModel
 
 	if envSlip, ok, err := parseInt64Env("ZEONICA_STRICT_MAX_SLIP"); err != nil {
 		return ResolvedConfig{}, err
@@ -419,6 +428,7 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 		WithRegisterCount(cfg.NumRegisters).
 		WithLocalMemoryWords(cfg.LocalMemoryWords).
 		WithVectorConfig(cfg.EnableVectorPE, cfg.VectorLanes).
+		WithCoreExecutionModel(cfg.CoreExecutionModel).
 		Build(cfg.DeviceName)
 
 	if cfg.LinkTimingModel == linkTimingModelParseOnly {

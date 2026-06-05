@@ -92,6 +92,7 @@ type DeviceComponent struct {
 	Name                    string             `yaml:"name"`
 	Frequency               string             `yaml:"frequency"`
 	BindToArchitecture      *bool              `yaml:"bind_to_architecture"`
+	CoreExecutionModel      string             `yaml:"core_execution_model"`
 	EnableVectorPE          *bool              `yaml:"enable_vector_pe"`
 	MemoryMode              string             `yaml:"memory_mode"`
 	MemoryShare             []MemoryShareEntry `yaml:"memory_share"`
