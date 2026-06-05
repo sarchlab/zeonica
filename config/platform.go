@@ -16,6 +16,9 @@ type tileCore interface {
 	SetSharedSRAMAccessor(accessor core.SharedSRAMAccessor)
 	GetMemory(x int, y int, addr uint32) uint32
 	WriteMemory(x int, y int, data uint32, baseAddr uint32)
+	InjectData(side cgra.Side, color int, data cgra.Data) bool
+	DrainData(side cgra.Side, color int) (cgra.Data, bool)
+	EnableHostDrain(side cgra.Side)
 	GetTileX() int
 	GetTileY() int
 	GetRetVal() uint32
@@ -116,6 +119,18 @@ func (t tile) ReadSharedMemory(x int, y int, addr uint32) uint32 { // x, y is us
 		panic(err)
 	}
 	return uint32(data[0])<<24 | uint32(data[1])<<16 | uint32(data[2])<<8 | uint32(data[3])
+}
+
+func (t tile) InjectData(side cgra.Side, color int, data cgra.Data) bool {
+	return t.Core.InjectData(side, color, data)
+}
+
+func (t tile) DrainData(side cgra.Side, color int) (cgra.Data, bool) {
+	return t.Core.DrainData(side, color)
+}
+
+func (t tile) EnableHostDrain(side cgra.Side) {
+	t.Core.EnableHostDrain(side)
 }
 
 // SetRemotePort sets the port that the core can send data to.

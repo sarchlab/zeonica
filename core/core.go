@@ -86,6 +86,18 @@ func (c *Core) SetSharedSRAMAccessor(accessor SharedSRAMAccessor) {
 	c.state.SharedSRAMAccessor = accessor
 }
 
+func (c *Core) InjectData(side cgra.Side, color int, data cgra.Data) bool {
+	return c.state.recvQueuePush(color, int(side), data)
+}
+
+func (c *Core) DrainData(side cgra.Side, color int) (cgra.Data, bool) {
+	return c.state.sendQueueConsume(color, int(side))
+}
+
+func (c *Core) EnableHostDrain(side cgra.Side) {
+	c.state.HostDrainDirections[int(side)] = true
+}
+
 // MapProgram sets the program that the core needs to run.
 func (c *Core) MapProgram(program interface{}, x int, y int) {
 	if prog, ok := program.(Program); ok {
@@ -130,6 +142,9 @@ func makeBytesFromUint32(data uint32) []byte {
 func (c *Core) doSend() bool {
 	madeProgress := false
 	for i := 0; i < 8; i++ { // only 8 directions
+		if c.state.HostDrainDirections[i] {
+			continue
+		}
 		for color := 0; color < 4; color++ {
 			if !c.state.sendQueueHasData(color, i) {
 				continue

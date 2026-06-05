@@ -128,6 +128,47 @@ func (mr *MockTileMockRecorder) ReadSharedMemory(arg0, arg1, arg2 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadSharedMemory", reflect.TypeOf((*MockTile)(nil).ReadSharedMemory), arg0, arg1, arg2)
 }
 
+// InjectData mocks base method.
+func (m *MockTile) InjectData(arg0 cgra.Side, arg1 int, arg2 cgra.Data) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InjectData", arg0, arg1, arg2)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// InjectData indicates an expected call of InjectData.
+func (mr *MockTileMockRecorder) InjectData(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InjectData", reflect.TypeOf((*MockTile)(nil).InjectData), arg0, arg1, arg2)
+}
+
+// DrainData mocks base method.
+func (m *MockTile) DrainData(arg0 cgra.Side, arg1 int) (cgra.Data, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DrainData", arg0, arg1)
+	ret0, _ := ret[0].(cgra.Data)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// DrainData indicates an expected call of DrainData.
+func (mr *MockTileMockRecorder) DrainData(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DrainData", reflect.TypeOf((*MockTile)(nil).DrainData), arg0, arg1)
+}
+
+// EnableHostDrain mocks base method.
+func (m *MockTile) EnableHostDrain(arg0 cgra.Side) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "EnableHostDrain", arg0)
+}
+
+// EnableHostDrain indicates an expected call of EnableHostDrain.
+func (mr *MockTileMockRecorder) EnableHostDrain(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableHostDrain", reflect.TypeOf((*MockTile)(nil).EnableHostDrain), arg0)
+}
+
 // GetPort mocks base method.
 func (m *MockTile) GetPort(arg0 cgra.Side) sim.Port {
 	m.ctrl.T.Helper()

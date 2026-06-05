@@ -78,6 +78,9 @@ type Tile interface {
 	WriteMemory(x int, y int, data uint32, baseAddr uint32)
 	WriteSharedMemory(x int, y int, data []byte, baseAddr uint32)
 	ReadSharedMemory(x int, y int, addr uint32) uint32
+	InjectData(side Side, color int, data Data) bool
+	DrainData(side Side, color int) (Data, bool)
+	EnableHostDrain(side Side)
 	GetTileX() int
 	GetTileY() int
 	GetRetVal() uint32

@@ -122,6 +122,7 @@ type coreState struct {
 	SendBufQueue           [][][]cgra.Data // [Color][Direction]FIFO
 	RecvQueueCapacity      int
 	SendQueueCapacity      int
+	HostDrainDirections    map[int]bool
 	EnableFIFOModel        bool
 	EnableVectorPE         bool
 	VectorLanes            int
@@ -1963,7 +1964,9 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 	vectorFuncs := i.vectorOpcodeFuncs()
 	retFuncs := i.returnOpcodeFuncs()
 
-	if instFunc, ok := vectorFuncs[instName]; ok {
+	if instName == "TT_MATMUL_TILE_U32" {
+		return i.runTTMatmulTileU32(inst, state)
+	} else if instFunc, ok := vectorFuncs[instName]; ok {
 		return instFunc(inst, state)
 	} else if instFunc, ok := instFuncs[instName]; ok {
 		i.rejectVectorSourcesForScalarOp(inst, state)
@@ -2224,6 +2227,54 @@ func (i instEmulator) runVStoreContig(inst Operation, state *coreState) map[Oper
 	}
 	copy(state.Memory[base:base+lanes], src.Data)
 	return nil
+}
+
+const ttMatmulTileEdge = 32
+
+func (i instEmulator) runTTMatmulTileU32(inst Operation, state *coreState) map[Operand]cgra.Data {
+	if len(inst.SrcOperands.Operands) < 2 {
+		panic("TT_MATMUL_TILE_U32 requires A and B panel operands")
+	}
+	if len(inst.DstOperands.Operands) == 0 {
+		panic("TT_MATMUL_TILE_U32 requires at least one destination operand")
+	}
+
+	aPanel := i.readOperand(inst.SrcOperands.Operands[0], state)
+	bPanel := i.readOperand(inst.SrcOperands.Operands[1], state)
+	out := ttMatmulTileU32(aPanel, bPanel)
+
+	results := make(map[Operand]cgra.Data)
+	for _, dst := range inst.DstOperands.Operands {
+		results[dst] = out
+	}
+	return results
+}
+
+func ttMatmulTileU32(aPanel, bPanel cgra.Data) cgra.Data {
+	tileElems := ttMatmulTileEdge * ttMatmulTileEdge
+	if len(aPanel.Data) == 0 || len(aPanel.Data)%tileElems != 0 {
+		panic(fmt.Sprintf("TT_MATMUL_TILE_U32 A panel lanes must be a positive multiple of %d", tileElems))
+	}
+	if len(aPanel.Data) != len(bPanel.Data) {
+		panic("TT_MATMUL_TILE_U32 A and B panels must have the same lane count")
+	}
+	kt := len(aPanel.Data) / tileElems
+	out := make([]uint32, tileElems)
+
+	for kTile := 0; kTile < kt; kTile++ {
+		aBase := kTile * tileElems
+		bBase := kTile * tileElems
+		for row := 0; row < ttMatmulTileEdge; row++ {
+			for inner := 0; inner < ttMatmulTileEdge; inner++ {
+				a := aPanel.Data[aBase+row*ttMatmulTileEdge+inner]
+				for col := 0; col < ttMatmulTileEdge; col++ {
+					out[row*ttMatmulTileEdge+col] += a * bPanel.Data[bBase+inner*ttMatmulTileEdge+col]
+				}
+			}
+		}
+	}
+
+	return cgra.FromSlice(out, aPanel.Pred && bPanel.Pred)
 }
 
 func (i instEmulator) getDirecIndex(side string) int {
@@ -3433,9 +3484,6 @@ func (i instEmulator) runPhiStart(inst Operation, state *coreState) map[Operand]
 		src2Struct := i.readOperand(src2, state) // only in normal path will consume src2
 		src2Val := src2Struct.First()
 		src2Pred := src2Struct.Pred
-		if src1Pred && src2Pred {
-			panic("Only one of the predicates of PHI_START can be true at (" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ") instruction " + strconv.Itoa(inst.ID))
-		}
 		if src1Pred {
 			result = src1Val
 			finalPred = src1Pred
