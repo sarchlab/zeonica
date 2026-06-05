@@ -54,6 +54,26 @@ func main() {
 	fmt.Printf("output_tiles=%d\n", outputTiles)
 	fmt.Printf("active_cores=%d\n", activeCores)
 
+	driver := buildDriver()
+	mapProgramToDevice(driver)
+	collectByCore, traceRecords := feedWork(driver)
+	driver.Run()
+
+	output := reassembleOutput(collectByCore, traceRecords)
+	mismatch := compareAgainstGolden(output)
+	fmt.Printf("mismatch=%d\n", mismatch)
+	if mismatch != 0 {
+		panic("matmul multicore demo failed")
+	}
+	if *traceSummaryPath != "" {
+		if err := writeTraceSummary(*traceSummaryPath, traceRecords, mismatch); err != nil {
+			panic(err)
+		}
+		fmt.Printf("trace_summary=%s\n", *traceSummaryPath)
+	}
+}
+
+func buildDriver() api.Driver {
 	engine := sim.NewSerialEngine()
 	driver := api.DriverBuilder{}.
 		WithEngine(engine).
@@ -68,7 +88,10 @@ func main() {
 		WithCorePortBufferDepth(64, 64).
 		Build("Device")
 	driver.RegisterDevice(device)
+	return driver
+}
 
+func mapProgramToDevice(driver api.Driver) {
 	programs := core.LoadProgramFileFromYAML(resolveProgramPath())
 	for x := 0; x < gridWidth; x++ {
 		for y := 0; y < gridHeight; y++ {
@@ -80,7 +103,9 @@ func main() {
 			driver.MapProgram(program, [2]int{x, y})
 		}
 	}
+}
 
+func feedWork(driver api.Driver) ([][]cgra.Data, []tileTraceRecord) {
 	collectByCore := make([][]cgra.Data, activeCores)
 	traceRecords := make([]tileTraceRecord, outputTiles)
 	for coreID := 0; coreID < activeCores; coreID++ {
@@ -111,9 +136,10 @@ func main() {
 		driver.FeedInDataToCore(bPanels, [2]int{x, y}, cgra.North, "R")
 		driver.CollectDataFromCore(collectByCore[coreID], [2]int{x, y}, cgra.East, "R")
 	}
+	return collectByCore, traceRecords
+}
 
-	driver.Run()
-
+func reassembleOutput(collectByCore [][]cgra.Data, traceRecords []tileTraceRecord) []uint32 {
 	output := make([]uint32, matrixM*matrixN)
 	for coreID := 0; coreID < activeCores; coreID++ {
 		startTile := coreID * tilesPerCore
@@ -128,18 +154,7 @@ func main() {
 			writeOutputTile(output, startTile+local, tile.Data)
 		}
 	}
-
-	mismatch := compareAgainstGolden(output)
-	fmt.Printf("mismatch=%d\n", mismatch)
-	if mismatch != 0 {
-		panic("matmul multicore demo failed")
-	}
-	if *traceSummaryPath != "" {
-		if err := writeTraceSummary(*traceSummaryPath, traceRecords, mismatch); err != nil {
-			panic(err)
-		}
-		fmt.Printf("trace_summary=%s\n", *traceSummaryPath)
-	}
+	return output
 }
 
 func resolveProgramPath() string {
@@ -230,10 +245,30 @@ func compareAgainstGolden(output []uint32) int {
 }
 
 func writeTraceSummary(path string, records []tileTraceRecord, mismatch int) error {
-	var complete int
 	var builder strings.Builder
 	builder.WriteString("# Matmul Multicore Trace Summary\n\n")
-	builder.WriteString("This lightweight summary records the logical data-driven lifecycle of each output tile in the TT-Metalium-inspired Zeonica demo. It is not a cycle trace and does not model Wormhole timing.\n\n")
+	writeTraceSummaryIntro(&builder)
+	writeTraceSummaryFields(&builder, mismatch)
+	writeLifecycleCoverage(&builder, records)
+	writeCoreAssignments(&builder)
+	writeTraceSample(&builder, records)
+	writeTraceInterpretation(&builder)
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(builder.String()), 0o644)
+}
+
+func writeTraceSummaryIntro(builder *strings.Builder) {
+	builder.WriteString(
+		"This lightweight summary records the logical data-driven lifecycle " +
+			"of each output tile in the TT-Metalium-inspired Zeonica demo. " +
+			"It is not a cycle trace and does not model Wormhole timing.\n\n",
+	)
+}
+
+func writeTraceSummaryFields(builder *strings.Builder, mismatch int) {
 	builder.WriteString("| Field | Value |\n")
 	builder.WriteString("| --- | --- |\n")
 	builder.WriteString(fmt.Sprintf("| M/K/N | %d/%d/%d |\n", matrixM, matrixK, matrixN))
@@ -244,19 +279,22 @@ func writeTraceSummary(path string, records []tileTraceRecord, mismatch int) err
 	builder.WriteString(fmt.Sprintf("| Tiles per core | %d |\n", tilesPerCore))
 	builder.WriteString("| Data type | uint32 |\n")
 	builder.WriteString(fmt.Sprintf("| CPU golden mismatches | %d |\n\n", mismatch))
+}
 
+func writeLifecycleCoverage(builder *strings.Builder, records []tileTraceRecord) {
 	builder.WriteString("## Lifecycle Coverage\n\n")
-	builder.WriteString("| Tile records | A ready | B ready | Compute after ready | C emitted | C collected | Complete |\n")
+	builder.WriteString(
+		"| Tile records | A ready | B ready | Compute after ready | " +
+			"C emitted | C collected | Complete |\n",
+	)
 	builder.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
 	aReady, bReady, computeReady, cEmitted, cCollected := countTraceStates(records)
-	for _, record := range records {
-		if record.AReady && record.BReady && record.ComputeAfterReady && record.CEmitted && record.CCollected && record.CLanes == tileEdge*tileEdge {
-			complete++
-		}
-	}
+	complete := countCompleteTraceRecords(records)
 	builder.WriteString(fmt.Sprintf("| %d | %d | %d | %d | %d | %d | %d |\n\n",
 		len(records), aReady, bReady, computeReady, cEmitted, cCollected, complete))
+}
 
+func writeCoreAssignments(builder *strings.Builder) {
 	builder.WriteString("## Per-Core Tile Assignment\n\n")
 	builder.WriteString("| Core ID | Coord | Tile start | Tile count |\n")
 	builder.WriteString("| --- | --- | --- | --- |\n")
@@ -264,9 +302,14 @@ func writeTraceSummary(path string, records []tileTraceRecord, mismatch int) err
 		x, y := coreCoord(coreID)
 		builder.WriteString(fmt.Sprintf("| %d | (%d,%d) | %d | %d |\n", coreID, x, y, coreID*tilesPerCore, tilesPerCore))
 	}
+}
 
+func writeTraceSample(builder *strings.Builder, records []tileTraceRecord) {
 	builder.WriteString("\n## Tile Lifecycle Sample\n\n")
-	builder.WriteString("| Tile ID | Core | Out tile | A ready | B ready | Compute after ready | C emitted | C collected | C lanes |\n")
+	builder.WriteString(
+		"| Tile ID | Core | Out tile | A ready | B ready | Compute after ready | " +
+			"C emitted | C collected | C lanes |\n",
+	)
 	builder.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
 	sampleCount := minInt(16, len(records))
 	for i := 0; i < sampleCount; i++ {
@@ -286,14 +329,18 @@ func writeTraceSummary(path string, records []tileTraceRecord, mismatch int) err
 			record.CLanes,
 		))
 	}
+}
 
+func writeTraceInterpretation(builder *strings.Builder) {
 	builder.WriteString("\n## Interpretation\n\n")
-	builder.WriteString("Every output tile has one A panel token and one B panel token before the abstract compute stage. The Zeonica operation fires only when both operand queues provide data, then emits one 32x32 C tile that is collected by the harness. This supports a kernel-level producer-consumer abstraction claim, not a Tenstorrent datapath or timing claim.\n")
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(builder.String()), 0o644)
+	builder.WriteString(
+		"Every output tile has one A panel token and one B panel token before " +
+			"the abstract compute stage. The Zeonica operation fires only when " +
+			"both operand queues provide data, then emits one 32x32 C tile that " +
+			"is collected by the harness. This supports a kernel-level " +
+			"producer-consumer abstraction claim, not a Tenstorrent datapath " +
+			"or timing claim.\n",
+	)
 }
 
 func countTraceStates(records []tileTraceRecord) (aReady, bReady, computeReady, cEmitted, cCollected int) {
@@ -315,6 +362,25 @@ func countTraceStates(records []tileTraceRecord) (aReady, bReady, computeReady, 
 		}
 	}
 	return
+}
+
+func countCompleteTraceRecords(records []tileTraceRecord) int {
+	complete := 0
+	for _, record := range records {
+		if isCompleteTraceRecord(record) {
+			complete++
+		}
+	}
+	return complete
+}
+
+func isCompleteTraceRecord(record tileTraceRecord) bool {
+	return record.AReady &&
+		record.BReady &&
+		record.ComputeAfterReady &&
+		record.CEmitted &&
+		record.CCollected &&
+		record.CLanes == tileEdge*tileEdge
 }
 
 func minInt(a, b int) int {
