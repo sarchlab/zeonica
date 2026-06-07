@@ -209,7 +209,14 @@ func resolveProgramYAMLWithGEPArgs(programPath string) (resolved string, cleanup
 		panic(fmt.Sprintf("parse FFT program file %q: %v", programPath, err))
 	}
 
-	repl := gepArgReplacements()
+	if !patchGEPArgOperands(&root, gepArgReplacements()) {
+		return programPath, func() {}
+	}
+
+	return writePatchedProgramYAML(&root)
+}
+
+func patchGEPArgOperands(root *core.YAMLRoot, repl map[string]string) bool {
 	changed := false
 	for ci := range root.ArrayConfig.Cores {
 		for ei := range root.ArrayConfig.Cores[ci].Entries {
@@ -230,12 +237,11 @@ func resolveProgramYAMLWithGEPArgs(programPath string) (resolved string, cleanup
 			}
 		}
 	}
+	return changed
+}
 
-	if !changed {
-		return programPath, func() {}
-	}
-
-	out, err := yaml.Marshal(&root)
+func writePatchedProgramYAML(root *core.YAMLRoot) (resolved string, cleanup func()) {
+	out, err := yaml.Marshal(root)
 	if err != nil {
 		panic(err)
 	}
