@@ -11,6 +11,10 @@ import (
 )
 
 func TestFft(t *testing.T) {
+	if _, err := resolveProgramPath(); err != nil {
+		t.Skipf("skip FFT test because generated program is unavailable: %v", err)
+	}
+
 	logPath := filepath.Join(t.TempDir(), "fft.json.log")
 	f, err := os.Create(logPath)
 	if err != nil {
