@@ -1,0 +1,11 @@
+kernel,zeonica_cycle,zeonica_aligned cycle,opencgra_cycle,OpenCGRA_aligned cycle,zeonica_sim_time_s,opencgra_sim_time_s
+relu,263,164,347,183,0.04,171.09
+fir,166,164,352,185,0.024,168.79
+axpy,183,84,292,92,0.025,155
+histogram,227,126,243,138,0.016,113.32
+spmv,128,124,753,105,0.024,295.89
+gemv,277,177,382,199,0.038,188.35
+gemm,1196,1193,1731,1363,0.267,1057
+bicg,857,857,866,866,0.30,157.34
+conv,21009,,33703,,6.903,69.3
+sad,48,,206,deadlock,0.007,80.97
