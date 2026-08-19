@@ -23,23 +23,23 @@ type histogramYAMLRoot struct {
 }
 
 type histogramArrayConfig struct {
-	Rows       int                    `yaml:"rows"`
-	Cols       int                    `yaml:"columns"`
-	CompiledII int                    `yaml:"compiled_ii"`
-	Cores      []histogramYAMLCore    `yaml:"cores"`
+	Rows       int                 `yaml:"rows"`
+	Cols       int                 `yaml:"columns"`
+	CompiledII int                 `yaml:"compiled_ii"`
+	Cores      []histogramYAMLCore `yaml:"cores"`
 }
 
 type histogramYAMLCore struct {
-	Row     int               `yaml:"row"`
-	Column  int               `yaml:"column"`
-	CoreID  string            `yaml:"core_id"`
+	Row     int                  `yaml:"row"`
+	Column  int                  `yaml:"column"`
+	CoreID  string               `yaml:"core_id"`
 	Entries []histogramYAMLEntry `yaml:"entries"`
 }
 
 type histogramYAMLEntry struct {
-	EntryID           string                        `yaml:"entry_id"`
-	Type              string                        `yaml:"type"`
-	InstructionGroups []histogramYAMLInstGroup      `yaml:"instructions"`
+	EntryID           string                   `yaml:"entry_id"`
+	Type              string                   `yaml:"type"`
+	InstructionGroups []histogramYAMLInstGroup `yaml:"instructions"`
 }
 
 type histogramYAMLInstGroup struct {
@@ -48,12 +48,12 @@ type histogramYAMLInstGroup struct {
 }
 
 type histogramYAMLOperation struct {
-	OpCode            string               `yaml:"opcode"`
+	OpCode            string                 `yaml:"opcode"`
 	SrcOperands       []histogramYAMLOperand `yaml:"src_operands"`
 	DstOperands       []histogramYAMLOperand `yaml:"dst_operands"`
-	ID                int                  `yaml:"id"`
-	InvalidIterations int                  `yaml:"invalid_iterations"`
-	TimeStep          int                  `yaml:"time_step"`
+	ID                int                    `yaml:"id"`
+	InvalidIterations int                    `yaml:"invalid_iterations"`
+	TimeStep          int                    `yaml:"time_step"`
 }
 
 type histogramYAMLOperand struct {

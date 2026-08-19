@@ -21,7 +21,9 @@ func TestFir(t *testing.T) {
 	handler := slog.NewJSONHandler(f, &slog.HandlerOptions{
 		Level: core.LevelTrace,
 	})
+	oldLogger := slog.Default()
 	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(oldLogger) })
 
 	archSpecPath, err := resolveArchSpecPath()
 	if err != nil {

@@ -1,23 +1,37 @@
 name: Zeonica Test
 
-on: push
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
-
-  compile:
-    name: Compilation
+  test:
+    name: Build, lint, and test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
+
+      - name: Check formatting
+        run: test -z "$(gofmt -l $(git ls-files '*.go'))"
+
+      - name: Check module files
+        run: go mod tidy -diff
 
       - name: Build
         run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
 
       - name: Lint
         uses: golangci/golangci-lint-action@v6
@@ -25,11 +39,23 @@ jobs:
           version: v1.64.8
           args: --timeout=10m
 
-      - name: Install Ginkgo
-        run: go install github.com/onsi/ginkgo/v2/ginkgo
+      - name: Unit tests
+        run: go test ./... -count=1
 
-      - name: Unit Test
-        run: ginkgo -r
+  integration-test:
+    name: Integration test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with test fixtures
+        uses: actions/checkout@v4
+        with:
+          submodules: true
 
-      - name: Go Test
-        run: go test ./...
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: FFT integration test
+        run: go test -tags=integration ./test/testbench/fft -count=1

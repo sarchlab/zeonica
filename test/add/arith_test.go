@@ -1,12 +1,8 @@
-//nolint:funlen
 package main
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
-	"time"
-	"unsafe"
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/api"
@@ -15,374 +11,144 @@ import (
 	"github.com/sarchlab/zeonica/core"
 )
 
-func TestAddOperationWithRandomData(t *testing.T) {
-	// Set test parameters
-	width := 2
-	height := 2
-	length := 16
-
-	// Create test data
-	src := make([]uint32, length)
-	dst := make([]uint32, length)
-
-	// Generate random test data
-	rand.Seed(time.Now().UnixNano())
-	minI := int32(-10)
-	maxI := int32(10)
-	for i := 0; i < length; i++ {
-		INum := minI + rand.Int31n(maxI-minI+1)
-		src[i] = *(*uint32)(unsafe.Pointer(&INum))
+func TestArithmeticOperations(t *testing.T) {
+	tests := []struct {
+		name        string
+		programPath string
+		feedSide    cgra.Side
+		collectSide cgra.Side
+		input       []int32
+		want        func(int32) int32
+	}{
+		{
+			name:        "add",
+			programPath: "test_add.yaml",
+			feedSide:    cgra.West,
+			collectSide: cgra.East,
+			input:       integerSequence(-10, 16),
+			want:        func(value int32) int32 { return value + 2 },
+		},
+		{
+			name:        "subtract",
+			programPath: "test_sub.yaml",
+			feedSide:    cgra.South,
+			collectSide: cgra.North,
+			input:       integerSequence(-10, 16),
+			want:        func(value int32) int32 { return value - 2 },
+		},
+		{
+			name:        "multiply",
+			programPath: "test_mul.yaml",
+			feedSide:    cgra.East,
+			collectSide: cgra.West,
+			input:       integerSequence(-10, 16),
+			want:        func(value int32) int32 { return value * 4 },
+		},
+		{
+			name:        "divide",
+			programPath: "test_div.yaml",
+			feedSide:    cgra.North,
+			collectSide: cgra.South,
+			input:       integerMultiples(-8, 4, 16),
+			want:        func(value int32) int32 { return value / 4 },
+		},
 	}
 
-	// Create simulation engine
-	engine := sim.NewSerialEngine()
-
-	// Create driver
-	driver := api.DriverBuilder{}.
-		WithEngine(engine).
-		WithFreq(1 * sim.GHz).
-		Build("Driver")
-
-	// Create device
-	device := config.DeviceBuilder{}.
-		WithEngine(engine).
-		WithFreq(1 * sim.GHz).
-		WithWidth(width).
-		WithHeight(height).
-		Build("Device")
-
-	driver.RegisterDevice(device)
-
-	// Load program
-	program := core.LoadProgramFileFromYAML("./test_add.yaml")
-	if len(program) == 0 {
-		t.Fatal("Failed to load program")
-	}
-
-	// Set data flow - input from west, output to east
-	driver.FeedIn(src, cgra.West, [2]int{0, height}, height, "R")
-	driver.Collect(dst, cgra.East, [2]int{0, height}, height, "R")
-
-	// Map program to all cores
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
-			coord := fmt.Sprintf("(%d,%d)", x, y)
-			if prog, exists := program[coord]; exists {
-				driver.MapProgram(prog, [2]int{x, y})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := runArithmeticProgram(t, tt.programPath, tt.feedSide, tt.collectSide, tt.input)
+			for idx, input := range tt.input {
+				want := tt.want(input)
+				if got[idx] != want {
+					t.Errorf("result[%d] = %d, want %d for input %d", idx, got[idx], want, input)
+				}
 			}
-		}
-	}
-
-	// Run simulation
-	driver.Run()
-
-	// Convert results and verify
-	srcI := make([]int32, length)
-	dstI := make([]int32, length)
-	for i := 0; i < length; i++ {
-		srcI[i] = *(*int32)(unsafe.Pointer(&src[i]))
-		dstI[i] = *(*int32)(unsafe.Pointer(&dst[i]))
-	}
-
-	// Verify results: output should be input+2
-	t.Log("=== ADD Test Results ===")
-	allPassed := true
-	for i := 0; i < length; i++ {
-		expected := srcI[i] + 2
-		actual := dstI[i]
-
-		if actual != expected {
-			t.Errorf("Index %d: Input=%d, Expected=%d, Actual=%d",
-				i, srcI[i], expected, actual)
-			allPassed = false
-		} else {
-			t.Logf("Index %d: Input=%d, Output=%d ✓", i, srcI[i], actual)
-		}
-	}
-
-	if allPassed {
-		t.Log("✅ ADD tests passed!")
-	} else {
-		t.Fatal("❌ ADD tests failed!")
+		})
 	}
 }
 
-func TestSubOperationWithRandomData(t *testing.T) {
-	// Set test parameters
-	width := 2
-	height := 2
-	length := 16
+func runArithmeticProgram(
+	t *testing.T,
+	programPath string,
+	feedSide cgra.Side,
+	collectSide cgra.Side,
+	input []int32,
+) []int32 {
+	t.Helper()
+	const width = 2
+	const height = 2
 
-	// Create test data
-	src := make([]uint32, length)
-	dst := make([]uint32, length)
-
-	// Generate random test data
-	rand.Seed(time.Now().UnixNano())
-	minI := int32(-10)
-	maxI := int32(10)
-	for i := 0; i < length; i++ {
-		INum := minI + rand.Int31n(maxI-minI+1)
-		src[i] = *(*uint32)(unsafe.Pointer(&INum))
-	}
-
-	// Create simulation engine
 	engine := sim.NewSerialEngine()
-
-	// Create driver
 	driver := api.DriverBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		Build("Driver")
-
-	// Create device
 	device := config.DeviceBuilder{}.
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
 		WithWidth(width).
 		WithHeight(height).
 		Build("Device")
-
 	driver.RegisterDevice(device)
 
-	// Load program
-	program := core.LoadProgramFileFromYAML("./test_sub.yaml")
-	if len(program) == 0 {
-		t.Fatal("Failed to load program")
+	programs := core.LoadProgramFileFromYAML(programPath)
+	if len(programs) == 0 {
+		t.Fatalf("program %q contains no core programs", programPath)
 	}
-
-	// Set data flow - input from north, output to south
-	driver.FeedIn(src, cgra.South, [2]int{0, width}, width, "R")
-	driver.Collect(dst, cgra.North, [2]int{0, width}, width, "R")
-
-	// Map program to all cores
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
-			coord := fmt.Sprintf("(%d,%d)", x, y)
-			if prog, exists := program[coord]; exists {
-				driver.MapProgram(prog, [2]int{x, y})
+			if program, ok := programs[fmt.Sprintf("(%d,%d)", x, y)]; ok {
+				driver.MapProgram(program, [2]int{x, y})
 			}
 		}
 	}
 
-	// Run simulation
+	src := signedToUint32(input)
+	dst := make([]uint32, len(src))
+	feedSpan := sideSpan(feedSide, width, height)
+	collectSpan := sideSpan(collectSide, width, height)
+	driver.FeedIn(src, feedSide, [2]int{0, feedSpan}, feedSpan, "R")
+	driver.Collect(dst, collectSide, [2]int{0, collectSpan}, collectSpan, "R")
 	driver.Run()
 
-	// Convert results and verify
-	srcI := make([]int32, length)
-	dstI := make([]int32, length)
-	for i := 0; i < length; i++ {
-		srcI[i] = *(*int32)(unsafe.Pointer(&src[i]))
-		dstI[i] = *(*int32)(unsafe.Pointer(&dst[i]))
-	}
-
-	// Verify results: output should be input-2
-	t.Log("=== SUB Test Results ===")
-	allPassed := true
-	for i := 0; i < length; i++ {
-		expected := srcI[i] - 2
-		actual := dstI[i]
-
-		if actual != expected {
-			t.Errorf("Index %d: Input=%d, Expected=%d, Actual=%d",
-				i, srcI[i], expected, actual)
-			allPassed = false
-		} else {
-			t.Logf("Index %d: Input=%d, Output=%d ✓", i, srcI[i], actual)
-		}
-	}
-
-	if allPassed {
-		t.Log("✅ SUB tests passed!")
-	} else {
-		t.Fatal("❌ SUB tests failed!")
-	}
+	return uint32ToSigned(dst)
 }
 
-func TestMulOperationWithRandomData(t *testing.T) {
-	// Set test parameters
-	width := 2
-	height := 2
-	length := 16
-
-	// Create test data
-	src := make([]uint32, length)
-	dst := make([]uint32, length)
-
-	// Generate random test data
-	rand.Seed(time.Now().UnixNano())
-	minI := int32(-10)
-	maxI := int32(10)
-	for i := 0; i < length; i++ {
-		INum := minI + rand.Int31n(maxI-minI+1)
-		src[i] = *(*uint32)(unsafe.Pointer(&INum))
+func sideSpan(side cgra.Side, width, height int) int {
+	if side == cgra.North || side == cgra.South {
+		return width
 	}
-
-	// Create simulation engine
-	engine := sim.NewSerialEngine()
-
-	// Create driver
-	driver := api.DriverBuilder{}.
-		WithEngine(engine).
-		WithFreq(1 * sim.GHz).
-		Build("Driver")
-
-	// Create device
-	device := config.DeviceBuilder{}.
-		WithEngine(engine).
-		WithFreq(1 * sim.GHz).
-		WithWidth(width).
-		WithHeight(height).
-		Build("Device")
-
-	driver.RegisterDevice(device)
-
-	// Load program
-	program := core.LoadProgramFileFromYAML("./test_mul.yaml")
-	if len(program) == 0 {
-		t.Fatal("Failed to load program")
-	}
-
-	// Set data flow - input from east, output to west
-	driver.FeedIn(src, cgra.East, [2]int{0, height}, height, "R")
-	driver.Collect(dst, cgra.West, [2]int{0, height}, height, "R")
-
-	// Map program to all cores
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
-			coord := fmt.Sprintf("(%d,%d)", x, y)
-			if prog, exists := program[coord]; exists {
-				driver.MapProgram(prog, [2]int{x, y})
-			}
-		}
-	}
-
-	// Run simulation
-	driver.Run()
-
-	// Convert results and verify
-	srcI := make([]int32, length)
-	dstI := make([]int32, length)
-	for i := 0; i < length; i++ {
-		srcI[i] = *(*int32)(unsafe.Pointer(&src[i]))
-		dstI[i] = *(*int32)(unsafe.Pointer(&dst[i]))
-	}
-
-	// Verify results: output should be input*2
-	t.Log("=== MUL Test Results ===")
-	allPassed := true
-	for i := 0; i < length; i++ {
-		expected := srcI[i] * 4
-		actual := dstI[i]
-
-		if actual != expected {
-			t.Errorf("Index %d: Input=%d, Expected=%d, Actual=%d",
-				i, srcI[i], expected, actual)
-			allPassed = false
-		} else {
-			t.Logf("Index %d: Input=%d, Output=%d ✓", i, srcI[i], actual)
-		}
-	}
-
-	if allPassed {
-		t.Log("✅ MUL tests passed!")
-	} else {
-		t.Fatal("❌ MUL tests failed!")
-	}
+	return height
 }
 
-func TestDivOperationWithRandomData(t *testing.T) {
-	// Set test parameters
-	width := 2
-	height := 2
-	length := 16
-
-	// Create test data
-	src := make([]uint32, length)
-	dst := make([]uint32, length)
-
-	// Generate random test data (avoid division by zero)
-	rand.Seed(time.Now().UnixNano())
-	minI := int32(-20)
-	maxI := int32(20)
-	for i := 0; i < length; i++ {
-		INum := minI + rand.Int31n(maxI-minI+1)
-		// Ensure data is a multiple of 4 to avoid division precision issues
-		if INum%4 != 0 {
-			INum = INum - INum%4 + 4
-		}
-		src[i] = *(*uint32)(unsafe.Pointer(&INum))
+func integerSequence(start int32, length int) []int32 {
+	values := make([]int32, length)
+	for idx := range values {
+		values[idx] = start + int32(idx)
 	}
+	return values
+}
 
-	// Create simulation engine
-	engine := sim.NewSerialEngine()
-
-	// Create driver
-	driver := api.DriverBuilder{}.
-		WithEngine(engine).
-		WithFreq(1 * sim.GHz).
-		Build("Driver")
-
-	// Create device
-	device := config.DeviceBuilder{}.
-		WithEngine(engine).
-		WithFreq(1 * sim.GHz).
-		WithWidth(width).
-		WithHeight(height).
-		Build("Device")
-
-	driver.RegisterDevice(device)
-
-	// Load program
-	program := core.LoadProgramFileFromYAML("./test_div.yaml")
-	if len(program) == 0 {
-		t.Fatal("Failed to load program")
+func integerMultiples(start, step int32, length int) []int32 {
+	values := make([]int32, length)
+	for idx := range values {
+		values[idx] = (start + int32(idx)) * step
 	}
+	return values
+}
 
-	// Set data flow - input from south, output to north
-	driver.FeedIn(src, cgra.North, [2]int{0, width}, width, "R")
-	driver.Collect(dst, cgra.South, [2]int{0, width}, width, "R")
-
-	// Map program to all cores
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
-			coord := fmt.Sprintf("(%d,%d)", x, y)
-			if prog, exists := program[coord]; exists {
-				driver.MapProgram(prog, [2]int{x, y})
-			}
-		}
+func signedToUint32(values []int32) []uint32 {
+	result := make([]uint32, len(values))
+	for idx, value := range values {
+		result[idx] = uint32(value)
 	}
+	return result
+}
 
-	// Run simulation
-	driver.Run()
-
-	// Convert results and verify
-	srcI := make([]int32, length)
-	dstI := make([]int32, length)
-	for i := 0; i < length; i++ {
-		srcI[i] = *(*int32)(unsafe.Pointer(&src[i]))
-		dstI[i] = *(*int32)(unsafe.Pointer(&dst[i]))
+func uint32ToSigned(values []uint32) []int32 {
+	result := make([]int32, len(values))
+	for idx, value := range values {
+		result[idx] = int32(value)
 	}
-
-	// Verify results: output should be input/2
-	t.Log("=== DIV Test Results ===")
-	allPassed := true
-	for i := 0; i < length; i++ {
-		expected := srcI[i] / 4
-		actual := dstI[i]
-
-		if actual != expected {
-			t.Errorf("Index %d: Input=%d, Expected=%d, Actual=%d",
-				i, srcI[i], expected, actual)
-			allPassed = false
-		} else {
-			t.Logf("Index %d: Input=%d, Output=%d ✓", i, srcI[i], actual)
-		}
-	}
-
-	if allPassed {
-		t.Log("✅ DIV tests passed!")
-	} else {
-		t.Fatal("❌ DIV tests failed!")
-	}
+	return result
 }

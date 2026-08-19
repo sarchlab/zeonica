@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"testing"
-	"unsafe"
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/zeonica/api"
@@ -16,10 +16,10 @@ import (
 )
 
 func TestPhiGpredOperation(t *testing.T) {
-	// log to file
-	f, err := os.Create("phi_gpred.json.log")
+	logPath := filepath.Join(t.TempDir(), "phi_gpred.json.log")
+	f, err := os.Create(logPath)
 	if err != nil {
-		panic(err)
+		t.Fatalf("create trace log: %v", err)
 	}
 	defer f.Close()
 
@@ -27,7 +27,9 @@ func TestPhiGpredOperation(t *testing.T) {
 		Level: core.LevelTrace,
 	})
 
+	oldLogger := slog.Default()
 	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(oldLogger) })
 
 	// Set test parameters
 	width := 2
@@ -94,31 +96,22 @@ func TestPhiGpredOperation(t *testing.T) {
 	dstI := make([]int32, length)
 
 	for i := 0; i < length; i++ {
-		cmpSrcIData1[i] = *(*int32)(unsafe.Pointer(&cmpSrcData1[i]))
-		cmpSrcIData2[i] = *(*int32)(unsafe.Pointer(&cmpSrcData2[i]))
-		srcIData1[i] = *(*int32)(unsafe.Pointer(&SrcData1[i]))
-		srcIData2[i] = *(*int32)(unsafe.Pointer(&SrcData2[i]))
+		cmpSrcIData1[i] = int32(cmpSrcData1[i])
+		cmpSrcIData2[i] = int32(cmpSrcData2[i])
+		srcIData1[i] = int32(SrcData1[i])
+		srcIData2[i] = int32(SrcData2[i])
 	}
 
 	expected := []int32{6, 7, 3, 4, 10}
 	for i := 0; i < 5; i++ {
-		dstI[i] = *(*int32)(unsafe.Pointer(&dst[i]))
+		dstI[i] = int32(dst[i])
 	}
 
-	t.Log("=== PhiGpred Test Results ===")
-	allPassed := true
 	for i := 0; i < 5; i++ {
 		actual := dstI[i]
 		if actual != expected[i] {
 			t.Errorf("Index %d:, cmpSrc1=%d, cmpSrc2=%d, src1=%d, src2=%d, Expected=%d, Actual=%d",
 				i, cmpSrcIData1[i], cmpSrcIData2[i], srcIData1[i], srcIData2[i], expected[i], actual)
-			allPassed = false
 		}
-	}
-
-	if allPassed {
-		t.Log("✅ PhiGpred tests passed!")
-	} else {
-		t.Fatal("❌ PhiGpred tests failed!")
 	}
 }

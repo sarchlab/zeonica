@@ -149,7 +149,7 @@ func (fs *FunctionalSimulator) isOperandReady(x, y int, operand *core.Operand) b
 //nolint:gocyclo
 func (fs *FunctionalSimulator) executeOp(x, y int, op *core.Operation) {
 	switch strings.ToUpper(op.OpCode) {
-	case "MOV":
+	case "MOV", "CAST_TRUNC":
 		fs.runMov(x, y, op)
 	case "DATA_MOV", "CTRL_MOV":
 		fs.runMov(x, y, op)
