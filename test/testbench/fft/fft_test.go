@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -11,9 +13,11 @@ import (
 )
 
 func TestFft(t *testing.T) {
-	if _, err := resolveProgramPath(); err != nil {
-		t.Skipf("skip FFT test because generated program is unavailable: %v", err)
+	programPath, err := resolveProgramPath()
+	if err != nil {
+		t.Fatalf("FFT integration fixture is unavailable: %v", err)
 	}
+	t.Setenv("ZEONICA_PROGRAM_YAML", programPath)
 
 	logPath := filepath.Join(t.TempDir(), "fft.json.log")
 	f, err := os.Create(logPath)
@@ -25,7 +29,9 @@ func TestFft(t *testing.T) {
 	handler := slog.NewJSONHandler(f, &slog.HandlerOptions{
 		Level: core.LevelTrace,
 	})
+	oldLogger := slog.Default()
 	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(oldLogger) })
 
 	archSpecPath, err := resolveArchSpecPath()
 	if err != nil {

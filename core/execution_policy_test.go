@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"log/slog"
-	"os"
 	"strings"
 	"testing"
 )
@@ -780,10 +779,31 @@ func TestRunInstructionGroupWithSyncOpsReadyHeldOccurrenceIndexIncrements(t *tes
 }
 
 func TestLoadProgramFileFromYAMLPreservesTimeStep(t *testing.T) {
-	filePath := "../test/testbench/stonneGEMM8x8/gemm.yaml"
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		t.Skipf("test file does not exist: %s", filePath)
-	}
+	filePath := writeTestFile(t, "timesteps.yaml", `
+array_config:
+  rows: 1
+  columns: 1
+  cores:
+    - row: 0
+      column: 0
+      core_id: "0"
+      entries:
+        - entry_id: entry
+          type: normal
+          instructions:
+            - operations:
+                - opcode: MOV
+                  src_operands: [{operand: "#1", color: RED}]
+                  dst_operands: [{operand: "$0", color: RED}]
+                  id: 1
+                  time_step: 0
+            - operations:
+                - opcode: ADD
+                  src_operands: [{operand: "$0", color: RED}, {operand: "#1", color: RED}]
+                  dst_operands: [{operand: "$1", color: RED}]
+                  id: 2
+                  time_step: 1
+`)
 
 	programMap := LoadProgramFileFromYAML(filePath)
 	program, ok := programMap["(0,0)"]

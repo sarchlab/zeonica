@@ -1,97 +1,46 @@
-//nolint:funlen
 package core
 
-import (
-	"fmt"
-	"os"
-	"testing"
-)
+import "testing"
 
 func TestLoadProgramFileFromASM_PEFormat(t *testing.T) {
-	// Test with fir4x4.asm format
-	filePath := "../test/Zeonica_Testbench/kernel/fir/fir4x4.asm"
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		t.Skipf("Test file does not exist: %s", filePath)
-	}
+	path := writeTestFile(t, "program-pe.asm", `
+# Compiled II: 2
+PE(0,1):
+{
+  ADD, [EAST, RED], [#1] -> [$0] (t=0, inv_iters=0)
+}
+PE(1,1):
+{
+  DATA_MOV, [WEST, RED] -> [EAST, RED] (t=1, inv_iters=0)
+}
+`)
 
-	// Load the program file
-	programMap := LoadProgramFileFromASM(filePath)
-
-	// Verify that we loaded some programs
-	if len(programMap) == 0 {
-		t.Error("No programs were loaded from the ASM file")
-	}
-
-	// Print the loaded programs
-	fmt.Println("=== Loaded Programs (PE Format) ===")
-	for coord, program := range programMap {
-		fmt.Printf("\n--- Core at %s ---\n", coord)
-		PrintProgram(program)
-	}
-
-	// Print summary
-	fmt.Printf("\n=== Summary ===\n")
-	fmt.Printf("Total cores loaded: %d\n", len(programMap))
-
-	// Verify specific core exists
-	if _, exists := programMap["(0,1)"]; !exists {
-		t.Error("Expected core at (0,1) not found")
-	}
-
-	// Verify core has entry blocks
-	for coord, program := range programMap {
-		if len(program.EntryBlocks) == 0 {
-			t.Errorf("Core at %s has no entry blocks", coord)
-		}
-		for _, entryBlock := range program.EntryBlocks {
-			if len(entryBlock.InstructionGroups) == 0 {
-				t.Errorf("Core at %s has no instruction groups", coord)
-			}
-		}
-	}
+	assertLoadedASMProgram(t, LoadProgramFileFromASM(path), "(0,1)")
 }
 
 func TestLoadProgramFileFromASM_CoreFormat(t *testing.T) {
-	// Test with fir.asm format
-	filePath := "../test/fir/fir.asm"
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		t.Skipf("Test file does not exist: %s", filePath)
+	path := writeTestFile(t, "program-core.asm", `
+Core 0,0:
+MOV [#1] -> [$0]
+ADD [$0] [#2] -> [EAST, RED]
+Core 1,0:
+RETURN [WEST, RED]
+`)
+
+	assertLoadedASMProgram(t, LoadProgramFileFromASM(path), "(0,0)")
+}
+
+func assertLoadedASMProgram(t *testing.T, programs map[string]Program, expectedCoord string) {
+	t.Helper()
+	program, ok := programs[expectedCoord]
+	if !ok {
+		t.Fatalf("expected core %s, got coordinates %v", expectedCoord, programs)
 	}
-
-	// Load the program file
-	programMap := LoadProgramFileFromASM(filePath)
-
-	// Verify that we loaded some programs
-	if len(programMap) == 0 {
-		t.Error("No programs were loaded from the ASM file")
+	if len(program.EntryBlocks) != 1 {
+		t.Fatalf("core %s entry block count = %d, want 1", expectedCoord, len(program.EntryBlocks))
 	}
-
-	// Print the loaded programs
-	fmt.Println("=== Loaded Programs (Core Format) ===")
-	for coord, program := range programMap {
-		fmt.Printf("\n--- Core at %s ---\n", coord)
-		PrintProgram(program)
-	}
-
-	// Print summary
-	fmt.Printf("\n=== Summary ===\n")
-	fmt.Printf("Total cores loaded: %d\n", len(programMap))
-
-	// Verify specific core exists
-	if _, exists := programMap["(0,0)"]; !exists {
-		t.Error("Expected core at (0,0) not found")
-	}
-
-	// Verify core has entry blocks
-	for coord, program := range programMap {
-		if len(program.EntryBlocks) == 0 {
-			t.Errorf("Core at %s has no entry blocks", coord)
-		}
-		for _, entryBlock := range program.EntryBlocks {
-			if len(entryBlock.InstructionGroups) == 0 {
-				t.Errorf("Core at %s has no instruction groups", coord)
-			}
-		}
+	if len(program.EntryBlocks[0].InstructionGroups) == 0 {
+		t.Fatalf("core %s has no instruction groups", expectedCoord)
 	}
 }
 
@@ -101,69 +50,13 @@ func TestParseASMOperand(t *testing.T) {
 		input    string
 		expected Operand
 	}{
-		{
-			name:  "Direction and color in brackets",
-			input: "[NORTH, RED]",
-			expected: Operand{
-				Flag:  false,
-				Color: "R",
-				Impl:  "North",
-			},
-		},
-		{
-			name:  "Register in brackets",
-			input: "[$0]",
-			expected: Operand{
-				Flag:  false,
-				Color: "",
-				Impl:  "$0",
-			},
-		},
-		{
-			name:  "Immediate in brackets",
-			input: "[#0]",
-			expected: Operand{
-				Flag:  false,
-				Color: "",
-				Impl:  "0",
-			},
-		},
-		{
-			name:  "Register without brackets",
-			input: "$0",
-			expected: Operand{
-				Flag:  false,
-				Color: "",
-				Impl:  "$0",
-			},
-		},
-		{
-			name:  "Direction without brackets",
-			input: "North",
-			expected: Operand{
-				Flag:  false,
-				Color: "",
-				Impl:  "North",
-			},
-		},
-		{
-			name:  "Immediate number",
-			input: "114",
-			expected: Operand{
-				Flag:  false,
-				Color: "",
-				Impl:  "114",
-			},
-		},
-		{
-			name:  "Yellow color",
-			input: "[WEST, YELLOW]",
-			expected: Operand{
-				Flag:  false,
-				Color: "Y",
-				Impl:  "West",
-			},
-		},
+		{name: "Direction and color in brackets", input: "[NORTH, RED]", expected: Operand{Color: "R", Impl: "North"}},
+		{name: "Register in brackets", input: "[$0]", expected: Operand{Impl: "$0"}},
+		{name: "Immediate in brackets", input: "[#0]", expected: Operand{Impl: "0"}},
+		{name: "Register without brackets", input: "$0", expected: Operand{Impl: "$0"}},
+		{name: "Direction without brackets", input: "North", expected: Operand{Impl: "North"}},
+		{name: "Immediate number", input: "114", expected: Operand{Impl: "114"}},
+		{name: "Yellow color", input: "[WEST, YELLOW]", expected: Operand{Color: "Y", Impl: "West"}},
 	}
 
 	for _, tt := range tests {

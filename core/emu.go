@@ -3186,40 +3186,6 @@ func (i instEmulator) runCmpExport(inst Operation, state *coreState) map[Operand
 	return results
 }
 
-func (i instEmulator) runSgtExport(inst Operation, state *coreState) map[Operand]cgra.Data {
-	src1 := inst.SrcOperands.Operands[0]
-	src2 := inst.SrcOperands.Operands[1]
-
-	src1Struct := i.readOperand(src1, state)
-	src2Struct := i.readOperand(src2, state)
-	src1Val := src1Struct.First()
-	src2Val := src2Struct.First()
-
-	src1Pred := src1Struct.Pred
-	src2Pred := src2Struct.Pred
-	resultPred := src1Pred && src2Pred
-
-	finalPred := resultPred
-
-	//o
-	src1Signed := int32(src1Val)
-	src2Signed := int32(src2Val)
-
-	results := make(map[Operand]cgra.Data)
-	if src1Signed > src2Signed {
-		for _, dst := range inst.DstOperands.Operands {
-			results[dst] = cgra.NewScalarWithPred(1, finalPred)
-		}
-	} else {
-		for _, dst := range inst.DstOperands.Operands {
-			results[dst] = cgra.NewScalarWithPred(0, finalPred)
-		}
-	}
-	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
-	// elect no next PC
-	return results
-}
-
 func (i instEmulator) runLTExport(inst Operation, state *coreState) map[Operand]cgra.Data {
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
@@ -3231,10 +3197,12 @@ func (i instEmulator) runLTExport(inst Operation, state *coreState) map[Operand]
 	src1Pred := src1Struct.Pred
 	src2Pred := src2Struct.Pred
 	resultPred := src1Pred && src2Pred
+	src1Signed := int32(src1Val)
+	src2Signed := int32(src2Val)
 
 	finalPred := resultPred
 	results := make(map[Operand]cgra.Data)
-	if src1Val < src2Val {
+	if src1Signed < src2Signed {
 		for _, dst := range inst.DstOperands.Operands {
 			results[dst] = cgra.NewScalarWithPred(1, finalPred)
 		}
@@ -3259,10 +3227,12 @@ func (i instEmulator) runGTExport(inst Operation, state *coreState) map[Operand]
 	src1Pred := src1Struct.Pred
 	src2Pred := src2Struct.Pred
 	resultPred := src1Pred && src2Pred
+	src1Signed := int32(src1Val)
+	src2Signed := int32(src2Val)
 
 	finalPred := resultPred
 	results := make(map[Operand]cgra.Data)
-	if src1Val > src2Val {
+	if src1Signed > src2Signed {
 		for _, dst := range inst.DstOperands.Operands {
 			results[dst] = cgra.NewScalarWithPred(1, finalPred)
 		}
