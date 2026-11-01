@@ -1848,12 +1848,10 @@ func (i instEmulator) checkIssueReadinessDetails(inst Operation, state *coreStat
 		Ready:                true,
 	}
 
-	requiredSources := inst.SrcOperands.Operands
-	if isFirstPhiExecution(inst, state) && i.phiHasInitialValue(inst, state) {
-		requiredSources = nil
-	}
-
-	for index, src := range requiredSources {
+	for index, src := range inst.SrcOperands.Operands {
+		if i.isMissingPhiBackEdge(inst, src, state) {
+			continue
+		}
 		if index == 1 {
 			if inst.OpCode == "PHI_CONST" || inst.OpCode == "PHI_START" {
 				var stateKey string
@@ -1922,41 +1920,25 @@ func (i instEmulator) checkIssueReadinessDetails(inst Operation, state *coreStat
 	return readiness
 }
 
-// isFirstPhiExecution reports whether a plain PHI has not fired yet. Its
-// back-edge producer has not run at that point, so no back-edge token can exist.
-func isFirstPhiExecution(inst Operation, state *coreState) bool {
-	if inst.OpCode != "PHI" {
+// isMissingPhiBackEdge reports whether src is the back-edge of a PHI that has not
+// fired yet: an empty port while the other source already holds a valid value.
+// Neura leaves loop-carried values as plain PHI, in either operand order, and a
+// dataflow PHI skips inputs that do not exist yet. Two port sources still both
+// have to arrive, since a PHI that merges two branches looks the same there.
+func (i instEmulator) isMissingPhiBackEdge(inst Operation, src Operand, state *coreState) bool {
+	if inst.OpCode != "PHI" || state.States[fmt.Sprintf("Phi_%d", inst.ID)] == true {
 		return false
 	}
-	fired, _ := state.States[fmt.Sprintf("Phi_%d", inst.ID)].(bool)
-	return !fired
-}
-
-// phiHasInitialValue reports whether a non-port source of a PHI already holds a
-// valid value. That value is the initial one, so the PHI must not wait for the
-// back-edge on its first execution. Two port sources still both have to arrive,
-// since a PHI that merges two branches looks the same as a loop PHI there.
-func (i instEmulator) phiHasInitialValue(inst Operation, state *coreState) bool {
-	for _, src := range inst.SrcOperands.Operands {
-		if !state.Directions[i.normalizeDirection(src.Impl)] && i.readOperand(src, state).Pred {
+	srcImpl := i.normalizeDirection(src.Impl)
+	if !state.Directions[srcImpl] || state.recvQueueLen(i.getColorIndex(src.Color), i.getDirecIndex(srcImpl)) > 0 {
+		return false
+	}
+	for _, other := range inst.SrcOperands.Operands {
+		if !state.Directions[i.normalizeDirection(other.Impl)] && i.readOperand(other, state).Pred {
 			return true
 		}
 	}
 	return false
-}
-
-// readPhiSource reads a PHI source. On the first execution a port with no token
-// reads as pred=false, without falling back to a stale head of the queue.
-func (i instEmulator) readPhiSource(src Operand, firstExecution bool, state *coreState) cgra.Data {
-	srcImpl := i.normalizeDirection(src.Impl)
-	if firstExecution && state.Directions[srcImpl] {
-		color, direction := i.getColorIndex(src.Color), i.getDirecIndex(srcImpl)
-		_, cached := state.OpInputReadCache[fmt.Sprintf("%d:%d", color, direction)]
-		if !cached && state.recvQueueLen(color, direction) == 0 {
-			return cgra.NewScalarWithPred(0, false)
-		}
-	}
-	return i.readOperand(src, state)
 }
 
 func (i instEmulator) checkIssueReadiness(inst Operation, state *coreState) (bool, string) {
@@ -3383,11 +3365,15 @@ func (i instEmulator) runPhi(inst Operation, state *coreState) map[Operand]cgra.
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	firstExecution := isFirstPhiExecution(inst, state)
+	readSource := func(src Operand) cgra.Data {
+		if i.isMissingPhiBackEdge(inst, src, state) {
+			return cgra.NewScalarWithPred(0, false)
+		}
+		return i.readOperand(src, state)
+	}
+	src1Struct := readSource(src1)
+	src2Struct := readSource(src2)
 	state.States[fmt.Sprintf("Phi_%d", inst.ID)] = true
-
-	src1Struct := i.readPhiSource(src1, firstExecution, state)
-	src2Struct := i.readPhiSource(src2, firstExecution, state)
 
 	var finalPred bool
 	results := make(map[Operand]cgra.Data)
