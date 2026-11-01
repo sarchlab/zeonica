@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/sarchlab/zeonica/cgra"
 )
 
 type readyHeldLog struct {
@@ -808,5 +810,68 @@ func TestLoadProgramFileFromYAMLPreservesTimeStep(t *testing.T) {
 	}
 	if group1.Operations[0].TimeStep != 1 {
 		t.Fatalf("unexpected timestep for second group first op: got %d want 1", group1.Operations[0].TimeStep)
+	}
+}
+
+func newPhiTestOperation(firstSrc, secondSrc string) Operation {
+	return Operation{
+		OpCode: "PHI",
+		ID:     7,
+		SrcOperands: OperandList{Operands: []Operand{
+			{Impl: firstSrc, Color: "R"},
+			{Impl: secondSrc, Color: "R"},
+		}},
+		DstOperands: OperandList{Operands: []Operand{{Impl: "$2", Color: "R"}}},
+	}
+}
+
+func newPhiTestState() (instEmulator, coreState) {
+	state := newPolicyTestState()
+	state.Mode = SyncOp
+	state.States = make(map[string]interface{})
+	state.Registers = make([]cgra.Data, 4)
+	state.OpInputReadCache = make(map[string]cgra.Data)
+	state.RecvBufHead = make([][]cgra.Data, 4)
+	for i := range state.RecvBufHead {
+		state.RecvBufHead[i] = make([]cgra.Data, 12)
+	}
+	return instEmulator{}, state
+}
+
+func TestPhiFirstExecutionIgnoresMissingBackEdgeInAnyOperandOrder(t *testing.T) {
+	for _, operands := range [][2]string{{"East", "$0"}, {"$0", "East"}} {
+		emu, state := newPhiTestState()
+		inst := newPhiTestOperation(operands[0], operands[1])
+
+		ready, reason := emu.checkIssueReadiness(inst, &state)
+		if ready || reason != StallReasonOperandWait {
+			t.Fatalf("%v: expected operand wait before the initial value, got ready=%t reason=%q", operands, ready, reason)
+		}
+
+		state.Registers[0] = cgra.NewScalar(42)
+		if ready, reason = emu.checkIssueReadiness(inst, &state); !ready {
+			t.Fatalf("%v: expected first execution to issue, blocked by %q", operands, reason)
+		}
+
+		// A stale head on the empty port must not be taken for a back-edge token.
+		state.RecvBufHead[emu.getColorIndex("R")][emu.getDirecIndex("East")] = cgra.NewScalar(9)
+		result := emu.runPhi(inst, &state)[inst.DstOperands.Operands[0]]
+		if !result.Pred || result.First() != 42 {
+			t.Fatalf("%v: expected the initial value, got %+v", operands, result)
+		}
+
+		if ready, reason = emu.checkIssueReadiness(inst, &state); ready || reason != StallReasonOperandWait {
+			t.Fatalf("%v: expected later executions to wait for the back-edge, got ready=%t reason=%q", operands, ready, reason)
+		}
+	}
+}
+
+func TestPhiFirstExecutionWaitsForBothPorts(t *testing.T) {
+	emu, state := newPhiTestState()
+	inst := newPhiTestOperation("East", "West")
+	state.RecvBufHeadReady[emu.getColorIndex("R")][emu.getDirecIndex("East")] = true
+
+	if ready, reason := emu.checkIssueReadiness(inst, &state); ready || reason != StallReasonOperandWait {
+		t.Fatalf("expected a merge PHI to wait for both ports, got ready=%t reason=%q", ready, reason)
 	}
 }
