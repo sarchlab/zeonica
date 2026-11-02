@@ -1922,8 +1922,9 @@ func (i instEmulator) checkIssueReadinessDetails(inst Operation, state *coreStat
 
 // isMissingPhiBackEdge reports whether src is the back-edge of a PHI that has not
 // fired yet: an empty port while the other source already holds a valid value.
-// Neura leaves loop-carried values as plain PHI, in either operand order, and a
-// dataflow PHI skips inputs that do not exist yet. Two port sources still both
+// Neura leaves loop-carried values as plain PHI, in either operand order. Its
+// back-edge reads as pred=false until the loop body first sends it, as with a
+// neura.reserve placeholder, so the PHI must not wait for it. Two port sources still both
 // have to arrive, since a PHI that merges two branches looks the same there.
 func (i instEmulator) isMissingPhiBackEdge(inst Operation, src Operand, state *coreState) bool {
 	if inst.OpCode != "PHI" || state.States[fmt.Sprintf("Phi_%d", inst.ID)] == true {
