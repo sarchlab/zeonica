@@ -1,0 +1,114 @@
+# The data memory of 8192 bytes cannot be expressed. Neura does not read a memory size from the architecture file
+# and Zeonica's shared memory has a fixed capacity of 4 GB.
+architecture:
+  name: "A3"
+  version: "1.0"
+
+multi_cgra_defaults:
+  base_topology: "mesh"
+  rows: 1
+  columns: 1
+
+per_cgra_defaults:
+  rows: 8
+  columns: 8
+  base_topology: "mesh"
+  ctrl_mem_items: 20 # largest II the mapper will try
+
+tile_defaults:
+  num_registers: 32
+  fu_types: ["mac", "add", "mul", "div", "fadd", "fmul", "fdiv", "logic", "cmp", "sel", "type_conv", "vfmul", "fadd_fadd", "fmul_fadd", "grant", "loop_control", "phi", "constant", "return", "alloca", "shift"]
+  local_memory_words: 0
+  vector_lanes: 0
+
+tile_overrides:
+  - cgra_x: 0
+    cgra_y: 0
+    tile_x: 0
+    tile_y: 0
+    num_registers: 32
+    fu_types: ["mac", "add", "mul", "div", "fadd", "fmul", "fdiv", "logic", "cmp", "sel", "type_conv", "vfmul", "fadd_fadd", "fmul_fadd", "grant", "loop_control", "phi", "constant", "return", "alloca", "shift", "mem", "mem_indexed"]
+  - cgra_x: 0
+    cgra_y: 0
+    tile_x: 0
+    tile_y: 1
+    num_registers: 32
+    fu_types: ["mac", "add", "mul", "div", "fadd", "fmul", "fdiv", "logic", "cmp", "sel", "type_conv", "vfmul", "fadd_fadd", "fmul_fadd", "grant", "loop_control", "phi", "constant", "return", "alloca", "shift", "mem", "mem_indexed"]
+  - cgra_x: 0
+    cgra_y: 0
+    tile_x: 0
+    tile_y: 2
+    num_registers: 32
+    fu_types: ["mac", "add", "mul", "div", "fadd", "fmul", "fdiv", "logic", "cmp", "sel", "type_conv", "vfmul", "fadd_fadd", "fmul_fadd", "grant", "loop_control", "phi", "constant", "return", "alloca", "shift", "mem", "mem_indexed"]
+  - cgra_x: 0
+    cgra_y: 0
+    tile_x: 0
+    tile_y: 3
+    num_registers: 32
+    fu_types: ["mac", "add", "mul", "div", "fadd", "fmul", "fdiv", "logic", "cmp", "sel", "type_conv", "vfmul", "fadd_fadd", "fmul_fadd", "grant", "loop_control", "phi", "constant", "return", "alloca", "shift", "mem", "mem_indexed"]
+  - cgra_x: 0
+    cgra_y: 0
+    tile_x: 0
+    tile_y: 4
+    num_registers: 32
+    fu_types: ["mac", "add", "mul", "div", "fadd", "fmul", "fdiv", "logic", "cmp", "sel", "type_conv", "vfmul", "fadd_fadd", "fmul_fadd", "grant", "loop_control", "phi", "constant", "return", "alloca", "shift", "mem", "mem_indexed"]
+  - cgra_x: 0
+    cgra_y: 0
+    tile_x: 0
+    tile_y: 5
+    num_registers: 32
+    fu_types: ["mac", "add", "mul", "div", "fadd", "fmul", "fdiv", "logic", "cmp", "sel", "type_conv", "vfmul", "fadd_fadd", "fmul_fadd", "grant", "loop_control", "phi", "constant", "return", "alloca", "shift", "mem", "mem_indexed"]
+  - cgra_x: 0
+    cgra_y: 0
+    tile_x: 0
+    tile_y: 6
+    num_registers: 32
+    fu_types: ["mac", "add", "mul", "div", "fadd", "fmul", "fdiv", "logic", "cmp", "sel", "type_conv", "vfmul", "fadd_fadd", "fmul_fadd", "grant", "loop_control", "phi", "constant", "return", "alloca", "shift", "mem", "mem_indexed"]
+  - cgra_x: 0
+    cgra_y: 0
+    tile_x: 0
+    tile_y: 7
+    num_registers: 32
+    fu_types: ["mac", "add", "mul", "div", "fadd", "fmul", "fdiv", "logic", "cmp", "sel", "type_conv", "vfmul", "fadd_fadd", "fmul_fadd", "grant", "loop_control", "phi", "constant", "return", "alloca", "shift", "mem", "mem_indexed"]
+
+link_defaults:
+  latency: 1
+  bandwidth: 32
+
+link_overrides:
+
+extensions:
+  crossbar: false
+
+# ----- Zeonica Simulator configuration -----
+# Zeonica ignores fu_types and tile_overrides. Memory access is restricted to the first column by connecting only
+# its tiles to the shared memory.
+
+cgra_defaults: # keep in sync with per_cgra_defaults
+  rows: 8
+  columns: 8
+
+simulator:
+  execution_model: "serial"
+  logging:
+    enabled: true
+    enableTrace: true
+    file: "output.log"
+  driver:
+    name: "Driver"
+    frequency: "1GHz"
+  device:
+    name: "Device"
+    frequency: "1GHz"
+    bind_to_architecture: true
+    memory_mode: "shared"
+    shared_memory_model: "ideal"
+    memory_share:
+      - {tile_x: 0, tile_y: 0, group: 0, base: 0}
+      - {tile_x: 0, tile_y: 1, group: 0, base: 0}
+      - {tile_x: 0, tile_y: 2, group: 0, base: 0}
+      - {tile_x: 0, tile_y: 3, group: 0, base: 0}
+      - {tile_x: 0, tile_y: 4, group: 0, base: 0}
+      - {tile_x: 0, tile_y: 5, group: 0, base: 0}
+      - {tile_x: 0, tile_y: 6, group: 0, base: 0}
+      - {tile_x: 0, tile_y: 7, group: 0, base: 0}

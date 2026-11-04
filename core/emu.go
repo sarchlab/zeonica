@@ -1849,6 +1849,9 @@ func (i instEmulator) checkIssueReadinessDetails(inst Operation, state *coreStat
 	}
 
 	for index, src := range inst.SrcOperands.Operands {
+		if i.isMissingPhiBackEdge(inst, src, state) {
+			continue
+		}
 		if index == 1 {
 			if inst.OpCode == "PHI_CONST" || inst.OpCode == "PHI_START" {
 				var stateKey string
@@ -1915,6 +1918,28 @@ func (i instEmulator) checkIssueReadinessDetails(inst Operation, state *coreStat
 	}
 
 	return readiness
+}
+
+// isMissingPhiBackEdge reports whether src is the back-edge of a PHI that has not
+// fired yet: an empty port while the other source already holds a valid value.
+// Neura leaves loop-carried values as plain PHI, in either operand order. Its
+// back-edge reads as pred=false until the loop body first sends it, as with a
+// neura.reserve placeholder, so the PHI must not wait for it. Two port sources still both
+// have to arrive, since a PHI that merges two branches looks the same there.
+func (i instEmulator) isMissingPhiBackEdge(inst Operation, src Operand, state *coreState) bool {
+	if inst.OpCode != "PHI" || state.States[fmt.Sprintf("Phi_%d", inst.ID)] == true {
+		return false
+	}
+	srcImpl := i.normalizeDirection(src.Impl)
+	if !state.Directions[srcImpl] || state.recvQueueLen(i.getColorIndex(src.Color), i.getDirecIndex(srcImpl)) > 0 {
+		return false
+	}
+	for _, other := range inst.SrcOperands.Operands {
+		if !state.Directions[i.normalizeDirection(other.Impl)] && i.readOperand(other, state).Pred {
+			return true
+		}
+	}
+	return false
 }
 
 func (i instEmulator) checkIssueReadiness(inst Operation, state *coreState) (bool, string) {
@@ -3344,8 +3369,15 @@ func (i instEmulator) runPhi(inst Operation, state *coreState) map[Operand]cgra.
 	src1 := inst.SrcOperands.Operands[0]
 	src2 := inst.SrcOperands.Operands[1]
 
-	src1Struct := i.readOperand(src1, state)
-	src2Struct := i.readOperand(src2, state)
+	readSource := func(src Operand) cgra.Data {
+		if i.isMissingPhiBackEdge(inst, src, state) {
+			return cgra.NewScalarWithPred(0, false)
+		}
+		return i.readOperand(src, state)
+	}
+	src1Struct := readSource(src1)
+	src2Struct := readSource(src2)
+	state.States[fmt.Sprintf("Phi_%d", inst.ID)] = true
 
 	var finalPred bool
 	results := make(map[Operand]cgra.Data)
