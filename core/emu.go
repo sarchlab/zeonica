@@ -2831,14 +2831,17 @@ func (i instEmulator) runDiv(inst Operation, state *coreState) map[Operand]cgra.
 	src1Signed := int32(src1Val)
 	src2Signed := int32(src2Val)
 
-	// avoid division by zero
-	if src2Signed == 0 {
-		panic("Division by zero at " + strconv.Itoa(int(state.PCInBlock)) + "@(" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ")")
-	}
-
-	dstValSigned := src1Signed / src2Signed
-	dstVal := uint32(dstValSigned)
+	var dstVal uint32 = 0
 	finalPred := src1Struct.Pred && src2Struct.Pred
+	if finalPred {
+		// avoid division by zero
+		if src2Signed == 0 {
+			panic("Division by zero at " + strconv.Itoa(int(state.PCInBlock)) + "@(" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ")")
+		}
+
+		dstValSigned := src1Signed / src2Signed
+		dstVal = uint32(dstValSigned)
+	}
 
 	results := make(map[Operand]cgra.Data)
 	for _, dst := range inst.DstOperands.Operands {
