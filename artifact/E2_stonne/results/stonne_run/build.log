@@ -1,0 +1,57 @@
+mkdir -p objs && \
+mkdir -p objs/TileGenerator && \
+mkdir -p objs/TileGenerator/mRNA && \
+mkdir -p objs/TileGenerator/StonneMapper && \
+mkdir -p objs/TileGenerator/Utils
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/AccumulationBuffer.cpp -o objs/AccumulationBuffer.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/Accumulator.cpp -o objs/Accumulator.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/ASNetwork.cpp -o objs/ASNetwork.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/ASwitch.cpp -o objs/ASwitch.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/CollectionBus.cpp -o objs/CollectionBus.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/CollectionBusLine.cpp -o objs/CollectionBusLine.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/CompilerART.cpp -o objs/CompilerART.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/CompilerFEN.cpp -o objs/CompilerFEN.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/CompilerMSN.cpp -o objs/CompilerMSN.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/CompilerMultiplierMesh.cpp -o objs/CompilerMultiplierMesh.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/Config.cpp -o objs/Config.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/Connection.cpp -o objs/Connection.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/DataPackage.cpp -o objs/DataPackage.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/DNNLayer.cpp -o objs/DNNLayer.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/DSNetwork.cpp -o objs/DSNetwork.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/DSNetworkTop.cpp -o objs/DSNetworkTop.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/DSwitch.cpp -o objs/DSwitch.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/FEASwitch.cpp -o objs/FEASwitch.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/FENetwork.cpp -o objs/FENetwork.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/Fifo.cpp -o objs/Fifo.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/LookupTable.cpp -o objs/LookupTable.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/main.cpp -o objs/main.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/MSNetwork.cpp -o objs/MSNetwork.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/MSwitch.cpp -o objs/MSwitch.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/MultiplierOS.cpp -o objs/MultiplierOS.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/OSMeshMN.cpp -o objs/OSMeshMN.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/OSMeshSDMemory.cpp -o objs/OSMeshSDMemory.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/SDMemory.cpp -o objs/SDMemory.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/SparseDenseSDMemory.cpp -o objs/SparseDenseSDMemory.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/SparseSDMemory.cpp -o objs/SparseSDMemory.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/Stats.cpp -o objs/Stats.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/STONNEModel.cpp -o objs/STONNEModel.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TemporalRN.cpp -o objs/TemporalRN.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/testbench.cpp -o objs/testbench.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/Tile.cpp -o objs/Tile.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/utility.cpp -o objs/utility.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/TileGenerator.cpp -o objs/TileGenerator/TileGenerator.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/mRNA/Analyzer.cpp -o objs/TileGenerator/mRNA/Analyzer.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/mRNA/DNNModel.cpp -o objs/TileGenerator/mRNA/DNNModel.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/mRNA/DSNetwork.cpp -o objs/TileGenerator/mRNA/DSNetwork.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/mRNA/MAERIModel.cpp -o objs/TileGenerator/mRNA/MAERIModel.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/mRNA/MappingStrategy.cpp -o objs/TileGenerator/mRNA/MappingStrategy.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/mRNA/MrnaGenerator.cpp -o objs/TileGenerator/mRNA/MrnaGenerator.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/mRNA/MSNetwork.cpp -o objs/TileGenerator/mRNA/MSNetwork.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/mRNA/RSNetwork.cpp -o objs/TileGenerator/mRNA/RSNetwork.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/mRNA/SDMemory.cpp -o objs/TileGenerator/mRNA/SDMemory.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/mRNA/VNAT.cpp -o objs/TileGenerator/mRNA/VNAT.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/StonneMapper/StonneMapperGenerator.cpp -o objs/TileGenerator/StonneMapper/StonneMapperGenerator.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/StonneMapper/TileOptionDenseGemm.cpp -o objs/TileGenerator/StonneMapper/TileOptionDenseGemm.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/StonneMapper/TileOptionSparseDense.cpp -o objs/TileGenerator/StonneMapper/TileOptionSparseDense.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/   -c src/TileGenerator/StonneMapper/utility.cpp -o objs/TileGenerator/StonneMapper/utility.o  #-ltcmalloc
+g++ -std=c++17 -O3 -Iinclude/ -Iexternal/    -o stonne  objs/AccumulationBuffer.o  objs/Accumulator.o  objs/ASNetwork.o  objs/ASwitch.o  objs/CollectionBus.o  objs/CollectionBusLine.o  objs/CompilerART.o  objs/CompilerFEN.o  objs/CompilerMSN.o  objs/CompilerMultiplierMesh.o  objs/Config.o  objs/Connection.o  objs/DataPackage.o  objs/DNNLayer.o  objs/DSNetwork.o  objs/DSNetworkTop.o  objs/DSwitch.o  objs/FEASwitch.o  objs/FENetwork.o  objs/Fifo.o  objs/LookupTable.o  objs/main.o  objs/MSNetwork.o  objs/MSwitch.o  objs/MultiplierOS.o  objs/OSMeshMN.o  objs/OSMeshSDMemory.o  objs/SDMemory.o  objs/SparseDenseSDMemory.o  objs/SparseSDMemory.o  objs/Stats.o  objs/STONNEModel.o  objs/TemporalRN.o  objs/testbench.o  objs/Tile.o  objs/utility.o  objs/TileGenerator/TileGenerator.o  objs/TileGenerator/mRNA/Analyzer.o  objs/TileGenerator/mRNA/DNNModel.o  objs/TileGenerator/mRNA/DSNetwork.o  objs/TileGenerator/mRNA/MAERIModel.o  objs/TileGenerator/mRNA/MappingStrategy.o  objs/TileGenerator/mRNA/MrnaGenerator.o  objs/TileGenerator/mRNA/MSNetwork.o  objs/TileGenerator/mRNA/RSNetwork.o  objs/TileGenerator/mRNA/SDMemory.o  objs/TileGenerator/mRNA/VNAT.o  objs/TileGenerator/StonneMapper/StonneMapperGenerator.o  objs/TileGenerator/StonneMapper/TileOptionDenseGemm.o  objs/TileGenerator/StonneMapper/TileOptionSparseDense.o  objs/TileGenerator/StonneMapper/utility.o  #-pthread -ltcmalloc

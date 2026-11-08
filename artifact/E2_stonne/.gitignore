@@ -3,3 +3,9 @@ results/zeonica_run/bin/
 results/stonne_run/src/
 results/stonne_run/sizes/*/output_stats_*
 __pycache__/
+
+# The repository root ignores logs and reports; this artifact ships them as
+# reference data and results, so re-include them here.
+!*.log
+!*.report.json
+!*.out

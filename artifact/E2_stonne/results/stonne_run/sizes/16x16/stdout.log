@@ -1,0 +1,28 @@
+Changing M to 16
+Changing N to 16
+Changing K to 16
+Changing ms_rows to 16
+Changing ms_cols to 16
+Changing num_ms to 256
+Changing dn_bw to 16
+Changing rn_bw to 16
+Changing T_M to 16
+Changing T_N to 16
+Changing T_K to 1
+Changing accumulation_buffer to 1
+Changing rn_type to TEMPORALRN
+Changing mn_type to OS_MESH
+Changing mem_ctrl to TPU_OS_DENSE
+ms_cols+ms_rows=32
+Loading a GEMM into STONNE
+Loading a GEMM tile
+Loading Tile: <T_R=1, T_S=1, T_C=1, T_K=16, T_G=1, T_N=1, T_X'=16, T_Y'=1>
+Printing stats
+Number of cycles running: 67
+Time mem: 0
+Time lt: 0
+Time as: 0
+Time ms: 0
+Time ds: 0
+[1;32mTest passed correctly [0m
+
