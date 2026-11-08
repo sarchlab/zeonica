@@ -1,0 +1,13 @@
+{
+  "_comment": "Values printed in the paper. Fig. 5: cycles, per-size residual labels and MAPE. Fig. 7d: host-time ratio labels (Zeonica / STONNE), computed by the paper plot script from reference/legacy_data.csv.",
+  "fig5": {
+    "zeonica_cycles": {"4x4": 15, "8x8": 31, "16x16": 63, "32x32": 127, "64x64": 255, "128x128": 511},
+    "stonne_cycles":  {"4x4": 15, "8x8": 35, "16x16": 67, "32x32": 131, "64x64": 259, "128x128": 515},
+    "residual_labels": {"4x4": "+0.0%", "8x8": "-11.4%", "16x16": "-6.0%", "32x32": "-3.1%", "64x64": "-1.5%", "128x128": "-0.8%"},
+    "mape_pct_rounded": 3.80
+  },
+  "fig7d": {
+    "ratio_labels": {"4x4": "0.27", "16x16": "2.60", "128x128": "28.39"},
+    "parity_crossing": "between 8x8 and 16x16"
+  }
+}

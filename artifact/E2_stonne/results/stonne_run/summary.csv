@@ -1,0 +1,7 @@
+size,n,cycles,passed,stats_match_historical,median_elapsed_s,min_elapsed_s,max_elapsed_s,reps
+4x4,4,15,True,n/a (historical file used num_ms=64),0.006753,0.006741,0.007130,3
+8x8,8,35,True,True,0.018376,0.017757,0.018426,3
+16x16,16,67,True,True,0.061725,0.061409,0.062126,3
+32x32,32,131,True,True,0.244986,0.243833,0.245090,3
+64x64,64,259,True,True,1.129698,1.129457,1.134452,3
+128x128,128,515,True,True,7.523275,7.468854,7.941077,3

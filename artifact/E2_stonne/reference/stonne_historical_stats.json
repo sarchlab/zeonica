@@ -1,0 +1,17 @@
+{
+  "_comment": "sha256 of the STONNE statistics files left by the historical (2026-03-06) Fig. 5 sweep in /scratch/data/yijia/stonne/output (not shipped: up to 47 MB each). STONNE writes no timestamp inside these files, so a rerun of the same command reproduces them byte for byte. The 4x4 file was produced with -num_ms=64 (its hardwareConfiguration.MSNetwork.ms_size is 64), which differs from the num_ms=16 in data.csv; 'command' records the num_ms each file was produced with.",
+  "files": {
+    "4x4":     {"num_ms": 64,    "txt": "6e2d76cf12d0f0172a6d6c0cf0491f1186f6444c401560198c13d14978add0d4", "counters": "7a399fa892af778fb83e3e9b7e2ddf34345f277152e6b34136595b19168efc8c",
+                "source": "output_stats_layer_TestLayer_architecture_MSes_64_dnbw_8_rn_bw_8timestamp_1772765188.{txt,counters} (identical: ..._1772766369)"},
+    "8x8":     {"num_ms": 64,    "txt": "21ce647d1d074cfb0a740de61585d465087a95bc2f2a50d05f3ad8ae691b3653", "counters": "a37ba768d873297a7d33fe384abda7395ab502527fb8f1a0aac9af3f6f8db90c",
+                "source": "output_stats_layer_TestLayer_architecture_MSes_64_dnbw_8_rn_bw_8timestamp_1772765194.{txt,counters} (identical: ..._1772765457, ..._1772766528)"},
+    "16x16":   {"num_ms": 256,   "txt": "417a8606788ee4100ca4489329bac21a209839fe2926781bb7cec77d07160389", "counters": "0ff4fdbd352970614856f1867d2f7c6e2dd8285bfcd70fd643eaef4a80fab3b4",
+                "source": "output_stats_layer_TestLayer_architecture_MSes_256_dnbw_16_rn_bw_16timestamp_1772765303.{txt,counters} (identical: ..._1772765572, ..._1772766548)"},
+    "32x32":   {"num_ms": 1024,  "txt": "ba3cac7dd5b3d8ff8b028699d7f72bd1065681c2e91a5c8ecf21cb4b7036a796", "counters": "090f6a6747be36072b868e49a5120c8b0991e26a01e6d362418c39f295d68477",
+                "source": "output_stats_layer_TestLayer_architecture_MSes_1024_dnbw_32_rn_bw_32timestamp_1772829992.{txt,counters}"},
+    "64x64":   {"num_ms": 4096,  "txt": "f5c5c7da8c6436090851b809bf00e3fc91415944a6b1c5f5888500cad763734c", "counters": "85f8153959768404abc99773e28730ccd8d674daa8310747096df478d3b6c71f",
+                "source": "output_stats_layer_TestLayer_architecture_MSes_4096_dnbw_64_rn_bw_64timestamp_1772766890.txt, ..._1772766891.counters"},
+    "128x128": {"num_ms": 16384, "txt": "592fe4c3ce140c462cf2efa1e05027a433e14fb25a7793278c88001c35e94dc4", "counters": "e78cd8d9ff9f9ccc790f697701a32127302029472ecb5fc0d35dd98fe60ff694",
+                "source": "output_stats_layer_TestLayer_architecture_MSes_16384_dnbw_128_rn_bw_128timestamp_1772830062.txt, ..._1772830067.counters"}
+  }
+}

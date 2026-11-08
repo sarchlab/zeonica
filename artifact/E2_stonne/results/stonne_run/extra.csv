@@ -1,0 +1,2 @@
+name,cycles,passed,stats_match_historical,elapsed_s,args
+4x4_num_ms64,15,True,True,0.008111,-DenseGEMM -M=4 -N=4 -K=4 -ms_rows=4 -ms_cols=4 -num_ms=64 -dn_bw=8 -rn_bw=8 -T_M=4 -T_N=4 -T_K=1 -accumulation_buffer=1 -rn_type=TEMPORALRN -mn_type=OS_MESH -mem_ctrl=TPU_OS_DENSE

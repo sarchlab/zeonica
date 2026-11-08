@@ -1,0 +1,23 @@
+{
+  "_comment": "Fig. 5 / Fig. 7d sizes. Zeonica paths are relative to the Zeonica source snapshot root (results/zeonica_run/src). 'arch_spec' is the spec the testbench resolves by default (the 4x4 testbench has none of its own and falls back to test/arch_spec/arch_spec.yaml). 'stonne_args' is the Stonne_config column of reference/legacy_data.csv, tokenized with shlex; run_stonne.py checks that the two agree. Order follows the paper figure.",
+  "seed": 12345,
+  "sizes": [
+    {"n": 4,   "label": "4x4",     "dir": "test/testbench/stonneGEMM4x4",      "arch_spec": "test/arch_spec/arch_spec.yaml",                 "report": "stonne_gemm.report.json",
+     "stonne_args": ["-DenseGEMM", "-M=4", "-N=4", "-K=4", "-ms_rows=4", "-ms_cols=4", "-num_ms=16", "-dn_bw=8", "-rn_bw=8", "-T_M=4", "-T_N=4", "-T_K=1", "-accumulation_buffer=1", "-rn_type=TEMPORALRN", "-mn_type=OS_MESH", "-mem_ctrl=TPU_OS_DENSE"]},
+    {"n": 8,   "label": "8x8",     "dir": "test/testbench/stonneGEMM8x8",      "arch_spec": "test/testbench/stonneGEMM8x8/arch_spec.yaml",      "report": "stonne_gemm8x8.report.json",
+     "stonne_args": ["-DenseGEMM", "-M=8", "-N=8", "-K=8", "-ms_rows=8", "-ms_cols=8", "-num_ms=64", "-dn_bw=8", "-rn_bw=8", "-T_M=8", "-T_N=8", "-T_K=1", "-accumulation_buffer=1", "-rn_type=TEMPORALRN", "-mn_type=OS_MESH", "-mem_ctrl=TPU_OS_DENSE"]},
+    {"n": 16,  "label": "16x16",   "dir": "test/testbench/stonneGEMM16x16",    "arch_spec": "test/testbench/stonneGEMM16x16/arch_spec.yaml",    "report": "stonne_gemm16x16.report.json",
+     "stonne_args": ["-DenseGEMM", "-M=16", "-N=16", "-K=16", "-ms_rows=16", "-ms_cols=16", "-num_ms=256", "-dn_bw=16", "-rn_bw=16", "-T_M=16", "-T_N=16", "-T_K=1", "-accumulation_buffer=1", "-rn_type=TEMPORALRN", "-mn_type=OS_MESH", "-mem_ctrl=TPU_OS_DENSE"]},
+    {"n": 32,  "label": "32x32",   "dir": "test/testbench/stonneGEMM32x32",    "arch_spec": "test/testbench/stonneGEMM32x32/arch_spec.yaml",    "report": "stonne_gemm32x32.report.json",
+     "stonne_args": ["-DenseGEMM", "-M=32", "-N=32", "-K=32", "-ms_rows=32", "-ms_cols=32", "-num_ms=1024", "-dn_bw=32", "-rn_bw=32", "-T_M=32", "-T_N=32", "-T_K=1", "-accumulation_buffer=1", "-rn_type=TEMPORALRN", "-mn_type=OS_MESH", "-mem_ctrl=TPU_OS_DENSE"]},
+    {"n": 64,  "label": "64x64",   "dir": "test/testbench/stonneGEMM64x64",    "arch_spec": "test/testbench/stonneGEMM64x64/arch_spec.yaml",    "report": "stonne_gemm64x64.report.json",
+     "stonne_args": ["-DenseGEMM", "-M=64", "-N=64", "-K=64", "-ms_rows=64", "-ms_cols=64", "-num_ms=4096", "-dn_bw=64", "-rn_bw=64", "-T_M=64", "-T_N=64", "-T_K=1", "-accumulation_buffer=1", "-rn_type=TEMPORALRN", "-mn_type=OS_MESH", "-mem_ctrl=TPU_OS_DENSE"]},
+    {"n": 128, "label": "128x128", "dir": "test/testbench/stonneGEMM128X128",  "arch_spec": "test/testbench/stonneGEMM128X128/arch_spec.yaml",  "report": "stonne_gemm128x128.report.json",
+     "stonne_args": ["-DenseGEMM", "-M=128", "-N=128", "-K=128", "-ms_rows=128", "-ms_cols=128", "-num_ms=16384", "-dn_bw=128", "-rn_bw=128", "-T_M=128", "-T_N=128", "-T_K=1", "-accumulation_buffer=1", "-rn_type=TEMPORALRN", "-mn_type=OS_MESH", "-mem_ctrl=TPU_OS_DENSE"]}
+  ],
+  "stonne_extra": [
+    {"name": "4x4_num_ms64", "n": 4, "label": "4x4", "historical_key": "4x4",
+     "_comment": "The surviving historical 4x4 STONNE stats file (reference/stonne_historical_stats.json) was produced with num_ms=64, not the num_ms=16 printed in data.csv. Run once (untimed) to show both give 15 cycles and that num_ms=64 reproduces that file byte for byte.",
+     "stonne_args": ["-DenseGEMM", "-M=4", "-N=4", "-K=4", "-ms_rows=4", "-ms_cols=4", "-num_ms=64", "-dn_bw=8", "-rn_bw=8", "-T_M=4", "-T_N=4", "-T_K=1", "-accumulation_buffer=1", "-rn_type=TEMPORALRN", "-mn_type=OS_MESH", "-mem_ctrl=TPU_OS_DENSE"]}
+  ]
+}

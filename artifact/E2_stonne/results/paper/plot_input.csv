@@ -1,0 +1,7 @@
+Size,Zeonica(cycle),Simulation Time(s),Stonne(cycle),Simulation Time(s),Stonne_config
+4x4,15,0.004,15,0.015,-DenseGEMM -M=4 -N=4 -K=4 -ms_rows=4 -ms_cols=4 -num_ms=16 -dn_bw=8 -rn_bw=8 -T_M=4 -T_N=4 -T_K=1 -accumulation_buffer=1 -rn_type=TEMPORALRN -mn_type=OS_MESH -mem_ctrl=TPU_OS_DENSE
+8x8,31,0.023,35,0.026,-DenseGEMM -M=8 -N=8 -K=8 -ms_rows=8 -ms_cols=8 -num_ms=64 -dn_bw=8 -rn_bw=8 -T_M=8 -T_N=8 -T_K=1 -accumulation_buffer=1 -rn_type=TEMPORALRN -mn_type=OS_MESH -mem_ctrl=TPU_OS_DENSE
+16x16,63,0.221,67,0.085,-DenseGEMM -M=16 -N=16 -K=16 -ms_rows=16 -ms_cols=16 -num_ms=256 -dn_bw=16 -rn_bw=16 -T_M=16 -T_N=16 -T_K=1 -accumulation_buffer=1 -rn_type=TEMPORALRN -mn_type=OS_MESH -mem_ctrl=TPU_OS_DENSE
+32x32,127,1.906,131,0.302,-DenseGEMM -M=32 -N=32 -K=32 -ms_rows=32 -ms_cols=32 -num_ms=1024 -dn_bw=32 -rn_bw=32 -T_M=32 -T_N=32 -T_K=1 -accumulation_buffer=1 -rn_type=TEMPORALRN -mn_type=OS_MESH -mem_ctrl=TPU_OS_DENSE
+64x64,255,17.511,259,1.335,-DenseGEMM -M=64 -N=64 -K=64 -ms_rows=64 -ms_cols=64 -num_ms=4096 -dn_bw=64 -rn_bw=64 -T_M=64 -T_N=64 -T_K=1 -accumulation_buffer=1 -rn_type=TEMPORALRN -mn_type=OS_MESH -mem_ctrl=TPU_OS_DENSE
+128x128,511,161.712,515,5.696,"-DenseGEMM -M=128 -N=128 -K=128 -ms_rows=128 -ms_cols=128 -num_ms=16384 -dn_bw=128 -rn_bw=128 -T_M=128 -T_N=128 -T_K=1 -accumulation_buffer=1 -rn_type=""TEMPORALRN"" -mn_type=""OS_MESH"" -mem_ctrl=""TPU_OS_DENSE"""

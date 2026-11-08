@@ -1,0 +1,7 @@
+size,zeonica_cycles,paper_zeonica_cycles,stonne_cycles,paper_stonne_cycles,residual_pct,residual_label,zeonica_passed,stonne_passed,zeonica_ext_s,zeonica_report_span_s,stonne_ext_s,ratio_measured,ratio_process_both,paper_zeonica_s,paper_stonne_s,ratio_paper,stonne_stats_match_historical
+4x4,15,15,15,15,0.0000,+0.0%,True,True,0.017631,0.003550,0.006753,0.5257,2.6108,0.004,0.015,0.2667,n/a (historical file used num_ms=64)
+8x8,31,31,35,35,-11.4286,-11.4%,True,True,0.061088,0.034296,0.018376,1.8663,3.3243,0.023,0.026,0.8846,True
+16x16,63,63,67,67,-5.9701,-6.0%,True,True,0.359152,0.285894,0.061725,4.6317,5.8186,0.221,0.085,2.6000,True
+32x32,127,127,131,131,-3.0534,-3.1%,True,True,2.487928,2.253978,0.244986,9.2004,10.1554,1.906,0.302,6.3113,True
+64x64,255,255,259,259,-1.5444,-1.5%,True,True,18.255374,17.393630,1.129698,15.3967,16.1595,17.511,1.335,13.1169,True
+128x128,511,511,515,515,-0.7767,-0.8%,True,True,138.381150,135.171419,7.523275,17.9671,18.3937,161.712,5.696,28.3904,True

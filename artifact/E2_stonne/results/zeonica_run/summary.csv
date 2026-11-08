@@ -1,0 +1,7 @@
+size,n,total_cycles,passed,mismatch_count,committed_spec_trace_on,committed_spec_cycles,median_elapsed_s,min_elapsed_s,max_elapsed_s,median_report_span_s,reps
+4x4,4,15,True,0,True,15,0.017631,0.016154,0.018420,0.003550,3
+8x8,8,31,True,0,True,31,0.061088,0.058567,0.061305,0.034296,3
+16x16,16,63,True,0,False,,0.359152,0.345150,0.374690,0.285894,3
+32x32,32,127,True,0,True,127,2.487928,2.483169,2.490125,2.253978,3
+64x64,64,255,True,0,False,,18.255374,18.091283,18.441360,17.393630,3
+128x128,128,511,True,0,False,,138.381150,136.701545,139.322002,135.171419,3

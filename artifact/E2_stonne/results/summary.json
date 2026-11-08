@@ -1,0 +1,97 @@
+{
+  "mape_pct": 3.795533333333333,
+  "mape_pct_rounded": 3.8,
+  "ratio_measured": {
+    "4x4": 0.5257,
+    "8x8": 1.8663,
+    "16x16": 4.6317,
+    "32x32": 9.2004,
+    "64x64": 15.3967,
+    "128x128": 17.9671
+  },
+  "ratio_process_both": {
+    "4x4": 2.6108,
+    "8x8": 3.3243,
+    "16x16": 5.8186,
+    "32x32": 10.1554,
+    "64x64": 16.1595,
+    "128x128": 18.3937
+  },
+  "ratio_paper": {
+    "4x4": 0.2667,
+    "8x8": 0.8846,
+    "16x16": 2.6,
+    "32x32": 6.3113,
+    "64x64": 13.1169,
+    "128x128": 28.3904
+  },
+  "checks": [
+    {
+      "check": "fig5_zeonica_cycles",
+      "status": "PASS",
+      "ok": true,
+      "detail": "4x4=15 8x8=31 16x16=63 32x32=127 64x64=255 128x128=511"
+    },
+    {
+      "check": "fig5_stonne_cycles",
+      "status": "PASS",
+      "ok": true,
+      "detail": "4x4=15 8x8=35 16x16=67 32x32=131 64x64=259 128x128=515"
+    },
+    {
+      "check": "fig5_mape",
+      "status": "PASS",
+      "ok": true,
+      "detail": "MAPE = 3.7955% (paper 3.80%)"
+    },
+    {
+      "check": "fig5_residual_labels",
+      "status": "PASS",
+      "ok": true,
+      "detail": "4x4=+0.0% 8x8=-11.4% 16x16=-6.0% 32x32=-3.1% 64x64=-1.5% 128x128=-0.8%"
+    },
+    {
+      "check": "correctness",
+      "status": "PASS",
+      "ok": true,
+      "detail": "Zeonica report passed=true and STONNE 'Test passed correctly' for every size"
+    },
+    {
+      "check": "paper_plot_input_equals_data_csv",
+      "status": "PASS",
+      "ok": true,
+      "detail": "results/paper/plot_input.csv equals reference/legacy_data.csv on every plotted column"
+    },
+    {
+      "check": "stonne_stats_byte_identical_to_historical_sweep",
+      "status": "INFO",
+      "ok": true,
+      "detail": "4x4=n/a (historical file used num_ms=64) 8x8=True 16x16=True 32x32=True 64x64=True 128x128=True; 4x4 with num_ms=64: cycles=15, stats match historical file: True"
+    },
+    {
+      "check": "fig7d_paper_ratio_labels",
+      "status": "PASS",
+      "ok": true,
+      "detail": "paper ratios from data.csv: 4x4=0.27x 8x8=0.88x 16x16=2.60x 32x32=6.31x 64x64=13.12x 128x128=28.39x"
+    },
+    {
+      "check": "fig7d_ratio_grows_with_N",
+      "status": "PASS",
+      "ok": true,
+      "detail": "measured (Zeonica wallClockDurationSec / STONNE process time): 4x4=0.53x 8x8=1.87x 16x16=4.63x 32x32=9.20x 64x64=15.40x 128x128=17.97x"
+    },
+    {
+      "check": "fig7d_parity_crossing",
+      "status": "INFO",
+      "ok": true,
+      "detail": "measured ratio crosses 1x between 4x4 and 8x8; paper: between 8x8 and 16x16"
+    },
+    {
+      "check": "fig7d_process_time_ratio",
+      "status": "INFO",
+      "ok": true,
+      "detail": "supplementary, both simulators timed as whole processes: 4x4=2.61x 8x8=3.32x 16x16=5.82x 32x32=10.16x 64x64=16.16x 128x128=18.39x"
+    }
+  ],
+  "result": "PASS"
+}

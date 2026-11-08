@@ -1,0 +1,25 @@
+{
+  "zeonica": {
+    "path": "/scratch/data/yijia/zeonica_ae_e2",
+    "commit": "ad19fef6f2136b940302aa52c17513737de23b0e",
+    "dirty": false
+  },
+  "source": "head",
+  "zeonica_testbench": {
+    "path": "/scratch/data/yijia/zeonica_ae_e2/test/Zeonica_Testbench",
+    "commit": "6ed5ac6739c08cfd608873c04b6ac97b19810495",
+    "dirty": false
+  },
+  "go": "go version go1.25.3 linux/amd64",
+  "host": {
+    "node": "yss2",
+    "machine": "x86_64",
+    "platform": "Linux-5.15.0-198-generic-x86_64-with-glibc2.35",
+    "cpu_count": 128
+  },
+  "timing_boundary": "external monotonic elapsed time around the prebuilt testbench binary process (median of measured runs); report wallClockDurationSec recorded alongside",
+  "tracing": "off for every timed run (generated arch_spec.timing.yaml); one extra untimed run with the committed spec for sizes whose spec enables tracing, to check that cycles do not change",
+  "seed": 12345,
+  "warmup": 1,
+  "reps": 3
+}

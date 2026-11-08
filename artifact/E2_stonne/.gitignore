@@ -1,0 +1,5 @@
+results/zeonica_run/src/
+results/zeonica_run/bin/
+results/stonne_run/src/
+results/stonne_run/sizes/*/output_stats_*
+__pycache__/
