@@ -1,0 +1,27 @@
+{
+ "kernel": "matmul_multicore_multi_dram_small_3x3",
+ "execution_path": "E-IR YAML -> LoadProgramFileFromYAML -> Driver.MapProgram -> Core/Akita",
+ "pes": 45,
+ "eir_instructions": 3600,
+ "cb_queues": 153,
+ "eir_cycles": 1676,
+ "fixed_cycles": 36721,
+ "zeonica_cycles": 38397,
+ "data_check": {
+  "source": "reference/ttsim_gtest_dump/matmul_multicore_multi_dram_small_3x3/dump",
+  "mode": "bit_exact",
+  "elements": 147456,
+  "bit_exact": 147456,
+  "within_tolerance": 147456,
+  "max_ulp": 0,
+  "bit_exact_fraction": 1,
+  "passed": true
+ },
+ "passed": true,
+ "wall_seconds": 1.329961392,
+ "fixed_components": {
+  "class": 0,
+  "dispatch": 4237,
+  "multicore": 32484
+ }
+}

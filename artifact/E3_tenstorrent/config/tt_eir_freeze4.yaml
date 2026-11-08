@@ -1,0 +1,50 @@
+# TT-on-E-IR profile: calibration partition only (18 kernels + Case B calibration baseline/probes).
+latencies:
+  dram_read_tile: 1
+  dram_write_tile: 5
+  unpack_tile: 1
+  reload_tile: 1
+  zero_tile: 1
+  mov_tile: 1
+  matmul_tile: 2
+  pack_tile: 1
+  tilize_tile: 34
+  untilize_page: 175
+  copy_tile: 1
+  eltwise_binary_tile: 207
+  bcast_h_tile: 72
+  bcast_w_tile: 39
+  bcast_hw_tile: 63
+  bcast_mul_adjust: -19
+  sfpu_tile: 29
+  cb_op: 1
+  reader_delay_steps: 5.2581
+  compute_delay_steps: 5.96
+  writer_delay_steps: 5.943
+  reader_delay_setup: 59
+  compute_delay_setup: -41
+  writer_delay_setup: 10
+  unpack_progress_steps: 2
+  reader_work_per_tile: 38.9375
+  writer_work_per_tile: 45.375
+  first_burst_extra: 0
+  release_before_fraction: 0.4372
+  resume_work: 18
+  unpack_subblock: 1
+  math_subblock: 1
+  pack_subblock: 1
+  compute_burst_steps: 1042
+  reload_progress_steps: 81
+  pack_burst_steps: 116
+  reload_init: 12
+  mm_init_short: 34
+  single_core_subblock_extra: 30
+fixed:
+  dispatch: 4237
+  class_fixed:
+    large_block_hifi4: 8486
+  multicore_base: 15344
+  multicore_line: 2647
+  multicore_mesh: 4285
+  sfpu_dispatch: 12483
+  program_window_base: 3942

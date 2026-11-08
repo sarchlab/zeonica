@@ -1,0 +1,1 @@
+{"name":"in0","words":512,"format":"bf16","layout":"tile_pages","tiles":1,"op":"exponential","approx":0}

@@ -1,0 +1,51 @@
+diff --git a/docs/libttsim_api.md b/docs/libttsim_api.md
+index ab02276..7f3d1e0 100644
+--- a/docs/libttsim_api.md
++++ b/docs/libttsim_api.md
+@@ -99,12 +99,18 @@ device.
+ 
+ ```c
+ void libttsim_clock(uint32_t n_clocks);
++uint64_t libttsim_get_clock(void);
+ ```
+ 
+ Advances the simulation by `n_clocks` clock steps, running the RISC-V cores and Tensix units. The
+ host calls this to let the device make forward progress between or during register accesses. The
+ simulator does not advance time on its own; it only runs inside `libttsim_clock`.
+ 
++`libttsim_get_clock` returns the current value of the simulator's process-global clock counter. The
++value starts at zero after `libttsim_init` and increments once for each simulated clock step advanced
++through `libttsim_clock`. This is a read-only observation point for host-side measurement and does
++not advance simulation time.
++
+ ### Tile-relative access (transitional)
+ 
+ ```c
+diff --git a/src/libttsim.cpp b/src/libttsim.cpp
+index e944920..8c492a9 100644
+--- a/src/libttsim.cpp
++++ b/src/libttsim.cpp
+@@ -146,6 +146,11 @@ extern "C" API_EXPORT void libttsim_exit() {
+     s_ttsim_running = false;
+ }
+ 
++extern "C" API_EXPORT uint64_t libttsim_get_clock() {
++    TTSIM_VERIFY(s_ttsim_running, ConfigurationError, "sim is not running");
++    return g_clock;
++}
++
+ extern "C" API_EXPORT void libttsim_set_pci_dma_mem_callbacks(
+     decltype(s_pfn_libttsim_pci_dma_mem_rd_bytes) pci_dma_mem_rd,
+     decltype(s_pfn_libttsim_pci_dma_mem_wr_bytes) pci_dma_mem_wr
+diff --git a/src/libttsim.map b/src/libttsim.map
+index b850272..d8c93f7 100644
+--- a/src/libttsim.map
++++ b/src/libttsim.map
+@@ -9,6 +9,7 @@
+     global:
+         libttsim_init;
+         libttsim_exit;
++        libttsim_get_clock;
+         libttsim_set_pci_dma_mem_callbacks;
+         libttsim_pci_config_rd32;
+         libttsim_pci_config_wr32;

@@ -1,0 +1,17 @@
+{
+ "argv": [
+  "/scratch/data/yijia/tt-metal/build_ttsim_tests/test/tt_metal/unit_tests_legacy",
+  "--gtest_filter=MeshDeviceSingleCardFixture.BcastWMul"
+ ],
+ "cwd": "/scratch/data/yijia/tt-metal",
+ "env": {
+  "TT_METAL_HOME": "/scratch/data/yijia/tt-metal",
+  "TT_METAL_SIMULATOR": "/scratch/data/yijia/ttsim-run/wh-cycle/libttsim.so",
+  "TT_METAL_CACHE": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/build/tt_cache",
+  "TT_METAL_DISABLE_SFPLOADMACRO": "1",
+  "LD_LIBRARY_PATH": "/scratch/data/yijia/local-apt/usr/lib/x86_64-linux-gnu:/scratch/data/yijia/miniconda3/envs/llvm-build/lib:/usr/lib/x86_64-linux-gnu:/scratch/data/yijia/tt-metal/build_ttsim_tests/lib:/scratch/data/yijia/tt-metal/build_ttsim_tests/tt_metal:/scratch/data/yijia/tt-metal/build_ttsim_tests/tt_metal/third_party/umd/lib:/scratch/data/yijia/tt-metal/build_ttsim_tests/tt_stl",
+  "TT_METAL_SLOW_DISPATCH_MODE": "1",
+  "ZEONICA_TT_DUMP_DIR": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/raw/ttsim_gtest_dump/bcast_w_mul/dump"
+ },
+ "binary_sha256": "dbee231a784b98772cb4156056b8dd84cc55a4a72b9949735eb9e13500cd94d8"
+}

@@ -1,0 +1,189 @@
+{
+  "freeze_record": {
+    "created_utc": "2026-10-05T03:35:22.816311Z",
+    "files": 62
+  },
+  "zeonica_source": "HEAD = 70eb5477f17af3b27fe368b3fc1a8739584fcf0d",
+  "upstream_commit": "582016668dd52f170c777dc12f4456c8243e3480",
+  "source_files_matched": 59,
+  "source_files_expected": 59,
+  "source_mismatches": [],
+  "go_files_not_in_freeze_record": [],
+  "binary": "build/tt_eir_pruned sha256 2a2e5421ee071a45f51fa7506616b0309f16979b5a36ab1477181f2dc0687ba9 (not compared: rebuilt locally)",
+  "ttsim_references": [
+    {
+      "kernel": "matmul_single_tile_bfp8b",
+      "reference_cycles": 4413,
+      "nodump_result": 4413,
+      "nodump_stdout": 4413,
+      "dump_off_observations": [
+        4413
+      ],
+      "dump_on": 4413,
+      "dump_on_equal": true,
+      "ok": true
+    },
+    {
+      "kernel": "matmul_single_core_small",
+      "reference_cycles": 5568,
+      "nodump_result": 5568,
+      "nodump_stdout": 5568,
+      "dump_off_observations": [
+        5568
+      ],
+      "dump_on": 5568,
+      "dump_on_equal": true,
+      "ok": true
+    },
+    {
+      "kernel": "matmul_large_block_hifi4_rowmajor_rowmajor",
+      "reference_cycles": 14889,
+      "nodump_result": 14889,
+      "nodump_stdout": 14889,
+      "dump_off_observations": [
+        14889,
+        14889,
+        14889,
+        14889,
+        14889,
+        14889
+      ],
+      "dump_on": 14889,
+      "dump_on_equal": true,
+      "ok": true
+    },
+    {
+      "kernel": "matmul_multicore_multi_dram_small_3x3",
+      "reference_cycles": 35177,
+      "nodump_result": 35177,
+      "nodump_stdout": 35177,
+      "dump_off_observations": [
+        35177,
+        35177,
+        35177,
+        35177,
+        35177,
+        35177
+      ],
+      "dump_on": 35177,
+      "dump_on_equal": true,
+      "ok": true
+    },
+    {
+      "kernel": "bcast_w_mul",
+      "reference_cycles": 5403,
+      "nodump_result": 5403,
+      "nodump_stdout": 5403,
+      "dump_off_observations": [
+        5403
+      ],
+      "dump_on": 5403,
+      "dump_on_equal": true,
+      "ok": true
+    },
+    {
+      "kernel": "eltwise_binary_mul",
+      "reference_cycles": 393369,
+      "nodump_result": 393369,
+      "nodump_stdout": 393369,
+      "dump_off_observations": [
+        393369,
+        393369,
+        393369,
+        393369,
+        393369,
+        393369
+      ],
+      "dump_on": 393369,
+      "dump_on_equal": true,
+      "ok": true
+    },
+    {
+      "kernel": "sfpu_exponential_1tile",
+      "reference_cycles": 12525,
+      "nodump_result": 12525,
+      "nodump_stdout": 12525,
+      "dump_off_observations": [
+        12525,
+        12525,
+        12525,
+        12525,
+        12525,
+        12525,
+        12525,
+        12525,
+        12525
+      ],
+      "dump_on": 12525,
+      "dump_on_equal": true,
+      "ok": true
+    },
+    {
+      "kernel": "sfpu_sigmoid_1tile",
+      "reference_cycles": 12465,
+      "nodump_result": 12465,
+      "nodump_stdout": 12465,
+      "dump_off_observations": [
+        12465,
+        12465,
+        12465,
+        12465,
+        12465,
+        12465,
+        12465,
+        12465,
+        12465
+      ],
+      "dump_on": 12465,
+      "dump_on_equal": true,
+      "ok": true
+    },
+    {
+      "kernel": "sfpu_sigmoid_4tile",
+      "reference_cycles": 12531,
+      "nodump_result": 12531,
+      "nodump_stdout": 12531,
+      "dump_off_observations": [
+        12531,
+        12531,
+        12531,
+        12531,
+        12531,
+        12531,
+        12531,
+        12531,
+        12531
+      ],
+      "dump_on": 12613,
+      "dump_on_equal": false,
+      "ok": true
+    },
+    {
+      "kernel": "sfpu_tanh_4tile",
+      "reference_cycles": 12843,
+      "nodump_result": 12843,
+      "nodump_stdout": 12843,
+      "dump_off_observations": [
+        12843,
+        12843,
+        12843,
+        12843,
+        12843,
+        12843,
+        12843,
+        12843,
+        12843
+      ],
+      "dump_on": 12843,
+      "dump_on_equal": true,
+      "ok": true
+    }
+  ],
+  "checks": {
+    "config_hash": "PASS",
+    "source_hashes": "PASS",
+    "upstream_commit_is_ancestor": "PASS",
+    "ttsim_references": "PASS"
+  },
+  "check": "PASS"
+}

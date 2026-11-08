@@ -1,0 +1,26 @@
+{
+ "kernel": "matmul_single_tile_bfp8b",
+ "execution_path": "E-IR YAML -> LoadProgramFileFromYAML -> Driver.MapProgram -> Core/Akita",
+ "pes": 5,
+ "eir_instructions": 24,
+ "cb_queues": 17,
+ "eir_cycles": 174,
+ "fixed_cycles": 4237,
+ "zeonica_cycles": 4411,
+ "data_check": {
+  "source": "reference/ttsim_gtest_dump/matmul_single_tile_bfp8b/dump",
+  "mode": "bit_exact",
+  "elements": 1088,
+  "bit_exact": 1088,
+  "within_tolerance": 1088,
+  "max_ulp": 0,
+  "bit_exact_fraction": 1,
+  "passed": true
+ },
+ "passed": true,
+ "wall_seconds": 0.005209306,
+ "fixed_components": {
+  "class": 0,
+  "dispatch": 4237
+ }
+}

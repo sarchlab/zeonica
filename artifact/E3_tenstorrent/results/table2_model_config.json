@@ -1,0 +1,277 @@
+[
+ {
+  "kernel": "matmul_single_tile_bfp8b",
+  "device_width_pes": 3,
+  "device_height_pes": 2,
+  "tt_cores": 1,
+  "pes": 5,
+  "cbs_core0": [
+   {
+    "name": "c0",
+    "label": "c0",
+    "tiles": 1
+   },
+   {
+    "name": "c1",
+    "label": "c1",
+    "tiles": 1
+   },
+   {
+    "name": "c16",
+    "label": "c16",
+    "tiles": 1
+   },
+   {
+    "name": "c24",
+    "label": "c24",
+    "tiles": 1
+   }
+  ],
+  "out_pages": 1,
+  "in_page_bytes": 1088,
+  "out_page_bytes": 1088
+ },
+ {
+  "kernel": "matmul_single_core_small",
+  "device_width_pes": 3,
+  "device_height_pes": 2,
+  "tt_cores": 1,
+  "pes": 5,
+  "cbs_core0": [
+   {
+    "name": "c0",
+    "label": "c0",
+    "tiles": 16
+   },
+   {
+    "name": "c1",
+    "label": "c1",
+    "tiles": 16
+   },
+   {
+    "name": "c16",
+    "label": "c16",
+    "tiles": 16
+   },
+   {
+    "name": "c24",
+    "label": "c24",
+    "tiles": 16
+   }
+  ],
+  "out_pages": 16,
+  "in_page_bytes": 2048,
+  "out_page_bytes": 2048
+ },
+ {
+  "kernel": "matmul_large_block_hifi4_rowmajor_rowmajor",
+  "device_width_pes": 3,
+  "device_height_pes": 2,
+  "tt_cores": 1,
+  "pes": 5,
+  "cbs_core0": [
+   {
+    "name": "c0",
+    "label": "c0",
+    "tiles": 16
+   },
+   {
+    "name": "c1",
+    "label": "c1",
+    "tiles": 8
+   },
+   {
+    "name": "c16",
+    "label": "c16",
+    "tiles": 8
+   },
+   {
+    "name": "c24",
+    "label": "c24 (tilized in0)",
+    "tiles": 8
+   },
+   {
+    "name": "c26",
+    "label": "c26",
+    "tiles": 4
+   }
+  ],
+  "out_pages": 8,
+  "in_page_bytes": 2048,
+  "out_page_bytes": 2048
+ },
+ {
+  "kernel": "matmul_multicore_multi_dram_small_3x3",
+  "device_width_pes": 9,
+  "device_height_pes": 6,
+  "tt_cores": 9,
+  "pes": 45,
+  "cbs_core0": [
+   {
+    "name": "c0",
+    "label": "c0",
+    "tiles": 16
+   },
+   {
+    "name": "c1",
+    "label": "c1",
+    "tiles": 16
+   },
+   {
+    "name": "c16",
+    "label": "c16",
+    "tiles": 16
+   },
+   {
+    "name": "c24",
+    "label": "c24",
+    "tiles": 16
+   }
+  ],
+  "out_pages": 144,
+  "in_page_bytes": 2048,
+  "out_page_bytes": 2048
+ },
+ {
+  "kernel": "bcast_w_mul",
+  "device_width_pes": 3,
+  "device_height_pes": 2,
+  "tt_cores": 1,
+  "pes": 5,
+  "cbs_core0": [
+   {
+    "name": "c0",
+    "label": "c0",
+    "tiles": 2
+   },
+   {
+    "name": "c1",
+    "label": "c1",
+    "tiles": 2
+   },
+   {
+    "name": "c16",
+    "label": "c16",
+    "tiles": 2
+   }
+  ],
+  "out_pages": 48,
+  "in_page_bytes": 2048,
+  "out_page_bytes": 2048
+ },
+ {
+  "kernel": "eltwise_binary_mul",
+  "device_width_pes": 3,
+  "device_height_pes": 2,
+  "tt_cores": 1,
+  "pes": 5,
+  "cbs_core0": [
+   {
+    "name": "c0",
+    "label": "c0",
+    "tiles": 2
+   },
+   {
+    "name": "c1",
+    "label": "c1",
+    "tiles": 2
+   },
+   {
+    "name": "c16",
+    "label": "c16",
+    "tiles": 2
+   }
+  ],
+  "out_pages": 2048,
+  "in_page_bytes": 2048,
+  "out_page_bytes": 2048
+ },
+ {
+  "kernel": "sfpu_exponential_1tile",
+  "device_width_pes": 3,
+  "device_height_pes": 2,
+  "tt_cores": 1,
+  "pes": 5,
+  "cbs_core0": [
+   {
+    "name": "c0",
+    "label": "c0",
+    "tiles": 1
+   },
+   {
+    "name": "c16",
+    "label": "c16",
+    "tiles": 1
+   }
+  ],
+  "out_pages": 1,
+  "in_page_bytes": 2048,
+  "out_page_bytes": 2048
+ },
+ {
+  "kernel": "sfpu_sigmoid_1tile",
+  "device_width_pes": 3,
+  "device_height_pes": 2,
+  "tt_cores": 1,
+  "pes": 5,
+  "cbs_core0": [
+   {
+    "name": "c0",
+    "label": "c0",
+    "tiles": 1
+   },
+   {
+    "name": "c16",
+    "label": "c16",
+    "tiles": 1
+   }
+  ],
+  "out_pages": 1,
+  "in_page_bytes": 2048,
+  "out_page_bytes": 2048
+ },
+ {
+  "kernel": "sfpu_sigmoid_4tile",
+  "device_width_pes": 3,
+  "device_height_pes": 2,
+  "tt_cores": 1,
+  "pes": 5,
+  "cbs_core0": [
+   {
+    "name": "c0",
+    "label": "c0",
+    "tiles": 1
+   },
+   {
+    "name": "c16",
+    "label": "c16",
+    "tiles": 1
+   }
+  ],
+  "out_pages": 4,
+  "in_page_bytes": 2048,
+  "out_page_bytes": 2048
+ },
+ {
+  "kernel": "sfpu_tanh_4tile",
+  "device_width_pes": 3,
+  "device_height_pes": 2,
+  "tt_cores": 1,
+  "pes": 5,
+  "cbs_core0": [
+   {
+    "name": "c0",
+    "label": "c0",
+    "tiles": 1
+   },
+   {
+    "name": "c16",
+    "label": "c16",
+    "tiles": 1
+   }
+  ],
+  "out_pages": 4,
+  "in_page_bytes": 2048,
+  "out_page_bytes": 2048
+ }
+]

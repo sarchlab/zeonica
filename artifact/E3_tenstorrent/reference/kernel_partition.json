@@ -1,0 +1,226 @@
+[
+ {
+  "kernel": "matmul_single_tile_l1",
+  "role": "calibration",
+  "gtest_filter": "MeshDeviceSingleCardFixture.MatmulSingleTileOutputInL1",
+  "tt_source": "tests/tt_metal/tt_metal/test_matmul_single_tile_output_in_l1.cpp",
+  "tt_binary": "legacy",
+  "slow_dispatch": true
+ },
+ {
+  "kernel": "matmul_large_block",
+  "role": "calibration",
+  "gtest_filter": "MeshDeviceSingleCardFixture.GenericBinaryReaderMatmulLargeBlock",
+  "tt_source": "tests/tt_metal/tt_metal/test_generic_binary_reader_matmul_large_block.cpp",
+  "tt_binary": "legacy",
+  "slow_dispatch": true
+ },
+ {
+  "kernel": "matmul_single_tile_bfp8b",
+  "role": "heldout",
+  "gtest_filter": "MeshDeviceSingleCardFixture.MatmulSingleTileBfp8b",
+  "tt_source": "tests/tt_metal/tt_metal/test_matmul_single_tile_bfp8b.cpp",
+  "tt_binary": "legacy",
+  "slow_dispatch": true
+ },
+ {
+  "kernel": "matmul_single_core_small",
+  "role": "heldout",
+  "gtest_filter": "MeshDispatchFixture.TensixMatmulSingleCoreSmall",
+  "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_single_core.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": true
+ },
+ {
+  "kernel": "matmul_single_core",
+  "role": "calibration",
+  "gtest_filter": "MeshDispatchFixture.TensixMatmulSingleCore",
+  "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_single_core.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": true
+ },
+ {
+  "kernel": "matmul_large_block_hifi4_tilized_tilized",
+  "role": "calibration",
+  "gtest_filter": "MeshDispatchFixture.TensixMatmulLargeBlockHiFi4TilizedTilized",
+  "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_large_block.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "matmul_large_block_hifi4_rowmajor_input",
+  "role": "calibration",
+  "gtest_filter": "MeshDispatchFixture.TensixMatmulLargeBlockHiFi4RowMajorInputTilizedOutput",
+  "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_large_block.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "matmul_large_block_hifi4_rowmajor_output",
+  "role": "calibration",
+  "gtest_filter": "MeshDispatchFixture.TensixMatmulLargeBlockHiFi4TilizedInputRowMajorOutput",
+  "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_large_block.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "matmul_large_block_hifi4_rowmajor_rowmajor",
+  "role": "heldout",
+  "gtest_filter": "MeshDispatchFixture.TensixMatmulLargeBlockHiFi4RowMajorRowMajor",
+  "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_large_block.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "matmul_multicore_multi_dram_small",
+  "role": "calibration",
+  "gtest_filter": "MeshDispatchFixture.TensixMatmulMultiCoreMultiDRAMSmall",
+  "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_X_dram.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "matmul_multicore_multi_dram_small_1x2",
+  "role": "calibration",
+  "gtest_filter": "MeshDispatchFixture.TensixMatmulMultiCoreMultiDRAMSmall1x2",
+  "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_X_dram.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "matmul_multicore_multi_dram_small_2x1",
+  "role": "calibration",
+  "gtest_filter": "MeshDispatchFixture.TensixMatmulMultiCoreMultiDRAMSmall2x1",
+  "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_X_dram.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "matmul_multicore_multi_dram_small_1x3",
+  "role": "calibration",
+  "gtest_filter": "MeshDispatchFixture.TensixMatmulMultiCoreMultiDRAMSmall1x3",
+  "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_X_dram.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "matmul_multicore_multi_dram_small_3x1",
+  "role": "calibration",
+  "gtest_filter": "MeshDispatchFixture.TensixMatmulMultiCoreMultiDRAMSmall3x1",
+  "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_X_dram.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "matmul_multicore_multi_dram_small_3x3",
+  "role": "heldout",
+  "gtest_filter": "MeshDispatchFixture.TensixMatmulMultiCoreMultiDRAMSmall3x3",
+  "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_X_dram.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "bcast_h_add",
+  "role": "calibration",
+  "gtest_filter": "MeshDeviceSingleCardFixture.BcastHAdd",
+  "tt_source": "tests/tt_metal/tt_metal/test_bcast.cpp",
+  "tt_binary": "legacy",
+  "slow_dispatch": true
+ },
+ {
+  "kernel": "bcast_w_add",
+  "role": "calibration",
+  "gtest_filter": "MeshDeviceSingleCardFixture.BcastWAdd",
+  "tt_source": "tests/tt_metal/tt_metal/test_bcast.cpp",
+  "tt_binary": "legacy",
+  "slow_dispatch": true
+ },
+ {
+  "kernel": "bcast_hw_add",
+  "role": "calibration",
+  "gtest_filter": "MeshDeviceSingleCardFixture.BcastHWAdd",
+  "tt_source": "tests/tt_metal/tt_metal/test_bcast.cpp",
+  "tt_binary": "legacy",
+  "slow_dispatch": true
+ },
+ {
+  "kernel": "bcast_h_mul",
+  "role": "calibration",
+  "gtest_filter": "MeshDeviceSingleCardFixture.BcastHMul",
+  "tt_source": "tests/tt_metal/tt_metal/test_bcast.cpp",
+  "tt_binary": "legacy",
+  "slow_dispatch": true
+ },
+ {
+  "kernel": "bcast_w_mul",
+  "role": "heldout",
+  "gtest_filter": "MeshDeviceSingleCardFixture.BcastWMul",
+  "tt_source": "tests/tt_metal/tt_metal/test_bcast.cpp",
+  "tt_binary": "legacy",
+  "slow_dispatch": true
+ },
+ {
+  "kernel": "eltwise_binary_add",
+  "role": "calibration",
+  "gtest_filter": "UnitMeshCQSingleCardSharedFixture.EltwiseBinaryAdd",
+  "tt_source": "tests/tt_metal/tt_metal/test_eltwise_binary.cpp",
+  "tt_binary": "legacy",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "eltwise_binary_mul",
+  "role": "heldout",
+  "gtest_filter": "UnitMeshCQSingleCardSharedFixture.EltwiseBinaryMul",
+  "tt_source": "tests/tt_metal/tt_metal/test_eltwise_binary.cpp",
+  "tt_binary": "legacy",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "sfpu_relu_1tile",
+  "role": "calibration",
+  "gtest_filter": "SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/0",
+  "tt_source": "tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "sfpu_relu_4tile",
+  "role": "calibration",
+  "gtest_filter": "SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/8",
+  "tt_source": "tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "sfpu_exponential_1tile",
+  "role": "heldout",
+  "gtest_filter": "SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/1",
+  "tt_source": "tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "sfpu_sigmoid_1tile",
+  "role": "heldout",
+  "gtest_filter": "SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/5",
+  "tt_source": "tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "sfpu_sigmoid_4tile",
+  "role": "heldout",
+  "gtest_filter": "SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/13",
+  "tt_source": "tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ },
+ {
+  "kernel": "sfpu_tanh_4tile",
+  "role": "heldout",
+  "gtest_filter": "SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/15",
+  "tt_source": "tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp",
+  "tt_binary": "integration",
+  "slow_dispatch": false
+ }
+]

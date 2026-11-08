@@ -1,0 +1,25 @@
+{
+ "kernel": "bcast_w_mul",
+ "execution_path": "E-IR YAML -\u003e LoadProgramFileFromYAML -\u003e Driver.MapProgram -\u003e Core/Akita",
+ "pes": 5,
+ "eir_instructions": 18,
+ "cb_queues": 6,
+ "eir_cycles": 971,
+ "fixed_cycles": 4237,
+ "zeonica_cycles": 5208,
+ "data_check": {
+  "source": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/raw/ttsim_gtest_dump/bcast_w_mul/dump",
+  "mode": "bit_exact",
+  "elements": 49152,
+  "bit_exact": 49152,
+  "within_tolerance": 49152,
+  "max_ulp": 0,
+  "bit_exact_fraction": 1,
+  "passed": true
+ },
+ "passed": true,
+ "wall_seconds": 0.040824147,
+ "fixed_components": {
+  "dispatch": 4237
+ }
+}

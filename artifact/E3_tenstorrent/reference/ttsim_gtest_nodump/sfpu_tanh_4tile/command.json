@@ -1,0 +1,15 @@
+{
+ "argv": [
+  "/scratch/data/yijia/tt-metal/build_ttsim_tests/test/tt_metal/unit_tests_integration",
+  "--gtest_filter=SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/15"
+ ],
+ "cwd": "/scratch/data/yijia/tt-metal",
+ "env": {
+  "TT_METAL_HOME": "/scratch/data/yijia/tt-metal",
+  "TT_METAL_SIMULATOR": "/scratch/data/yijia/ttsim-run/wh-cycle/libttsim.so",
+  "TT_METAL_CACHE": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/build/tt_cache",
+  "TT_METAL_DISABLE_SFPLOADMACRO": "1",
+  "LD_LIBRARY_PATH": "/scratch/data/yijia/local-apt/usr/lib/x86_64-linux-gnu:/scratch/data/yijia/miniconda3/envs/llvm-build/lib:/usr/lib/x86_64-linux-gnu:/scratch/data/yijia/tt-metal/build_ttsim_tests/lib:/scratch/data/yijia/tt-metal/build_ttsim_tests/tt_metal:/scratch/data/yijia/tt-metal/build_ttsim_tests/tt_metal/third_party/umd/lib:/scratch/data/yijia/tt-metal/build_ttsim_tests/tt_stl"
+ },
+ "binary_sha256": "2ae752edb871c390c7c318b140bb75e33e8ceaae3856db3ba5caff9040449431"
+}

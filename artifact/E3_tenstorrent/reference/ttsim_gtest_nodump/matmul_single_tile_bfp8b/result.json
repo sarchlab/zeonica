@@ -1,0 +1,1 @@
+{"kernel": "matmul_single_tile_bfp8b", "role": "heldout", "returncode": 0, "passed": true, "cycles": 4413}

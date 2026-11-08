@@ -1,0 +1,61 @@
+{
+  "time_utc": "2026-10-04T11:11:18.702669+00:00",
+  "repo_records": {
+    "zeonica_tt_stage_latency": {
+      "commit": "frozen/zeonica_tt_stage_latency_commit.txt",
+      "status": "frozen/zeonica_tt_stage_latency_status.txt",
+      "diff": "frozen/zeonica_tt_stage_latency_diff.txt"
+    },
+    "tt-metal": {
+      "commit": "frozen/tt-metal_commit.txt",
+      "status": "frozen/tt-metal_status.txt",
+      "diff": "frozen/tt-metal_diff.txt"
+    },
+    "ttsim": {
+      "commit": "frozen/ttsim_commit.txt",
+      "status": "frozen/ttsim_status.txt",
+      "diff": "frozen/ttsim_diff.txt"
+    }
+  },
+  "binaries": {
+    "ttsim_wh_cycle_lib": {
+      "path": "/scratch/data/yijia/ttsim-run/wh-cycle/libttsim.so",
+      "sha256": "9a667f9bbf895f3617e2ccb0440db16a28667a6e1fad459eff163f2594d3de2d"
+    },
+    "caseb_observer_lib": {
+      "path": "/scratch/data/yijia/zeonica_tt_sensitivity_alignment_20261003/build/observer/libttsim.so",
+      "sha256": "3edfb1e7bd417b99cc2ffef8153fb98780875916f81eb47d89f8f77215598423"
+    },
+    "instruction_observer_reference": {
+      "path": "/scratch/data/yijia/zeonica_tt_sensitivity_alignment_20261003/build/reference",
+      "sha256": "811a6ff589ce96198d4829e740eb06e477c0aa5df5a8a9ae7ca05e0de9e2fa30"
+    },
+    "calibration_step2_compute": {
+      "path": "/scratch/data/yijia/zeonica_tt_sensitivity_alignment_20261003/build/compute",
+      "sha256": "7595b0bb633e3bac50f176a058274caa954f0f16cadda07e11aa70c385809253"
+    },
+    "gtest_unit_tests_legacy_with_dump": {
+      "path": "/scratch/data/yijia/tt-metal/build_ttsim_tests/test/tt_metal/unit_tests_legacy",
+      "sha256": "dbee231a784b98772cb4156056b8dd84cc55a4a72b9949735eb9e13500cd94d8"
+    },
+    "gtest_unit_tests_integration_with_dump": {
+      "path": "/scratch/data/yijia/tt-metal/build_ttsim_tests/test/tt_metal/unit_tests_integration",
+      "sha256": "8d492119e17c1950a4df289d61f8c00ef7b716d0594325a4b24c2598b7af6d4a"
+    },
+    "gtest_libtt_metal": {
+      "path": "/scratch/data/yijia/tt-metal/build_ttsim_tests/tt_metal/libtt_metal.so",
+      "sha256": "e92384386b2894df96bb0d3a0d06d83b95fa3979bc2c500ffc7b12ec7e13c6f4"
+    },
+    "caseb_host": {
+      "path": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/build/host",
+      "sha256": "e24c7330e7b392d285fb2207a3bbc5b12c1206d0869e04c4cacce62880e6c0b7"
+    },
+    "zeonica_compute": {
+      "path": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/build/compute",
+      "sha256": "0573e0a3397eeb3f1e9cc16e62d2a0a8a28a9ca531cdbd01bb2f647136f7ef37"
+    }
+  },
+  "gtest_dump_hook": "tests/tt_metal/tt_metal/zeonica_dump.hpp + insertion points; see frozen/tt-metal_dump_hook.patch.diff (no-op unless ZEONICA_TT_DUMP_DIR is set; dumps run after readback)",
+  "gtest_binaries_before_dump_hook": "231e629b0cfe55223bacad88334029ad4c9420afceaac3fe36119c04677ecdac  /scratch/data/yijia/zeonica_tt_functional_data_20261004/build/tt_tests_before_dump/unit_tests_integration\nd3c8dee5c347863ef4caaee7ed990162505b4c2f4dc7296f0e2c51d569a07437  /scratch/data/yijia/zeonica_tt_functional_data_20261004/build/tt_tests_before_dump/unit_tests_legacy\n",
+  "note": "Rebuilding the gtest targets also relinked libtt_metal.so from unchanged tt-metal sources; cycles of all 28 gtests matched the frozen endpoints with dump off (and the 18 fast-dispatch kernels 5/5 repeats)."
+}

@@ -1,0 +1,26 @@
+{
+ "kernel": "matmul_large_block_hifi4_rowmajor_rowmajor",
+ "execution_path": "E-IR YAML -\u003e LoadProgramFileFromYAML -\u003e Driver.MapProgram -\u003e Core/Akita",
+ "pes": 5,
+ "eir_instructions": 146,
+ "cb_queues": 16,
+ "eir_cycles": 2304,
+ "fixed_cycles": 12723,
+ "zeonica_cycles": 15027,
+ "data_check": {
+  "source": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/raw/ttsim_gtest_dump/matmul_large_block_hifi4_rowmajor_rowmajor/dump",
+  "mode": "bit_exact",
+  "elements": 8192,
+  "bit_exact": 8192,
+  "within_tolerance": 8192,
+  "max_ulp": 0,
+  "bit_exact_fraction": 1,
+  "passed": true
+ },
+ "passed": true,
+ "wall_seconds": 0.032561715,
+ "fixed_components": {
+  "class": 8486,
+  "dispatch": 4237
+ }
+}

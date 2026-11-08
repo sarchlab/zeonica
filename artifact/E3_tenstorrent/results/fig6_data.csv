@@ -1,0 +1,11 @@
+kernel,label,ttsim_cycles,zeonica_cycles,ape_pct,ape_pct_2dp,paper_ape_pct,ape_matches_paper,freeze4_zeonica_cycles,cycles_equal_freeze4,summary_equal_freeze4,output_equal_freeze4,eir_cycles,fixed_cycles,data_mode,bit_exact_fraction,data_passed
+matmul_single_tile_bfp8b,BFP8 matmul,4413,4411.0,0.04532064355313845,0.05,0.05,True,4411.0,True,True,True,174.0,4237.0,bit_exact,1.0,True
+matmul_single_core_small,single-core matmul,5568,5974.0,7.291666666666667,7.29,7.29,True,5974.0,True,True,True,1737.0,4237.0,bit_exact,1.0,True
+matmul_large_block_hifi4_rowmajor_rowmajor,HiFi4 matmul,14889,15027.0,0.926858754785412,0.93,0.93,True,15027.0,True,True,True,2304.0,12723.0,bit_exact,1.0,True
+matmul_multicore_multi_dram_small_3x3,3x3 matmul,35177,38397.0,9.153708389004178,9.15,9.15,True,38397.0,True,True,True,1676.0,36721.0,bit_exact,1.0,True
+bcast_w_mul,bcast W-mul,5403,5208.0,3.609106052193226,3.61,3.61,True,5208.0,True,True,True,971.0,4237.0,bit_exact,1.0,True
+eltwise_binary_mul,eltwise mul,393369,428183.0,8.850214429708492,8.85,8.85,True,428183.0,True,True,True,423946.0,4237.0,bit_exact,1.0,True
+sfpu_exponential_1tile,SFPU exp-1,12525,12521.0,0.031936127744510975,0.03,0.03,True,12521.0,True,True,True,38.0,12483.0,gtest_tolerance,0.484375,True
+sfpu_sigmoid_1tile,SFPU sigmoid-1,12465,12521.0,0.4492579221821099,0.45,0.45,True,12521.0,True,True,True,38.0,12483.0,gtest_tolerance,0.5107421875,True
+sfpu_sigmoid_4tile,SFPU sigmoid-4,12531,12608.0,0.614476099273801,0.61,0.61,True,12608.0,True,True,True,125.0,12483.0,gtest_tolerance,0.50244140625,True
+sfpu_tanh_4tile,SFPU tanh-4,12843,12608.0,1.8297905473798957,1.83,1.83,True,12608.0,True,True,True,125.0,12483.0,gtest_tolerance,0.504638671875,True

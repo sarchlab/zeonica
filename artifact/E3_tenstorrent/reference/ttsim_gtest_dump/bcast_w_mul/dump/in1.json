@@ -1,0 +1,1 @@
+{"name":"in1","words":8192,"format":"bf16","layout":"tiled_nfaces","shape":[2,4,64,96],"bcast_dim":2,"bcast_op":2,"multibank":1}

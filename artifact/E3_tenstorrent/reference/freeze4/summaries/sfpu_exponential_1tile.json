@@ -1,0 +1,25 @@
+{
+ "kernel": "sfpu_exponential_1tile",
+ "execution_path": "E-IR YAML -\u003e LoadProgramFileFromYAML -\u003e Driver.MapProgram -\u003e Core/Akita",
+ "pes": 5,
+ "eir_instructions": 5,
+ "cb_queues": 4,
+ "eir_cycles": 38,
+ "fixed_cycles": 12483,
+ "zeonica_cycles": 12521,
+ "data_check": {
+  "source": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/raw/ttsim_gtest_dump/sfpu_exponential_1tile/dump",
+  "mode": "gtest_tolerance",
+  "elements": 1024,
+  "bit_exact": 496,
+  "within_tolerance": 1024,
+  "max_ulp": 1,
+  "bit_exact_fraction": 0.484375,
+  "passed": true
+ },
+ "passed": true,
+ "wall_seconds": 0.001284284,
+ "fixed_components": {
+  "sfpu_dispatch": 12483
+ }
+}

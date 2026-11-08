@@ -1,0 +1,667 @@
+diff --git a/tests/tt_metal/tt_metal/integration/matmul/test_matmul_large_block.cpp b/tests/tt_metal/tt_metal/integration/matmul/test_matmul_large_block.cpp
+index fd01279b43..de7b4321eb 100644
+--- a/tests/tt_metal/tt_metal/integration/matmul/test_matmul_large_block.cpp
++++ b/tests/tt_metal/tt_metal/integration/matmul/test_matmul_large_block.cpp
+@@ -458,4 +458,32 @@ TEST_F(MeshDispatchFixture, TensixMatmulLargeBlock) {
+     }
+ }
+ 
++TEST_F(MeshDispatchFixture, TensixMatmulLargeBlockHiFi4TilizedTilized) {
++    for (const auto& device : devices_) {
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_large_block::matmul_large_block(
++            this, device, false, false, MathFidelity::HiFi4));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulLargeBlockHiFi4RowMajorInputTilizedOutput) {
++    for (const auto& device : devices_) {
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_large_block::matmul_large_block(
++            this, device, true, false, MathFidelity::HiFi4));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulLargeBlockHiFi4TilizedInputRowMajorOutput) {
++    for (const auto& device : devices_) {
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_large_block::matmul_large_block(
++            this, device, false, true, MathFidelity::HiFi4));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulLargeBlockHiFi4RowMajorRowMajor) {
++    for (const auto& device : devices_) {
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_large_block::matmul_large_block(
++            this, device, true, true, MathFidelity::HiFi4));
++    }
++}
++
+ }  // namespace tt::tt_metal
+diff --git a/tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_X_dram.cpp b/tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_X_dram.cpp
+index 7c0ae9dff4..1fc4ede607 100644
+--- a/tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_X_dram.cpp
++++ b/tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_X_dram.cpp
+@@ -599,6 +599,107 @@ bool matmul_multi_core_multi_dram(
+     return pass;
+ }
+ 
++bool matmul_multi_core_multi_dram_sized(
++    tt_metal::MeshDispatchFixture* fixture,
++    const std::shared_ptr<distributed::MeshDevice>& mesh_device,
++    int num_cores_r,
++    int num_cores_c) {
++    bool pass = true;
++    uint32_t M = 4 * num_cores_r;
++    uint32_t K = 8;
++    uint32_t N = 4 * num_cores_c;
++    int out_subblock_h = 4;
++    int out_subblock_w = 2;
++    int in0_block_w = 2;
++    int per_core_M = M / num_cores_r;
++    int per_core_N = N / num_cores_c;
++    log_info(LogTest, "small num_cores_r={}, num_cores_c={}", num_cores_r, num_cores_c);
++    log_info(LogTest, "small M = {}, N = {}, K = {}", M, N, K);
++
++    SHAPE shape = {1, 1, M * 32, K * 32};
++    tt::deprecated::Tensor<bfloat16> tensor =
++        tt::deprecated::initialize_tensor<bfloat16>(shape, tt::deprecated::Initialize::RANDOM, 0, 100, 10 /* seed */);
++    auto identity = create_identity_matrix(K * 32, N * 32, std::min(K, N) * 32);
++
++    MatmulConfig matmul_cfg = {
++        .multi_dram = 1,
++        .reader_kernel = "tests/tt_metal/tt_metal/test_kernels/dataflow/reader_matmul_tile_layout.cpp",
++        .writer_kernel = "tests/tt_metal/tt_metal/test_kernels/dataflow/writer_matmul_tile_layout.cpp"};
++
++    auto [workload, mm_reader_kernel, unary_writer_kernel] =
++        unit_tests_common::matmul::test_matmul_multi_core_X_dram::create_program(
++            mesh_device,
++            matmul_cfg,
++            num_cores_r,
++            num_cores_c,
++            per_core_M,
++            per_core_N,
++            K,
++            in0_block_w,
++            out_subblock_h,
++            out_subblock_w);
++
++    auto activations_tilized = tilize_swizzled(tensor.get_values(), M * 32, K * 32);
++    auto activations_tile_layout =
++        convert_layout_tile_swizzled_to_tile_nfaces(tt::stl::make_const_span(activations_tilized));
++    auto activations = pack_bfloat16_vec_into_uint32_vec(activations_tile_layout);
++    distributed::DeviceLocalBufferConfig local_buffer_config = {
++        .page_size = 1024 * 2, .buffer_type = tt_metal::BufferType::DRAM, .bottom_up = false};
++    distributed::ReplicatedBufferConfig activation_buffer_config = {.size = activations.size() * sizeof(uint32_t)};
++    auto activation_buffer =
++        distributed::MeshBuffer::create(activation_buffer_config, local_buffer_config, mesh_device.get());
++    pass &= move_tiles_to_dram(mesh_device, activations, M, K, activation_buffer);
++
++    auto identity_tilized = tilize_swizzled(identity, K * 32, N * 32);
++    auto weights_tile_layout = convert_layout_tile_swizzled_to_tile_nfaces(tt::stl::make_const_span(identity_tilized));
++    auto weights = pack_bfloat16_vec_into_uint32_vec(weights_tile_layout);
++    distributed::ReplicatedBufferConfig weight_buffer_config = {.size = weights.size() * sizeof(uint32_t)};
++    auto weight_buffer = distributed::MeshBuffer::create(weight_buffer_config, local_buffer_config, mesh_device.get());
++    pass &= move_tiles_to_dram(mesh_device, weights, K, N, weight_buffer);
++
++    distributed::ReplicatedBufferConfig out_buffer_config = {.size = M * N * sizeof(uint32_t) * 32 * 32};
++    auto out_buffer = distributed::MeshBuffer::create(out_buffer_config, local_buffer_config, mesh_device.get());
++    pass &= unit_tests_common::matmul::test_matmul_multi_core_X_dram::assign_runtime_args_to_program(
++        mesh_device,
++        workload,
++        num_cores_r,
++        num_cores_c,
++        mm_reader_kernel,
++        unary_writer_kernel,
++        M,
++        N,
++        K,
++        in0_block_w,
++        out_subblock_h,
++        out_subblock_w,
++        per_core_M,
++        per_core_N,
++        activation_buffer->address(),
++        weight_buffer->address(),
++        out_buffer->address());
++
++    distributed::EnqueueMeshWorkload(mesh_device->mesh_command_queue(), workload, false);
++
++    vector<uint32_t> result;
++    fixture->ReadBuffer(mesh_device, out_buffer, result);
++    auto golden = tt_metal::select_columns(tensor.get_values(), M, K, N);
++    auto result_iter = result.begin();
++    for (int i = 0; i < M; i++) {
++        auto row = tt_metal::get_row_slice(golden, M, i, M * 32, N * 32);
++        for (int j = 0; j < N; j++) {
++            auto golden_tile = tt_metal::get_col_slice(row, N, j, 32, N * 32);
++            std::vector<uint32_t> result_vec;
++            result_vec.insert(result_vec.end(), result_iter, result_iter + 512);
++            result_iter += 512;
++            auto result_bfp16 = unpack_uint32_vec_into_bfloat16_vec(result_vec);
++            auto result_flat_layout =
++                convert_layout_tile_nfaces_to_tile_swizzled(tt::stl::make_const_span(result_bfp16));
++            pass &= (golden_tile == result_flat_layout);
++        }
++    }
++    return pass;
++}
++
+ }  // namespace unit_tests_common::matmul::test_matmul_multi_core_X_dram
+ 
+ TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreSingleDRAM) {
+@@ -632,4 +733,154 @@ TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAM) {
+     }
+ }
+ 
++TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMSmall) {
++    if (getenv("TT_METAL_SLOW_DISPATCH_MODE")) {
++        log_info(LogTest, "This test is not supported in slow dispatch mode.");
++        GTEST_SKIP();
++    }
++
++    for (unsigned int id = 0; id < devices_.size(); id++) {
++        if (this->devices_.at(id)->arch() == tt::ARCH::BLACKHOLE) {
++            GTEST_SKIP();
++        }
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_multi_core_X_dram::matmul_multi_core_multi_dram_sized(
++            this, devices_.at(id), 2, 2));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMSmall1x2) {
++    if (getenv("TT_METAL_SLOW_DISPATCH_MODE")) {
++        log_info(LogTest, "This test is not supported in slow dispatch mode.");
++        GTEST_SKIP();
++    }
++
++    for (unsigned int id = 0; id < devices_.size(); id++) {
++        if (this->devices_.at(id)->arch() == tt::ARCH::BLACKHOLE) {
++            GTEST_SKIP();
++        }
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_multi_core_X_dram::matmul_multi_core_multi_dram_sized(
++            this, devices_.at(id), 1, 2));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMSmall2x1) {
++    if (getenv("TT_METAL_SLOW_DISPATCH_MODE")) {
++        log_info(LogTest, "This test is not supported in slow dispatch mode.");
++        GTEST_SKIP();
++    }
++
++    for (unsigned int id = 0; id < devices_.size(); id++) {
++        if (this->devices_.at(id)->arch() == tt::ARCH::BLACKHOLE) {
++            GTEST_SKIP();
++        }
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_multi_core_X_dram::matmul_multi_core_multi_dram_sized(
++            this, devices_.at(id), 2, 1));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMSmall1x3) {
++    if (getenv("TT_METAL_SLOW_DISPATCH_MODE")) {
++        log_info(LogTest, "This test is not supported in slow dispatch mode.");
++        GTEST_SKIP();
++    }
++
++    for (unsigned int id = 0; id < devices_.size(); id++) {
++        if (this->devices_.at(id)->arch() == tt::ARCH::BLACKHOLE) {
++            GTEST_SKIP();
++        }
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_multi_core_X_dram::matmul_multi_core_multi_dram_sized(
++            this, devices_.at(id), 1, 3));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMSmall3x1) {
++    if (getenv("TT_METAL_SLOW_DISPATCH_MODE")) {
++        log_info(LogTest, "This test is not supported in slow dispatch mode.");
++        GTEST_SKIP();
++    }
++
++    for (unsigned int id = 0; id < devices_.size(); id++) {
++        if (this->devices_.at(id)->arch() == tt::ARCH::BLACKHOLE) {
++            GTEST_SKIP();
++        }
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_multi_core_X_dram::matmul_multi_core_multi_dram_sized(
++            this, devices_.at(id), 3, 1));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMSmall2x3) {
++    if (getenv("TT_METAL_SLOW_DISPATCH_MODE")) {
++        log_info(LogTest, "This test is not supported in slow dispatch mode.");
++        GTEST_SKIP();
++    }
++
++    for (unsigned int id = 0; id < devices_.size(); id++) {
++        if (this->devices_.at(id)->arch() == tt::ARCH::BLACKHOLE) {
++            GTEST_SKIP();
++        }
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_multi_core_X_dram::matmul_multi_core_multi_dram_sized(
++            this, devices_.at(id), 2, 3));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMSmall3x2) {
++    if (getenv("TT_METAL_SLOW_DISPATCH_MODE")) {
++        log_info(LogTest, "This test is not supported in slow dispatch mode.");
++        GTEST_SKIP();
++    }
++
++    for (unsigned int id = 0; id < devices_.size(); id++) {
++        if (this->devices_.at(id)->arch() == tt::ARCH::BLACKHOLE) {
++            GTEST_SKIP();
++        }
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_multi_core_X_dram::matmul_multi_core_multi_dram_sized(
++            this, devices_.at(id), 3, 2));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMSmall2x4) {
++    if (getenv("TT_METAL_SLOW_DISPATCH_MODE")) {
++        log_info(LogTest, "This test is not supported in slow dispatch mode.");
++        GTEST_SKIP();
++    }
++
++    for (unsigned int id = 0; id < devices_.size(); id++) {
++        if (this->devices_.at(id)->arch() == tt::ARCH::BLACKHOLE) {
++            GTEST_SKIP();
++        }
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_multi_core_X_dram::matmul_multi_core_multi_dram_sized(
++            this, devices_.at(id), 2, 4));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMSmall4x2) {
++    if (getenv("TT_METAL_SLOW_DISPATCH_MODE")) {
++        log_info(LogTest, "This test is not supported in slow dispatch mode.");
++        GTEST_SKIP();
++    }
++
++    for (unsigned int id = 0; id < devices_.size(); id++) {
++        if (this->devices_.at(id)->arch() == tt::ARCH::BLACKHOLE) {
++            GTEST_SKIP();
++        }
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_multi_core_X_dram::matmul_multi_core_multi_dram_sized(
++            this, devices_.at(id), 4, 2));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMSmall3x3) {
++    if (getenv("TT_METAL_SLOW_DISPATCH_MODE")) {
++        log_info(LogTest, "This test is not supported in slow dispatch mode.");
++        GTEST_SKIP();
++    }
++
++    for (unsigned int id = 0; id < devices_.size(); id++) {
++        if (this->devices_.at(id)->arch() == tt::ARCH::BLACKHOLE) {
++            GTEST_SKIP();
++        }
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_multi_core_X_dram::matmul_multi_core_multi_dram_sized(
++            this, devices_.at(id), 3, 3));
++    }
++}
++
+ }  // namespace tt::tt_metal
+diff --git a/tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_multi_dram_inX_mcast.cpp b/tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_multi_dram_inX_mcast.cpp
+index acf28061a7..224b9caee9 100644
+--- a/tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_multi_dram_inX_mcast.cpp
++++ b/tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_multi_dram_inX_mcast.cpp
+@@ -41,6 +41,7 @@
+ #include <tt_stl/span.hpp>
+ #include <tt-metalium/tt_backend_api_types.hpp>
+ #include "tt_metal/test_utils/deprecated/tensor.hpp"
++#include <tt-metalium/tensor_accessor_args.hpp>
+ 
+ namespace tt::tt_metal {
+ 
+@@ -139,19 +140,26 @@ create_program(
+                                 std::to_string(mcast_xy_offset) + "_mcast_sender.cpp";
+     std::string kernel_receiver = "tests/tt_metal/tt_metal/test_kernels/dataflow/reader_matmul_tile_layout_in" +
+                                   std::to_string(mcast_xy_offset) + "_mcast_receiver.cpp";
++    std::vector<uint32_t> reader_cta;
++    tt::tt_metal::TensorAccessorArgs::create_dram_interleaved().append_to(reader_cta);
++    tt::tt_metal::TensorAccessorArgs::create_dram_interleaved().append_to(reader_cta);
+     auto mm_reader_kernel_sender = tt_metal::CreateKernel(
+         program_,
+         kernel_sender,
+         mcast_senders,
+         tt_metal::DataMovementConfig{
+-            .processor = tt_metal::DataMovementProcessor::RISCV_1, .noc = tt_metal::NOC::RISCV_1_default});
++            .processor = tt_metal::DataMovementProcessor::RISCV_1,
++            .noc = tt_metal::NOC::RISCV_1_default,
++            .compile_args = reader_cta});
+ 
+     auto mm_reader_kernel_receiver = tt_metal::CreateKernel(
+         program_,
+         kernel_receiver,
+         mcast_receivers,
+         tt_metal::DataMovementConfig{
+-            .processor = tt_metal::DataMovementProcessor::RISCV_1, .noc = tt_metal::NOC::RISCV_1_default});
++            .processor = tt_metal::DataMovementProcessor::RISCV_1,
++            .noc = tt_metal::NOC::RISCV_1_default,
++            .compile_args = reader_cta});
+ 
+     auto unary_writer_kernel = tt_metal::CreateKernel(
+         program_,
+@@ -333,16 +341,19 @@ bool write_runtime_args_to_device(
+     return pass;
+ }
+ 
+-bool matmul_multi_core_multi_dram_inX_mcast(
+-    const std::shared_ptr<distributed::MeshDevice>& mesh_device, int in1_or_in0) {
++bool matmul_multi_core_multi_dram_inX_mcast_sized(
++    const std::shared_ptr<distributed::MeshDevice>& mesh_device,
++    int in1_or_in0,
++    int num_cores_r,
++    int num_cores_c,
++    int per_core_tiles,
++    int k_tiles) {
+     bool pass = true;
+     int start_core_x = 0;
+     int start_core_y = 0;
+-    int num_cores_r = mesh_device->compute_with_storage_grid_size().y;
+-    int num_cores_c = mesh_device->compute_with_storage_grid_size().x;
+-    uint32_t M = 16 * num_cores_r;
+-    uint32_t K = 16 * 12;
+-    uint32_t N = 16 * num_cores_c;
++    uint32_t M = per_core_tiles * num_cores_r;
++    uint32_t K = k_tiles;
++    uint32_t N = per_core_tiles * num_cores_c;
+     int out_subblock_h = 4;
+     int out_subblock_w = 2;
+     int in0_block_w = 2;
+@@ -469,6 +480,17 @@ bool matmul_multi_core_multi_dram_inX_mcast(
+     log_debug(LogTest, "Golden check complete");
+     return pass;
+ }
++
++bool matmul_multi_core_multi_dram_inX_mcast(
++    const std::shared_ptr<distributed::MeshDevice>& mesh_device, int in1_or_in0) {
++    return matmul_multi_core_multi_dram_inX_mcast_sized(
++        mesh_device,
++        in1_or_in0,
++        mesh_device->compute_with_storage_grid_size().y,
++        mesh_device->compute_with_storage_grid_size().x,
++        16,
++        16 * 12);
++}
+ }  // namespace unit_tests_common::matmul::test_matmul_multi_core_multi_dram_inX_mcast
+ 
+ TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMIn0MCast) {
+@@ -495,4 +517,28 @@ TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMIn1MCast) {
+     }
+ }
+ 
++TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMIn0MCastSmall2x2) {
++    if (!getenv("TT_METAL_SLOW_DISPATCH_MODE")) {
++        log_info(tt::LogTest, "This test is only supported in slow dispatch mode");
++        GTEST_SKIP();
++    }
++
++    for (const auto& device : devices_) {
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_multi_core_multi_dram_inX_mcast::
++                        matmul_multi_core_multi_dram_inX_mcast_sized(device, 0, 2, 2, 4, 8));
++    }
++}
++
++TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAMIn1MCastSmall2x2) {
++    if (!getenv("TT_METAL_SLOW_DISPATCH_MODE")) {
++        log_info(tt::LogTest, "This test is only supported in slow dispatch mode");
++        GTEST_SKIP();
++    }
++
++    for (const auto& device : devices_) {
++        ASSERT_TRUE(unit_tests_common::matmul::test_matmul_multi_core_multi_dram_inX_mcast::
++                        matmul_multi_core_multi_dram_inX_mcast_sized(device, 1, 2, 2, 4, 8));
++    }
++}
++
+ }  // namespace tt::tt_metal
+diff --git a/tt_metal/programming_examples/add_2_integers_in_compute/add_2_integers_in_compute.cpp b/tt_metal/programming_examples/add_2_integers_in_compute/add_2_integers_in_compute.cpp
+index 36eeb0c0db..5fb1257526 100644
+--- a/tt_metal/programming_examples/add_2_integers_in_compute/add_2_integers_in_compute.cpp
++++ b/tt_metal/programming_examples/add_2_integers_in_compute/add_2_integers_in_compute.cpp
+@@ -3,6 +3,9 @@
+ // SPDX-License-Identifier: Apache-2.0
+ 
+ #include <random>
++#include <cstdlib>
++#include <dlfcn.h>
++#include <optional>
+ #include <tt-metalium/host_api.hpp>
+ #include <tt-metalium/device.hpp>
+ #include <tt-metalium/bfloat16.hpp>
+@@ -14,6 +17,38 @@ using namespace tt::tt_metal;
+ #ifndef OVERRIDE_KERNEL_PREFIX
+ #define OVERRIDE_KERNEL_PREFIX ""
+ #endif
++
++namespace {
++
++std::optional<uint64_t> read_ttsim_clock() {
++    const char* simulator = std::getenv("TT_METAL_SIMULATOR");
++    if (simulator == nullptr) {
++        return std::nullopt;
++    }
++
++    void* handle = dlopen(simulator, RTLD_LAZY | RTLD_NOLOAD);
++    if (handle == nullptr) {
++        return std::nullopt;
++    }
++
++    using GetClockFn = uint64_t (*)();
++    auto get_clock = reinterpret_cast<GetClockFn>(dlsym(handle, "libttsim_get_clock"));
++    if (get_clock == nullptr) {
++        return std::nullopt;
++    }
++    return get_clock();
++}
++
++void print_ttsim_kernel_cycles(const char* kernel_name, std::optional<uint64_t> start, std::optional<uint64_t> end) {
++    if (!start || !end || *end < *start) {
++        return;
++    }
++    fmt::print(
++        "TTSIM_KERNEL_CYCLES kernel={} start={} end={} cycles={}\n", kernel_name, *start, *end, *end - *start);
++}
++
++}  // namespace
++
+ int main() {
+     // Ensure printing from kernel is enabled (so we can see the output of the Data Movement kernels).
+     char* env_var = std::getenv("TT_METAL_DPRINT_CORES");
+@@ -135,6 +170,7 @@ int main() {
+     // to false safely.
+     EnqueueWriteMeshBuffer(cq, src0_dram_buffer, src0_vec, false);
+     EnqueueWriteMeshBuffer(cq, src1_dram_buffer, src1_vec, false);
++    distributed::Finish(cq);
+ 
+     // Setup arguments for the kernels in the program.
+     // Unlike OpenCL/CUDA, every kernel can have its own set of arguments.
+@@ -148,8 +184,12 @@ int main() {
+ 
+     // Add the program to the workload and execute it.
+     workload.add_program(device_range, std::move(program));
++    fmt::print("TTSIM_WORK_PARTITION kernel=simple_compute num_cores=1 total_tiles=1 tiles_per_core=1\n");
++    auto ttsim_start = read_ttsim_clock();
+     distributed::EnqueueMeshWorkload(cq, workload, false);
+     distributed::Finish(cq);
++    auto ttsim_end = read_ttsim_clock();
++    print_ttsim_kernel_cycles("simple_compute", ttsim_start, ttsim_end);
+ 
+     // Data can be read from a MeshBuffer using the ReadShard function. This function is used to read data from a
+     // specific shard of a MeshBuffer. The shard is specified by the MeshCoordinate. The last argument indicates if the
+diff --git a/tt_metal/programming_examples/eltwise_binary/eltwise_binary.cpp b/tt_metal/programming_examples/eltwise_binary/eltwise_binary.cpp
+index d678ee7d4f..54c81b0000 100644
+--- a/tt_metal/programming_examples/eltwise_binary/eltwise_binary.cpp
++++ b/tt_metal/programming_examples/eltwise_binary/eltwise_binary.cpp
+@@ -10,7 +10,10 @@
+ #include <tt-metalium/distributed.hpp>
+ #include <cstddef>
+ #include <cstdint>
++#include <cstdlib>
++#include <dlfcn.h>
+ #include <memory>
++#include <optional>
+ #include <random>
+ #include <string_view>
+ #include <vector>
+@@ -20,6 +23,38 @@ using namespace tt::tt_metal;
+ #ifndef OVERRIDE_KERNEL_PREFIX
+ #define OVERRIDE_KERNEL_PREFIX ""
+ #endif
++
++namespace {
++
++std::optional<uint64_t> read_ttsim_clock() {
++    const char* simulator = std::getenv("TT_METAL_SIMULATOR");
++    if (simulator == nullptr) {
++        return std::nullopt;
++    }
++
++    void* handle = dlopen(simulator, RTLD_LAZY | RTLD_NOLOAD);
++    if (handle == nullptr) {
++        return std::nullopt;
++    }
++
++    using GetClockFn = uint64_t (*)();
++    auto get_clock = reinterpret_cast<GetClockFn>(dlsym(handle, "libttsim_get_clock"));
++    if (get_clock == nullptr) {
++        return std::nullopt;
++    }
++    return get_clock();
++}
++
++void print_ttsim_kernel_cycles(const char* kernel_name, std::optional<uint64_t> start, std::optional<uint64_t> end) {
++    if (!start || !end || *end < *start) {
++        return;
++    }
++    fmt::print(
++        "TTSIM_KERNEL_CYCLES kernel={} start={} end={} cycles={}\n", kernel_name, *start, *end, *end - *start);
++}
++
++}  // namespace
++
+ int main(int /*argc*/, char** /*argv*/) {
+     bool pass = true;
+ 
+@@ -79,6 +114,7 @@ int main(int /*argc*/, char** /*argv*/) {
+         // Upload host vectors into the mesh buffers.
+         distributed::EnqueueWriteMeshBuffer(cq, src0_dram_buffer, a_data, false);
+         distributed::EnqueueWriteMeshBuffer(cq, src1_dram_buffer, b_data, false);
++        distributed::Finish(cq);
+ 
+         // Create 3 circular buffers. Think them like pipes moving data from one core to another. cb_src0 and cb_src1 are used to
+         // move data from the reader kernel to the compute kernel. cb_dst is used to move data from the compute kernel to the writer
+@@ -151,8 +187,12 @@ int main(int /*argc*/, char** /*argv*/) {
+         // all operations in the command queue are finished. This is equivalent to calling EnqueueMeshWorkload(cq, program, true); telling
+         // Metalium to wait until the program is finished before returning.
+         workload.add_program(device_range, std::move(program));
++        fmt::print("TTSIM_WORK_PARTITION kernel=eltwise_add num_cores=1 total_tiles={} tiles_per_core={}\n", n_tiles, n_tiles);
++        auto ttsim_start = read_ttsim_clock();
+         distributed::EnqueueMeshWorkload(cq, workload, false);
+         distributed::Finish(cq);
++        auto ttsim_end = read_ttsim_clock();
++        print_ttsim_kernel_cycles("eltwise_add", ttsim_start, ttsim_end);
+         // Equivalently:
+         // distributed::EnqueueMeshWorkload(cq, workload, true);
+ 
+diff --git a/tt_metal/programming_examples/matmul/matmul_multi_core/matmul_multi_core.cpp b/tt_metal/programming_examples/matmul/matmul_multi_core/matmul_multi_core.cpp
+index 12a103e5e7..ca0a75358f 100644
+--- a/tt_metal/programming_examples/matmul/matmul_multi_core/matmul_multi_core.cpp
++++ b/tt_metal/programming_examples/matmul/matmul_multi_core/matmul_multi_core.cpp
+@@ -3,6 +3,9 @@
+ // SPDX-License-Identifier: Apache-2.0
+ 
+ #include <random>
++#include <cstdlib>
++#include <dlfcn.h>
++#include <optional>
+ #include <tt-metalium/host_api.hpp>
+ #include <tt-metalium/constants.hpp>
+ #include <tt-metalium/bfloat16.hpp>
+@@ -22,6 +25,38 @@ using namespace tt::tt_metal;
+ #ifndef OVERRIDE_KERNEL_PREFIX
+ #define OVERRIDE_KERNEL_PREFIX ""
+ #endif
++
++namespace {
++
++std::optional<uint64_t> read_ttsim_clock() {
++    const char* simulator = std::getenv("TT_METAL_SIMULATOR");
++    if (simulator == nullptr) {
++        return std::nullopt;
++    }
++
++    void* handle = dlopen(simulator, RTLD_LAZY | RTLD_NOLOAD);
++    if (handle == nullptr) {
++        return std::nullopt;
++    }
++
++    using GetClockFn = uint64_t (*)();
++    auto get_clock = reinterpret_cast<GetClockFn>(dlsym(handle, "libttsim_get_clock"));
++    if (get_clock == nullptr) {
++        return std::nullopt;
++    }
++    return get_clock();
++}
++
++void print_ttsim_kernel_cycles(const char* kernel_name, std::optional<uint64_t> start, std::optional<uint64_t> end) {
++    if (!start || !end || *end < *start) {
++        return;
++    }
++    fmt::print(
++        "TTSIM_KERNEL_CYCLES kernel={} start={} end={} cycles={}\n", kernel_name, *start, *end, *end - *start);
++}
++
++}  // namespace
++
+ // Reference implementation of matrix multiplication.
+ // Array A is of size MxK, Array B is of size KxN, and the output C is of size MxN.
+ // The implementation is bare bones and does not include optimizations such as tiling or vectorization.
+@@ -107,7 +142,16 @@ void matmul_multi_core(
+     Program program{};
+ 
+     // Get the compute grid size to determine how many cores are available
+-    auto core_grid = mesh_device->compute_with_storage_grid_size();
++    constexpr CoreCoord case_study_core_grid = {4, 4};
++    auto available_core_grid = mesh_device->compute_with_storage_grid_size();
++    TT_FATAL(
++        available_core_grid.x >= case_study_core_grid.x && available_core_grid.y >= case_study_core_grid.y,
++        "Case-study matmul requires at least a {}x{} compute grid, got {}x{}",
++        case_study_core_grid.x,
++        case_study_core_grid.y,
++        available_core_grid.x,
++        available_core_grid.y);
++    auto core_grid = case_study_core_grid;
+     auto num_output_tiles_total = (M * N) / TILE_HW;
+ 
+     // Use the split_work_to_cores utility function to distribute matrix multiplication work
+@@ -120,6 +164,12 @@ void matmul_multi_core(
+     // approach minimizes workload imbalance between cores for optimal performance.
+     auto [num_cores, all_cores, core_group_1, core_group_2, work_per_core1, work_per_core2] =
+         split_work_to_cores(core_grid, num_output_tiles_total);
++    fmt::print(
++        "TTSIM_WORK_PARTITION kernel=matmul_multicore num_cores={} total_tiles={} work_per_core1={} work_per_core2={}\n",
++        num_cores,
++        num_output_tiles_total,
++        work_per_core1,
++        work_per_core2);
+ 
+     // Extracting Matrix dimensions from input/output vectors and converting to tile coordinates.
+     // The accelerator works with 32x32 tiles, so we need to convert from element dimensions
+@@ -258,8 +308,14 @@ void matmul_multi_core(
+     // returns, the output vector is fully populated).
+     distributed::EnqueueWriteMeshBuffer(cq, src0_dram_buffer, a, false);
+     distributed::EnqueueWriteMeshBuffer(cq, src1_dram_buffer, b, false);
++    distributed::Finish(cq);
+     workload.add_program(device_range, std::move(program));
++    auto ttsim_start = read_ttsim_clock();
+     distributed::EnqueueMeshWorkload(cq, workload, false);
++    distributed::Finish(cq);
++    auto ttsim_end = read_ttsim_clock();
++    print_ttsim_kernel_cycles("matmul_multicore", ttsim_start, ttsim_end);
++
+     // Blocking read waits for completion before returning and resizes 'output' as needed
+     distributed::EnqueueReadMeshBuffer(cq, output, dst_dram_buffer, true);
+ }

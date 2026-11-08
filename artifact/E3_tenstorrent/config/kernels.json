@@ -1,0 +1,21 @@
+{
+  "_comment": "The 10 held-out TT-Metal gtests of Fig. 6 / Table II, in paper order (Fig. 6 top to bottom). 'name' is the tt_eir -kernel argument and the reference/ directory name. 'paper_ape_pct' is the per-kernel APE printed in the paper (2 decimals); a kernel passes when its recomputed APE rounds to that value. The 18 calibration gtests and the Case B conditions are not part of this experiment (see README).",
+  "expected": {
+    "mape_pct": 3.28,
+    "mape_pct_unrounded": 3.2802,
+    "max_ape_pct": 9.15,
+    "max_ape_kernel": "matmul_multicore_multi_dram_small_3x3"
+  },
+  "kernels": [
+    {"name": "matmul_single_tile_bfp8b",                   "label": "BFP8 matmul",        "paper_ape_pct": 0.05},
+    {"name": "matmul_single_core_small",                   "label": "single-core matmul", "paper_ape_pct": 7.29},
+    {"name": "matmul_large_block_hifi4_rowmajor_rowmajor", "label": "HiFi4 matmul",       "paper_ape_pct": 0.93},
+    {"name": "matmul_multicore_multi_dram_small_3x3",      "label": "3x3 matmul",         "paper_ape_pct": 9.15},
+    {"name": "bcast_w_mul",                                "label": "bcast W-mul",        "paper_ape_pct": 3.61},
+    {"name": "eltwise_binary_mul",                         "label": "eltwise mul",        "paper_ape_pct": 8.85},
+    {"name": "sfpu_exponential_1tile",                     "label": "SFPU exp-1",         "paper_ape_pct": 0.03},
+    {"name": "sfpu_sigmoid_1tile",                         "label": "SFPU sigmoid-1",     "paper_ape_pct": 0.45},
+    {"name": "sfpu_sigmoid_4tile",                         "label": "SFPU sigmoid-4",     "paper_ape_pct": 0.61},
+    {"name": "sfpu_tanh_4tile",                            "label": "SFPU tanh-4",        "paper_ape_pct": 1.83}
+  ]
+}

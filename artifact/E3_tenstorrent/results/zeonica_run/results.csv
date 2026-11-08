@@ -1,0 +1,11 @@
+kernel,label,role,ttsim_cycles,zeonica_cycles,eir_cycles,fixed_cycles,fixed_components,pes,eir_instructions,cb_queues,data_mode,data_elements,bit_exact,bit_exact_fraction,max_ulp,data_passed,exit_code,model_wall_s,process_wall_s
+matmul_single_tile_bfp8b,BFP8 matmul,heldout,4413,4411,174,4237,"{""class"": 0, ""dispatch"": 4237}",5,24,17,bit_exact,1088,1088,1,0,True,0,0.005,0.014
+matmul_single_core_small,single-core matmul,heldout,5568,5974,1737,4237,"{""class"": 0, ""dispatch"": 4237}",5,213,17,bit_exact,16384,16384,1,0,True,0,0.068,0.08
+matmul_large_block_hifi4_rowmajor_rowmajor,HiFi4 matmul,heldout,14889,15027,2304,12723,"{""class"": 8486, ""dispatch"": 4237}",5,146,16,bit_exact,8192,8192,1,0,True,0,0.032,0.041
+matmul_multicore_multi_dram_small_3x3,3x3 matmul,heldout,35177,38397,1676,36721,"{""class"": 0, ""dispatch"": 4237, ""multicore"": 32484}",45,3600,153,bit_exact,147456,147456,1,0,True,0,1.33,1.364
+bcast_w_mul,bcast W-mul,heldout,5403,5208,971,4237,"{""dispatch"": 4237}",5,18,6,bit_exact,49152,49152,1,0,True,0,0.036,0.046
+eltwise_binary_mul,eltwise mul,heldout,393369,428183,423946,4237,"{""dispatch"": 4237}",5,7,6,bit_exact,2097152,2097152,1,0,True,0,1.886,1.923
+sfpu_exponential_1tile,SFPU exp-1,heldout,12525,12521,38,12483,"{""sfpu_dispatch"": 12483}",5,5,4,gtest_tolerance,1024,496,0.484375,1,True,0,0.001,0.011
+sfpu_sigmoid_1tile,SFPU sigmoid-1,heldout,12465,12521,38,12483,"{""sfpu_dispatch"": 12483}",5,5,4,gtest_tolerance,1024,523,0.5107421875,1,True,0,0.001,0.009
+sfpu_sigmoid_4tile,SFPU sigmoid-4,heldout,12531,12608,125,12483,"{""sfpu_dispatch"": 12483}",5,5,4,gtest_tolerance,4096,2058,0.50244140625,1,True,0,0.004,0.011
+sfpu_tanh_4tile,SFPU tanh-4,heldout,12843,12608,125,12483,"{""sfpu_dispatch"": 12483}",5,5,4,gtest_tolerance,4096,2067,0.504638671875,1,True,0,0.004,0.013

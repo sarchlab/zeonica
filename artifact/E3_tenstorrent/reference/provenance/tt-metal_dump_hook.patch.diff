@@ -1,0 +1,222 @@
+2c2
+< index fd01279b43..de7b4321eb 100644
+---
+> index fd01279b43..5f16aac276 100644
+5c5,24
+< @@ -458,4 +458,32 @@ TEST_F(MeshDispatchFixture, TensixMatmulLargeBlock) {
+---
+> @@ -36,6 +36,7 @@
+>  #include "tt_metal/test_utils/deprecated/tensor.hpp"
+>  #include "tt_metal/test_utils/env_vars.hpp"
+>  #include <umd/device/types/arch.hpp>
+> +#include "../../zeonica_dump.hpp"
+>  
+>  namespace tt::tt_metal {
+>  class IDevice;
+> @@ -413,6 +414,10 @@ bool matmul_large_block(
+>          val = std::bit_cast<bfloat16>(static_cast<uint16_t>(std::bit_cast<uint16_t>(val) & math_fid_mask));
+>      }
+>  
+> +    zeonica_dump::u32("in0", activations, std::string("\"format\":\"bf16\"" + std::string(",") + "\"M\":" + std::to_string(M) + std::string(",") + "\"K\":" + std::to_string(K) + std::string(",") + "\"N\":" + std::to_string(N) + std::string(",") + "\"activations_rm\":" + std::to_string(activations_rm) + std::string(",") + "\"output_rm\":" + std::to_string(output_rm) + std::string(",") + "\"math_fidelity\":" + std::to_string(static_cast<int>(math_fidelity))));
+> +    zeonica_dump::u32("in1", weights, std::string("\"format\":\"bf16\"" + std::string(",") + "\"layout\":\"tile_nfaces\""));
+> +    zeonica_dump::u32("out", result_vec, std::string("\"format\":\"bf16\"" + std::string(",") + "\"output_rm\":" + std::to_string(output_rm)));
+> +    zeonica_dump::u16("golden", golden, std::string("\"format\":\"bf16\"" + std::string(",") + "\"layout\":\"row_major\"" + std::string(",") + "\"criterion\":\"exact\""));
+>      if (output_rm) {
+>          pass &= (golden == result_bfp16);
+>          if (not pass) {
+> @@ -458,4 +463,32 @@ TEST_F(MeshDispatchFixture, TensixMatmulLargeBlock) {
+39c58
+< index 7c0ae9dff4..1fc4ede607 100644
+---
+> index 7c0ae9dff4..02f5ece5a7 100644
+42c61,69
+< @@ -599,6 +599,107 @@ bool matmul_multi_core_multi_dram(
+---
+> @@ -39,6 +39,7 @@
+>  #include "hostdevcommon/kernel_structs.h"
+>  #include <tt-logger/tt-logger.hpp>
+>  #include "matmul_test_utils.hpp"
+> +#include "../../zeonica_dump.hpp"
+>  #include <tt-metalium/program.hpp>
+>  #include <tt_stl/span.hpp>
+>  #include <tt-metalium/tt_backend_api_types.hpp>
+> @@ -599,6 +600,111 @@ bool matmul_multi_core_multi_dram(
+128a156,158
+> +    zeonica_dump::u32("in0", activations, std::string("\"format\":\"bf16\",\"layout\":\"tile_nfaces_tile_rowmajor_order\",\"M\":") + std::to_string(M) + ",\"K\":" + std::to_string(K) + ",\"N\":" + std::to_string(N) + ",\"cores_r\":" + std::to_string(num_cores_r) + ",\"cores_c\":" + std::to_string(num_cores_c));
+> +    zeonica_dump::u32("in1", weights, std::string("\"format\":\"bf16\",\"layout\":\"tile_nfaces_tile_rowmajor_order\",\"M\":") + std::to_string(M) + ",\"K\":" + std::to_string(K) + ",\"N\":" + std::to_string(N) + ",\"cores_r\":" + std::to_string(num_cores_r) + ",\"cores_c\":" + std::to_string(num_cores_c));
+> +    zeonica_dump::u32("out", result, std::string("\"format\":\"bf16\",\"layout\":\"tile_nfaces_tile_rowmajor_order\",\"M\":") + std::to_string(M) + ",\"K\":" + std::to_string(K) + ",\"N\":" + std::to_string(N) + ",\"cores_r\":" + std::to_string(num_cores_r) + ",\"cores_c\":" + std::to_string(num_cores_c));
+129a160
+> +    zeonica_dump::u16("golden", golden, std::string("\"format\":\"bf16\",\"layout\":\"row_major\",\"criterion\":\"exact\""));
+150c181
+< @@ -632,4 +733,154 @@ TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAM) {
+---
+> @@ -632,4 +738,154 @@ TEST_F(MeshDispatchFixture, TensixMatmulMultiCoreMultiDRAM) {
+419a451,618
+> diff --git a/tests/tt_metal/tt_metal/integration/matmul/test_matmul_single_core.cpp b/tests/tt_metal/tt_metal/integration/matmul/test_matmul_single_core.cpp
+> index 85ffe0a178..a73d13106b 100644
+> --- a/tests/tt_metal/tt_metal/integration/matmul/test_matmul_single_core.cpp
+> +++ b/tests/tt_metal/tt_metal/integration/matmul/test_matmul_single_core.cpp
+> @@ -37,6 +37,7 @@
+>  #include <tt-metalium/tt_backend_api_types.hpp>
+>  #include "tt_metal/test_utils/comparison.hpp"
+>  #include "tt_metal/test_utils/deprecated/tensor.hpp"
+> +#include "../../zeonica_dump.hpp"
+>  
+>  namespace tt::tt_metal {
+>  
+> @@ -252,6 +253,10 @@ bool matmul_single_core(
+>      auto result_flat_layout = convert_layout_tile_nfaces_to_tile_swizzled(tt::stl::make_const_span(result_bfp16));
+>      auto result_untilized = untilize_swizzled(result_flat_layout, M * 32, N * 32);
+>      auto golden = tt_metal::select_columns(tensor.get_values(), M, K, std::min(K, N));
+> +    zeonica_dump::u32("in0", activations_tile_transposed, std::string("\"format\":\"bf16\"" + std::string(",") + "\"layout\":\"tile_nfaces_block_transposed\"" + std::string(",") + "\"M\":" + std::to_string(M) + std::string(",") + "\"K\":" + std::to_string(K) + std::string(",") + "\"N\":" + std::to_string(N) + std::string(",") + "\"in0_block_w\":" + std::to_string(in0_block_w) + std::string(",") + "\"out_subblock_h\":" + std::to_string(out_subblock_h) + std::string(",") + "\"out_subblock_w\":" + std::to_string(out_subblock_w)));
+> +    zeonica_dump::u32("in1", weights, std::string("\"format\":\"bf16\"" + std::string(",") + "\"layout\":\"tile_nfaces\""));
+> +    zeonica_dump::u32("out", result_vec, std::string("\"format\":\"bf16\"" + std::string(",") + "\"layout\":\"tile_nfaces\""));
+> +    zeonica_dump::u16("golden", golden, std::string("\"format\":\"bf16\"" + std::string(",") + "\"layout\":\"row_major\"" + std::string(",") + "\"criterion\":\"is_close_0.015\""));
+>      pass &= test_utils::is_close_vectors<bfloat16>(golden, result_untilized, [&](const bfloat16& a, const bfloat16& b) {
+>          return tt::test_utils::is_close<bfloat16>(a, b, 0.015f);
+>      });
+> diff --git a/tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp b/tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp
+> index d4b4d3e707..43b27c9625 100644
+> --- a/tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp
+> +++ b/tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp
+> @@ -37,6 +37,7 @@
+>  #include "tt_metal/test_utils/stimulus.hpp"
+>  #include <umd/device/types/arch.hpp>
+>  #include <tt-metalium/distributed.hpp>
+> +#include "../zeonica_dump.hpp"
+>  
+>  namespace tt::tt_metal {
+>  
+> @@ -255,6 +256,9 @@ bool run_sfpu_all_same_buffer(distributed::MeshCommandQueue& cq, const SfpuConfi
+>      std::vector<uint32_t> dest_buffer_data;
+>      distributed::ReadShard(cq, dest_buffer_data, output_dram_buffer, local_coord);
+>  
+> +    zeonica_dump::u32("in0", packed_input, std::string("\"format\":\"bf16\",\"layout\":\"tile_pages\",\"tiles\":") + std::to_string(test_config.num_tiles) + ",\"op\":\"" + test_config.sfpu_op + "\",\"approx\":" + std::to_string(int(test_config.approx_mode)));
+> +    zeonica_dump::u32("out", dest_buffer_data, std::string("\"format\":\"bf16\",\"layout\":\"tile_pages\",\"tiles\":") + std::to_string(test_config.num_tiles) + ",\"op\":\"" + test_config.sfpu_op + "\",\"approx\":" + std::to_string(int(test_config.approx_mode)));
+> +    zeonica_dump::u32("golden", packed_golden, std::string("\"format\":\"bf16\",\"layout\":\"tile_pages\",\"tiles\":") + std::to_string(test_config.num_tiles) + ",\"op\":\"" + test_config.sfpu_op + "\",\"approx\":" + std::to_string(int(test_config.approx_mode)));
+>      return sfpu_util::is_close_packed_sfpu_output(dest_buffer_data, packed_golden, test_config.sfpu_op);
+>  }
+>  
+> diff --git a/tests/tt_metal/tt_metal/test_bcast.cpp b/tests/tt_metal/tt_metal/test_bcast.cpp
+> index a428259d66..ce6a27527e 100644
+> --- a/tests/tt_metal/tt_metal/test_bcast.cpp
+> +++ b/tests/tt_metal/tt_metal/test_bcast.cpp
+> @@ -22,6 +22,7 @@
+>  #include <tt-logger/tt-logger.hpp>
+>  #include "test_gold_impls.hpp"
+>  #include "impl/data_format/bfloat16_utils.hpp"
+> +#include "zeonica_dump.hpp"
+>  
+>  using std::vector;
+>  using namespace tt;
+> @@ -259,6 +260,9 @@ void run_bcast_test(IDevice* dev, BcastDim::Enum bcast_dim, BcastOp::Enum bcast_
+>  
+>      vector<uint32_t> result_vec;
+>      detail::ReadFromBuffer(dst_dram_buffer, result_vec);
+> +    zeonica_dump::u32("in1", bcast_tiled_u32, std::string("\"format\":\"bf16\",\"layout\":\"tiled_nfaces\",\"shape\":[") + std::to_string(shape[0]) + "," + std::to_string(shape[1]) + "," + std::to_string(shape[2]) + "," + std::to_string(shape[3]) + "],\"bcast_dim\":" + std::to_string(int(bcast_dim)) + ",\"bcast_op\":" + std::to_string(int(bcast_op)) + ",\"multibank\":" + std::to_string(int(multibank)));
+> +    zeonica_dump::u32("in0", src0_vec, std::string("\"format\":\"bf16\",\"layout\":\"tiled_nfaces\",\"shape\":[") + std::to_string(shape[0]) + "," + std::to_string(shape[1]) + "," + std::to_string(shape[2]) + "," + std::to_string(shape[3]) + "],\"bcast_dim\":" + std::to_string(int(bcast_dim)) + ",\"bcast_op\":" + std::to_string(int(bcast_op)) + ",\"multibank\":" + std::to_string(int(multibank)));
+> +    zeonica_dump::u32("out", result_vec, std::string("\"format\":\"bf16\",\"layout\":\"tiled_nfaces\",\"shape\":[") + std::to_string(shape[0]) + "," + std::to_string(shape[1]) + "," + std::to_string(shape[2]) + "," + std::to_string(shape[3]) + "],\"bcast_dim\":" + std::to_string(int(bcast_dim)) + ",\"bcast_op\":" + std::to_string(int(bcast_op)) + ",\"multibank\":" + std::to_string(int(multibank)));
+>  
+>      // Validation
+>      auto comparison_function = [](float a, float b) {
+> @@ -278,6 +282,7 @@ void run_bcast_test(IDevice* dev, BcastDim::Enum bcast_dim, BcastOp::Enum bcast_
+>      auto gold_4f_u32 = u32_from_u16_vector(
+>          convert_layout<uint16_t>(gold_added, shapeR, TensorLayoutType::LIN_ROW_MAJOR, TensorLayoutType::TILED_NFACES));
+>  
+> +    zeonica_dump::u32("golden", gold_4f_u32, std::string("\"format\":\"bf16\",\"layout\":\"tiled_nfaces\",\"criterion\":\"rtol0.02_atol1e-3\""));
+>      int argfail = -1;
+>      bool pass = packed_uint32_t_vector_comparison(result_vec, gold_4f_u32, comparison_function, &argfail);
+>      EXPECT_TRUE(pass) << "Failure position=" << argfail;
+> diff --git a/tests/tt_metal/tt_metal/test_eltwise_binary.cpp b/tests/tt_metal/tt_metal/test_eltwise_binary.cpp
+> index 99390e9b31..81648a1497 100644
+> --- a/tests/tt_metal/tt_metal/test_eltwise_binary.cpp
+> +++ b/tests/tt_metal/tt_metal/test_eltwise_binary.cpp
+> @@ -18,6 +18,7 @@
+>  #include <tt-metalium/tensor_accessor_args.hpp>
+>  #include <tt-logger/tt-logger.hpp>
+>  #include "test_gold_impls.hpp"
+> +#include "zeonica_dump.hpp"
+>  
+>  using std::vector;
+>  using namespace tt;
+> @@ -151,6 +152,10 @@ void run_eltwise_binary_test(
+>      std::vector<uint32_t> result_vec;
+>      distributed::ReadShard(cq, result_vec, dst_dram_buffer, distributed::MeshCoordinate(0, 0));
+>  
+> +    zeonica_dump::u32("in0", src0_vec, std::string("\"format\":\"bf16\",\"layout\":\"tile_pages\",\"tiles\":") + std::to_string(num_tiles) + ",\"op\":\"" + op_id_to_op_name[eltwise_op] + "\"");
+> +    zeonica_dump::u32("in1", src1_vec, std::string("\"format\":\"bf16\",\"layout\":\"tile_pages\",\"tiles\":") + std::to_string(num_tiles) + ",\"op\":\"" + op_id_to_op_name[eltwise_op] + "\"");
+> +    zeonica_dump::u32("out", result_vec, std::string("\"format\":\"bf16\",\"layout\":\"tile_pages\",\"tiles\":") + std::to_string(num_tiles) + ",\"op\":\"" + op_id_to_op_name[eltwise_op] + "\"");
+> +    zeonica_dump::u32("golden", src0_vec, std::string("\"criterion\":\"exact\""));
+>      // Validation
+>      EXPECT_EQ(src0_vec, result_vec);
+>  }
+> diff --git a/tests/tt_metal/tt_metal/test_generic_binary_reader_matmul_large_block.cpp b/tests/tt_metal/tt_metal/test_generic_binary_reader_matmul_large_block.cpp
+> index 4b6d9ea018..cd12827fab 100644
+> --- a/tests/tt_metal/tt_metal/test_generic_binary_reader_matmul_large_block.cpp
+> +++ b/tests/tt_metal/tt_metal/test_generic_binary_reader_matmul_large_block.cpp
+> @@ -41,6 +41,7 @@
+>  #include <tt_stl/span.hpp>
+>  #include <tt-metalium/tt_backend_api_types.hpp>
+>  #include "tt_metal/test_utils/deprecated/tensor.hpp"
+> +#include "zeonica_dump.hpp"
+>  
+>  //////////////////////////////////////////////////////////////////////////////////////////
+>  // This test is similar to test_matmul_large_block.
+> @@ -309,6 +310,11 @@ TEST_F(MeshDeviceSingleCardFixture, GenericBinaryReaderMatmulLargeBlock) {
+>  
+>          std::vector<uint32_t> result_vec;
+>          tt_metal::detail::ReadFromBuffer(dst_dram_buffer, result_vec);
+> +        zeonica_dump::u32("in0", activations_tile_transposed, "\"format\":\"bf16\",\"layout\":\"tile_nfaces_block_transposed\",\"M\":" + std::to_string(M) + ",\"K\":" + std::to_string(K) + ",\"N\":" + std::to_string(N) + ",\"in0_block_w\":" + std::to_string(in0_block_w));
+> +        zeonica_dump::u32("in1", weights, "\"format\":\"bf16\",\"layout\":\"tile_nfaces\"");
+> +        zeonica_dump::u32("reader_source_addresses", source_addresses, "\"src0_addr\":" + std::to_string(src0_dram_buffer->address()) + ",\"src1_addr\":" + std::to_string(src1_dram_buffer->address()));
+> +        zeonica_dump::u32("out", result_vec, "\"format\":\"bf16\",\"layout\":\"tile_nfaces\"");
+> +        zeonica_dump::u16("golden", tensor.get_values(), "\"format\":\"bf16\",\"layout\":\"row_major\"");
+>  
+>          ////////////////////////////////////////////////////////////////////////////
+>          //                      Validation & Teardown
+> diff --git a/tests/tt_metal/tt_metal/test_matmul_single_tile_bfp8b.cpp b/tests/tt_metal/tt_metal/test_matmul_single_tile_bfp8b.cpp
+> index a35f7dcd8c..2a1d52b862 100644
+> --- a/tests/tt_metal/tt_metal/test_matmul_single_tile_bfp8b.cpp
+> +++ b/tests/tt_metal/tt_metal/test_matmul_single_tile_bfp8b.cpp
+> @@ -14,6 +14,7 @@
+>  #include <tt-metalium/buffer.hpp>
+>  #include <tt-metalium/circular_buffer_config.hpp>
+>  #include "tt_metal/test_utils/bfloat_utils.hpp"
+> +#include "zeonica_dump.hpp"
+>  
+>  using std::vector;
+>  using namespace tt;
+> @@ -115,6 +116,10 @@ TEST_F(MeshDeviceSingleCardFixture, MatmulSingleTileBfp8b) {
+>  
+>      std::vector<uint32_t> result_vec;
+>      detail::ReadFromBuffer(dst_dram_buffer, result_vec);
+> +    zeonica_dump::u32("in0", activations, "\"format\":\"bfp8b\",\"layout\":\"tile_nfaces\",\"tiles\":1");
+> +    zeonica_dump::u32("in1", weights, "\"format\":\"bfp8b\",\"layout\":\"tile_nfaces\",\"tiles\":1");
+> +    zeonica_dump::u32("out", result_vec, "\"format\":\"bfp8b\",\"layout\":\"tile_nfaces\",\"tiles\":1");
+> +    zeonica_dump::u32("golden", activations, "\"format\":\"bfp8b\",\"layout\":\"tile_nfaces\",\"tiles\":1");
+>  
+>      // Validation - matmul with identity should return same result
+>      EXPECT_EQ(activations, result_vec);
+> diff --git a/tests/tt_metal/tt_metal/test_matmul_single_tile_output_in_l1.cpp b/tests/tt_metal/tt_metal/test_matmul_single_tile_output_in_l1.cpp
+> index f177a425d2..763a6f72fc 100644
+> --- a/tests/tt_metal/tt_metal/test_matmul_single_tile_output_in_l1.cpp
+> +++ b/tests/tt_metal/tt_metal/test_matmul_single_tile_output_in_l1.cpp
+> @@ -17,6 +17,7 @@
+>  #include <tt-metalium/circular_buffer_config.hpp>
+>  #include "tt_metal/test_utils/deprecated/tensor.hpp"
+>  #include <umd/device/types/core_coordinates.hpp>
+> +#include "zeonica_dump.hpp"
+>  
+>  using std::vector;
+>  using namespace tt;
+> @@ -122,6 +123,10 @@ TEST_F(MeshDeviceSingleCardFixture, MatmulSingleTileOutputInL1) {
+>  
+>      std::vector<uint32_t> result_vec;
+>      detail::ReadFromBuffer(dst_l1_buffer, result_vec);
+> +    zeonica_dump::u32("in0", activations, "\"format\":\"bf16\",\"layout\":\"tile_nfaces\",\"tiles\":1");
+> +    zeonica_dump::u32("in1", weights, "\"format\":\"bf16\",\"layout\":\"tile_nfaces\",\"tiles\":1");
+> +    zeonica_dump::u32("out", result_vec, "\"format\":\"bf16\",\"layout\":\"tile_nfaces\",\"tiles\":1");
+> +    zeonica_dump::u16("golden", tensor.get_values(), "\"format\":\"bf16\",\"layout\":\"tile_swizzled\"");
+>  
+>      // Validation
+>      auto result_bfp16 = unpack_uint32_vec_into_bfloat16_vec(result_vec);

@@ -1,0 +1,1 @@
+{"name":"in0","words":49152,"format":"bf16","layout":"tile_nfaces_tile_rowmajor_order","M":12,"K":8,"N":12,"cores_r":3,"cores_c":3}

@@ -1,0 +1,67 @@
+package main
+
+// Table II helper (artifact-only; not part of the Zeonica sources).
+// make_table2.py copies experiments/tt_eir from the built snapshot into a
+// scratch directory, adds this file as table2_caps.go and builds it. When
+// TT_TABLE2_CAPS=1 the init below builds each named kernel's E-IR program with
+// the frozen profile (the same lookup/build path the runner uses), prints the
+// circular-buffer capacities the model configured (receive-queue capacities
+// whose label starts with "c<digit>") as JSON, and exits before main runs.
+// Usage: TT_TABLE2_CAPS=1 tt_eir_table2 <profile.yaml> <kernel>...
+
+import (
+	"encoding/json"
+	"os"
+	"regexp"
+	"sort"
+
+	"gopkg.in/yaml.v3"
+)
+
+func init() {
+	if os.Getenv("TT_TABLE2_CAPS") != "1" {
+		return
+	}
+	raw, err := os.ReadFile(os.Args[1])
+	check(err)
+	var prof Profile
+	check(yaml.Unmarshal(raw, &prof))
+	cbName := regexp.MustCompile(`^c[0-9]+`)
+	type cb struct {
+		Name  string `json:"name"`
+		Label string `json:"label"`
+		Tiles int    `json:"tiles"`
+	}
+	type entry struct {
+		Kernel       string `json:"kernel"`
+		Width        int    `json:"device_width_pes"`
+		Height       int    `json:"device_height_pes"`
+		Cores        int    `json:"tt_cores"`
+		PEs          int    `json:"pes"`
+		CBsPerCore   []cb   `json:"cbs_core0"`
+		OutPages     int    `json:"out_pages"`
+		InPageBytes  int    `json:"in_page_bytes"`
+		OutPageBytes int    `json:"out_page_bytes"`
+	}
+	var out []entry
+	for _, k := range os.Args[2:] {
+		spec := lookup(k, caseB{a: 16, b: 16, shared: 16})
+		bd := spec.build(prof.Latencies)
+		e := entry{Kernel: k, Width: bd.prog.width, Height: bd.prog.height, PEs: len(bd.prog.pes),
+			Cores: (bd.prog.width / 3) * (bd.prog.height / 2), OutPages: spec.outPages,
+			InPageBytes: spec.inPageBytes, OutPageBytes: spec.outPageBytes}
+		for _, q := range bd.prog.caps {
+			if q.x < 3 && q.y < 2 { // TT core (0,0): PEs (0..2, 0..1)
+				if n := cbName.FindString(q.cb); n != "" {
+					e.CBsPerCore = append(e.CBsPerCore, cb{Name: n, Label: q.cb, Tiles: q.tiles})
+				}
+			}
+		}
+		sort.Slice(e.CBsPerCore, func(i, j int) bool { return e.CBsPerCore[i].Name < e.CBsPerCore[j].Name })
+		out = append(out, e)
+	}
+	b, err := json.MarshalIndent(out, "", " ")
+	check(err)
+	os.Stdout.Write(append(b, '\n'))
+	os.Exit(0)
+}

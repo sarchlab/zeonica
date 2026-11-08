@@ -1,0 +1,1 @@
+{"name":"out","words":512,"format":"bf16","layout":"tile_pages","tiles":1,"op":"sigmoid","approx":0}

@@ -1,0 +1,29 @@
+{
+  "experiment": "Fig. 6 / Table II: Zeonica TT/Wormhole model vs TT-Sim, 10 held-out kernels",
+  "kernels": 10,
+  "mape_pct": 3.2802335632491433,
+  "mape_pct_rounded": 3.28,
+  "expected_mape_pct": 3.28,
+  "max_ape_pct": 9.153708389004178,
+  "max_ape_kernel": "matmul_multicore_multi_dram_small_3x3",
+  "per_kernel_ape_pct": {
+    "matmul_single_tile_bfp8b": 0.0453,
+    "matmul_single_core_small": 7.2917,
+    "matmul_large_block_hifi4_rowmajor_rowmajor": 0.9269,
+    "matmul_multicore_multi_dram_small_3x3": 9.1537,
+    "bcast_w_mul": 3.6091,
+    "eltwise_binary_mul": 8.8502,
+    "sfpu_exponential_1tile": 0.0319,
+    "sfpu_sigmoid_1tile": 0.4493,
+    "sfpu_sigmoid_4tile": 0.6145,
+    "sfpu_tanh_4tile": 1.8298
+  },
+  "checks": {
+    "mape": "PASS",
+    "per_kernel_ape": "PASS",
+    "max_ape": "PASS",
+    "data": "PASS",
+    "freeze4": "PASS"
+  },
+  "check": "PASS"
+}

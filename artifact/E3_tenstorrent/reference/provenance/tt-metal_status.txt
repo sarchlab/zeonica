@@ -1,0 +1,16 @@
+ M tests/tt_metal/tt_metal/integration/matmul/test_matmul_large_block.cpp
+ M tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_X_dram.cpp
+ M tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_multi_dram_inX_mcast.cpp
+ M tests/tt_metal/tt_metal/integration/matmul/test_matmul_single_core.cpp
+ M tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp
+ M tests/tt_metal/tt_metal/test_bcast.cpp
+ M tests/tt_metal/tt_metal/test_eltwise_binary.cpp
+ M tests/tt_metal/tt_metal/test_generic_binary_reader_matmul_large_block.cpp
+ M tests/tt_metal/tt_metal/test_matmul_single_tile_bfp8b.cpp
+ M tests/tt_metal/tt_metal/test_matmul_single_tile_output_in_l1.cpp
+ M tt_metal/programming_examples/add_2_integers_in_compute/add_2_integers_in_compute.cpp
+ M tt_metal/programming_examples/eltwise_binary/eltwise_binary.cpp
+ M tt_metal/programming_examples/matmul/matmul_multi_core/matmul_multi_core.cpp
+?? .understand-anything/
+?? tests/tt_metal/tt_metal/zeonica_dump.hpp
+?? tt_metal/.understand-anything/

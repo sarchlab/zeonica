@@ -1,0 +1,5 @@
+# Build products of run_zeonica.py / make_table2.py (regenerated on every run)
+results/zeonica_run/src/
+results/zeonica_run/table2_src/
+results/zeonica_run/bin/
+__pycache__/

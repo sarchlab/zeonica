@@ -1,0 +1,420 @@
+{
+ "rows": [
+  {
+   "kernel": "matmul_single_tile_l1",
+   "role": "calibration",
+   "reference_cycles": 4411,
+   "dump_off_observations": [
+    4411
+   ],
+   "dump_on_cycles": 4411,
+   "previous_frozen": 4411,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_large_block",
+   "role": "calibration",
+   "reference_cycles": 17316,
+   "dump_off_observations": [
+    17316
+   ],
+   "dump_on_cycles": 17316,
+   "previous_frozen": 17316,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_single_tile_bfp8b",
+   "role": "heldout",
+   "reference_cycles": 4413,
+   "dump_off_observations": [
+    4413
+   ],
+   "dump_on_cycles": 4413,
+   "previous_frozen": 4413,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_single_core_small",
+   "role": "heldout",
+   "reference_cycles": 5568,
+   "dump_off_observations": [
+    5568
+   ],
+   "dump_on_cycles": 5568,
+   "previous_frozen": 5568,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_single_core",
+   "role": "calibration",
+   "reference_cycles": 357511,
+   "dump_off_observations": [
+    357511
+   ],
+   "dump_on_cycles": 357511,
+   "previous_frozen": 357511,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_large_block_hifi4_tilized_tilized",
+   "role": "calibration",
+   "reference_cycles": 13467,
+   "dump_off_observations": [
+    13467,
+    13467,
+    13467,
+    13467,
+    13467,
+    13467
+   ],
+   "dump_on_cycles": 13467,
+   "previous_frozen": 13467,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_large_block_hifi4_rowmajor_input",
+   "role": "calibration",
+   "reference_cycles": 13740,
+   "dump_off_observations": [
+    13716,
+    13740,
+    13740,
+    13740,
+    13740,
+    13740
+   ],
+   "dump_on_cycles": 13740,
+   "previous_frozen": 13740,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_large_block_hifi4_rowmajor_output",
+   "role": "calibration",
+   "reference_cycles": 14757,
+   "dump_off_observations": [
+    14729,
+    14757,
+    14757,
+    14757,
+    14757,
+    14757
+   ],
+   "dump_on_cycles": 14757,
+   "previous_frozen": 14757,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_large_block_hifi4_rowmajor_rowmajor",
+   "role": "heldout",
+   "reference_cycles": 14889,
+   "dump_off_observations": [
+    14889,
+    14889,
+    14889,
+    14889,
+    14889,
+    14889
+   ],
+   "dump_on_cycles": 14889,
+   "previous_frozen": 14889,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_multicore_multi_dram_small",
+   "role": "calibration",
+   "reference_cycles": 25539,
+   "dump_off_observations": [
+    25539,
+    25539,
+    25539,
+    25539,
+    25539,
+    25539
+   ],
+   "dump_on_cycles": 25539,
+   "previous_frozen": 25539,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_multicore_multi_dram_small_1x2",
+   "role": "calibration",
+   "reference_cycles": 21224,
+   "dump_off_observations": [
+    21224,
+    21224,
+    21224,
+    21224,
+    21224,
+    21224
+   ],
+   "dump_on_cycles": 21224,
+   "previous_frozen": 21224,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_multicore_multi_dram_small_2x1",
+   "role": "calibration",
+   "reference_cycles": 21284,
+   "dump_off_observations": [
+    21284,
+    21284,
+    21284,
+    21284,
+    21284,
+    21284
+   ],
+   "dump_on_cycles": 21284,
+   "previous_frozen": 21284,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_multicore_multi_dram_small_1x3",
+   "role": "calibration",
+   "reference_cycles": 23876,
+   "dump_off_observations": [
+    23876,
+    23876,
+    23876,
+    23876,
+    23876,
+    23876
+   ],
+   "dump_on_cycles": 23876,
+   "previous_frozen": 23876,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_multicore_multi_dram_small_3x1",
+   "role": "calibration",
+   "reference_cycles": 23932,
+   "dump_off_observations": [
+    23932,
+    23932,
+    23932,
+    23932,
+    23932,
+    23932
+   ],
+   "dump_on_cycles": 23932,
+   "previous_frozen": 23932,
+   "equal_previous": true
+  },
+  {
+   "kernel": "matmul_multicore_multi_dram_small_3x3",
+   "role": "heldout",
+   "reference_cycles": 35177,
+   "dump_off_observations": [
+    35177,
+    35177,
+    35177,
+    35177,
+    35177,
+    35177
+   ],
+   "dump_on_cycles": 35177,
+   "previous_frozen": 35177,
+   "equal_previous": true
+  },
+  {
+   "kernel": "bcast_h_add",
+   "role": "calibration",
+   "reference_cycles": 7724,
+   "dump_off_observations": [
+    7724
+   ],
+   "dump_on_cycles": 7724,
+   "previous_frozen": 7724,
+   "equal_previous": true
+  },
+  {
+   "kernel": "bcast_w_add",
+   "role": "calibration",
+   "reference_cycles": 6105,
+   "dump_off_observations": [
+    6105
+   ],
+   "dump_on_cycles": 6105,
+   "previous_frozen": 6105,
+   "equal_previous": true
+  },
+  {
+   "kernel": "bcast_hw_add",
+   "role": "calibration",
+   "reference_cycles": 7252,
+   "dump_off_observations": [
+    7252
+   ],
+   "dump_on_cycles": 7252,
+   "previous_frozen": 7252,
+   "equal_previous": true
+  },
+  {
+   "kernel": "bcast_h_mul",
+   "role": "calibration",
+   "reference_cycles": 6784,
+   "dump_off_observations": [
+    6784
+   ],
+   "dump_on_cycles": 6784,
+   "previous_frozen": 6784,
+   "equal_previous": true
+  },
+  {
+   "kernel": "bcast_w_mul",
+   "role": "heldout",
+   "reference_cycles": 5403,
+   "dump_off_observations": [
+    5403
+   ],
+   "dump_on_cycles": 5403,
+   "previous_frozen": 5403,
+   "equal_previous": true
+  },
+  {
+   "kernel": "eltwise_binary_add",
+   "role": "calibration",
+   "reference_cycles": 429189,
+   "dump_off_observations": [
+    429189,
+    429189,
+    429189,
+    429189,
+    429189,
+    429189
+   ],
+   "dump_on_cycles": 429189,
+   "previous_frozen": 429189,
+   "equal_previous": true
+  },
+  {
+   "kernel": "eltwise_binary_mul",
+   "role": "heldout",
+   "reference_cycles": 393369,
+   "dump_off_observations": [
+    393369,
+    393369,
+    393369,
+    393369,
+    393369,
+    393369
+   ],
+   "dump_on_cycles": 393369,
+   "previous_frozen": 393369,
+   "equal_previous": true
+  },
+  {
+   "kernel": "sfpu_relu_1tile",
+   "role": "calibration",
+   "reference_cycles": 12521,
+   "dump_off_observations": [
+    12521,
+    12521,
+    12521,
+    12521,
+    12521,
+    12521,
+    12521,
+    12521,
+    12521
+   ],
+   "dump_on_cycles": 12521,
+   "previous_frozen": 12521,
+   "equal_previous": true
+  },
+  {
+   "kernel": "sfpu_relu_4tile",
+   "role": "calibration",
+   "reference_cycles": 12611,
+   "dump_off_observations": [
+    12611,
+    12611,
+    12611,
+    12611,
+    12611,
+    12611,
+    12611,
+    12611,
+    12611
+   ],
+   "dump_on_cycles": 12611,
+   "previous_frozen": 12611,
+   "equal_previous": true
+  },
+  {
+   "kernel": "sfpu_exponential_1tile",
+   "role": "heldout",
+   "reference_cycles": 12525,
+   "dump_off_observations": [
+    12525,
+    12525,
+    12525,
+    12525,
+    12525,
+    12525,
+    12525,
+    12525,
+    12525
+   ],
+   "dump_on_cycles": 12525,
+   "previous_frozen": 12525,
+   "equal_previous": true
+  },
+  {
+   "kernel": "sfpu_sigmoid_1tile",
+   "role": "heldout",
+   "reference_cycles": 12465,
+   "dump_off_observations": [
+    12465,
+    12465,
+    12465,
+    12465,
+    12465,
+    12465,
+    12465,
+    12465,
+    12465
+   ],
+   "dump_on_cycles": 12465,
+   "previous_frozen": 12465,
+   "equal_previous": true
+  },
+  {
+   "kernel": "sfpu_sigmoid_4tile",
+   "role": "heldout",
+   "reference_cycles": 12531,
+   "dump_off_observations": [
+    12531,
+    12531,
+    12531,
+    12531,
+    12531,
+    12531,
+    12531,
+    12531,
+    12531
+   ],
+   "dump_on_cycles": 12613,
+   "previous_frozen": 12531,
+   "equal_previous": true
+  },
+  {
+   "kernel": "sfpu_tanh_4tile",
+   "role": "heldout",
+   "reference_cycles": 12843,
+   "dump_off_observations": [
+    12843,
+    12843,
+    12843,
+    12843,
+    12843,
+    12843,
+    12843,
+    12843,
+    12843
+   ],
+   "dump_on_cycles": 12843,
+   "previous_frozen": 12843,
+   "equal_previous": true
+  }
+ ]
+}

@@ -1,0 +1,1 @@
+{"kernel": "matmul_multicore_multi_dram_small_3x3", "role": "heldout", "returncode": 0, "passed": true, "cycles": 35177}

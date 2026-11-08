@@ -1,0 +1,135 @@
+{
+  "experiment": "HPCA27 Fig. 6 / Table II: Zeonica TT-Metalium/Wormhole model vs TT-Sim device-side cycles, 10 held-out kernels",
+  "zeonica": {
+    "branch": "hpca27-ae/e3-tenstorrent (github.com/sarchlab/zeonica)",
+    "upstream_base": {
+      "commit": "582016668dd52f170c777dc12f4456c8243e3480",
+      "subject": "Skip FFT test when submodule artifact is missing"
+    },
+    "rem": {
+      "commit": "2be7fa3",
+      "content": "REM opcode (core/emu.go, core/opcodes.go), as in the working tree the TT model was frozen on (2026-10-05)"
+    },
+    "tt": {
+      "commit": "70eb547",
+      "diffstat_vs_rem": "16 files changed, 2569 insertions(+), 6 deletions(-)"
+    },
+    "identity": "every file of the frozen pruned tree (zeonica_tt_eir_20261004/pruned/) is byte-identical to the same path at commit 70eb547; its UPSTREAM_COMMIT file names 5820166, an ancestor; all 59 source files match the freeze-4 hash record (scripts/check_freeze.py)"
+  },
+  "frozen_config": {
+    "path": "config/tt_eir_freeze4.yaml",
+    "sha256": "c22521106cf3dfb680b404bc1091b655d23afedd3cef52ebdc3a660d4f0cd531",
+    "freeze_record": "config/pre_validation_freeze4.json",
+    "freeze_record_created_utc": "2026-10-05T03:35:22.816311Z",
+    "original_binary_sha256": "2a2e5421ee071a45f51fa7506616b0309f16979b5a36ab1477181f2dc0687ba9"
+  },
+  "ttsim": {
+    "version": "v1.8.4",
+    "commit": "d351ea790333c20536680418b231b6a8284067ce",
+    "local_patch": "reference/provenance/ttsim_diff.txt (adds read-only libttsim_get_clock(); does not advance simulation time)",
+    "status": "reference/provenance/ttsim_status.txt",
+    "build": "wh-cycle (Wormhole, cycle mode)",
+    "library_sha256": "9a667f9bbf895f3617e2ccb0440db16a28667a6e1fad459eff163f2594d3de2d"
+  },
+  "tt_metal": {
+    "commit": "5922d48d50e29fffb37ee2f687fb764400314cdb",
+    "local_diff": "reference/provenance/tt-metal_diff.txt (tracked-file diff at reference time: added gtest variants -- HiFi4 large-block and sized multi-core small grids, see tt-metal_diff_before.txt -- plus the env-guarded tensor dump hook)",
+    "dump_hook": "reference/provenance/tt-metal_dump_hook.patch.diff + reference/provenance/zeonica_dump.hpp (untracked new file); no-op unless ZEONICA_TT_DUMP_DIR is set; dumps after readback",
+    "status": "reference/provenance/tt-metal_status.txt",
+    "gtest_binaries_sha256": {
+      "unit_tests_legacy": "dbee231a784b98772cb4156056b8dd84cc55a4a72b9949735eb9e13500cd94d8",
+      "unit_tests_integration": "8d492119e17c1950a4df289d61f8c00ef7b716d0594325a4b24c2598b7af6d4a",
+      "libtt_metal.so": "e92384386b2894df96bb0d3a0d06d83b95fa3979bc2c500ffc7b12ec7e13c6f4"
+    }
+  },
+  "reference_cycles": {
+    "definition": "TT-Sim process-global clock count (g_clock) printed by TT-Sim at simulator exit (\"[<cycles>] <s> seconds (<f> KHz)\") for the gtest run with the dump hook off: every simulated device cycle of the gtest process from libttsim_init to exit, i.e. device setup, program dispatch, kernel execution and readback. It is not a kernel-only window. The local libttsim_get_clock patch is not needed for this value (it serves other experiments); the patched wh-cycle library is the one these runs used.",
+    "runner": "reference/provenance/run_gtest_reference.py (record only; not run by this artifact)",
+    "gtests": {
+      "matmul_single_tile_bfp8b": {
+        "gtest_filter": "MeshDeviceSingleCardFixture.MatmulSingleTileBfp8b",
+        "tt_source": "tests/tt_metal/tt_metal/test_matmul_single_tile_bfp8b.cpp",
+        "binary": "unit_tests_legacy",
+        "slow_dispatch": true
+      },
+      "matmul_single_core_small": {
+        "gtest_filter": "MeshDispatchFixture.TensixMatmulSingleCoreSmall",
+        "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_single_core.cpp",
+        "binary": "unit_tests_integration",
+        "slow_dispatch": true
+      },
+      "matmul_large_block_hifi4_rowmajor_rowmajor": {
+        "gtest_filter": "MeshDispatchFixture.TensixMatmulLargeBlockHiFi4RowMajorRowMajor",
+        "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_large_block.cpp",
+        "binary": "unit_tests_integration",
+        "slow_dispatch": false
+      },
+      "matmul_multicore_multi_dram_small_3x3": {
+        "gtest_filter": "MeshDispatchFixture.TensixMatmulMultiCoreMultiDRAMSmall3x3",
+        "tt_source": "tests/tt_metal/tt_metal/integration/matmul/test_matmul_multi_core_X_dram.cpp",
+        "binary": "unit_tests_integration",
+        "slow_dispatch": false
+      },
+      "bcast_w_mul": {
+        "gtest_filter": "MeshDeviceSingleCardFixture.BcastWMul",
+        "tt_source": "tests/tt_metal/tt_metal/test_bcast.cpp",
+        "binary": "unit_tests_legacy",
+        "slow_dispatch": true
+      },
+      "eltwise_binary_mul": {
+        "gtest_filter": "UnitMeshCQSingleCardSharedFixture.EltwiseBinaryMul",
+        "tt_source": "tests/tt_metal/tt_metal/test_eltwise_binary.cpp",
+        "binary": "unit_tests_legacy",
+        "slow_dispatch": false
+      },
+      "sfpu_exponential_1tile": {
+        "gtest_filter": "SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/1",
+        "tt_source": "tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp",
+        "binary": "unit_tests_integration",
+        "slow_dispatch": false
+      },
+      "sfpu_sigmoid_1tile": {
+        "gtest_filter": "SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/5",
+        "tt_source": "tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp",
+        "binary": "unit_tests_integration",
+        "slow_dispatch": false
+      },
+      "sfpu_sigmoid_4tile": {
+        "gtest_filter": "SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/13",
+        "tt_source": "tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp",
+        "binary": "unit_tests_integration",
+        "slow_dispatch": false
+      },
+      "sfpu_tanh_4tile": {
+        "gtest_filter": "SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/15",
+        "tt_source": "tests/tt_metal/tt_metal/integration/test_sfpu_compute.cpp",
+        "binary": "unit_tests_integration",
+        "slow_dispatch": false
+      }
+    }
+  },
+  "copied_from": {
+    "reference/ttsim_reference_cycles.json": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/frozen/ttsim_reference_cycles.json",
+    "reference/kernel_partition.json": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/frozen/kernel_partition.json",
+    "reference/ttsim_configuration_cb.csv": "/scratch/data/yijia/zeonica_hpca27_evaluation_20260723/deliverables/tt_sim_configuration.csv (column subset: kernel, shape, tile geometry, output tiles, data type, core grid, compute allocation, CB capacities, memory placement)",
+    "config/tt_eir_freeze4.yaml": "/scratch/data/yijia/zeonica_tt_eir_20261004/configs/tt_eir.yaml (== configs/tt_eir_freeze4.yaml)",
+    "config/pre_validation_freeze4.json": "/scratch/data/yijia/zeonica_tt_eir_20261004/frozen/pre_validation.json (== frozen/pre_validation_freeze4.json)",
+    "reference/freeze4/kernels.csv": "/scratch/data/yijia/zeonica_tt_eir_20261004/results/freeze4/kernels.csv",
+    "reference/freeze4/evaluation.json": "/scratch/data/yijia/zeonica_tt_eir_20261004/results/freeze4/evaluation.json",
+    "reference/freeze4/summaries/<kernel>.json": "/scratch/data/yijia/zeonica_tt_eir_20261004/results/freeze4/<kernel>/summary.json",
+    "reference/freeze4/zeonica_out.sha256": "sha256 of /scratch/data/yijia/zeonica_tt_eir_20261004/results/freeze4/<kernel>/zeonica_out.u32",
+    "reference/ttsim_gtest_nodump/<kernel>/{command.json,result.json,stdout.log}": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/raw/ttsim_gtest_nodump/<kernel>/",
+    "reference/ttsim_gtest_dump/<kernel>/{command.json,result.json,stdout.log}": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/raw/ttsim_gtest_dump/<kernel>/",
+    "reference/ttsim_gtest_dump/<kernel>/dump/{in0,in1,out}.{u32,json}": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/raw/ttsim_gtest_dump/<kernel>/dump/ (golden.* host references omitted: not read by the model)",
+    "reference/provenance/*": "/scratch/data/yijia/zeonica_tt_functional_data_20261004/frozen/ (ttsim_run_provenance.json = frozen/provenance.json), /scratch/data/yijia/zeonica_tt_functional_data_20261004/scripts/run_gtest_reference.py, /scratch/data/yijia/zeonica_tt_functional_data_20261004/raw/nodump_summary.txt"
+  },
+  "sha256": {
+    "reference/ttsim_reference_cycles.json": "09f2ed18ac87a33b9b1c69ea739127a24ef816163e56414b5550f47b3be7eee5",
+    "reference/kernel_partition.json": "f5ad2043a9b5e7458c524a4ae6bb1528de6d0e7a85fe08837717d650a6b53cee",
+    "reference/ttsim_configuration_cb.csv": "fdecd9c11ac749b456f44d34da244cdfca14a7485b478ecc02db0f07f6a506e5",
+    "config/tt_eir_freeze4.yaml": "c22521106cf3dfb680b404bc1091b655d23afedd3cef52ebdc3a660d4f0cd531",
+    "config/pre_validation_freeze4.json": "6bec79c9264ba86f957c674606dd39966ce25b091986e1702b005bd9d56bae8f",
+    "config/kernels.json": "49147070113f1a5aa4a2b16d434f0713c36c9893a10311819765a45652b935ac",
+    "reference/freeze4/kernels.csv": "f11786e8de9d198a6f31d00e008e79a84bbc4e1b2b078948b0368a16ff07f684"
+  }
+}

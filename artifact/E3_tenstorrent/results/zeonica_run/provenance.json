@@ -1,0 +1,29 @@
+{
+  "zeonica": {
+    "mode": "git archive",
+    "rev": "HEAD",
+    "commit": "70eb5477f17af3b27fe368b3fc1a8739584fcf0d",
+    "worktree_dirty_ignored": false
+  },
+  "config": {
+    "path": "config/tt_eir_freeze4.yaml",
+    "sha256": "c22521106cf3dfb680b404bc1091b655d23afedd3cef52ebdc3a660d4f0cd531"
+  },
+  "binary_sha256": "a444de83a9d41e81adb1369f9e21fc32e93228dd39944c54c3364971f45753ce",
+  "go": "go version go1.25.3 linux/amd64",
+  "build_flags": "-buildvcs=false -trimpath",
+  "host": {
+    "node": "yss2",
+    "machine": "x86_64",
+    "platform": "Linux-5.15.0-198-generic-x86_64-with-glibc2.35",
+    "cpu_count": 128,
+    "python": "3.13.11"
+  },
+  "jobs": 8,
+  "seconds": {
+    "build": 1.23,
+    "kernels": 1.93,
+    "total": 3.27
+  },
+  "data_check_failed": []
+}

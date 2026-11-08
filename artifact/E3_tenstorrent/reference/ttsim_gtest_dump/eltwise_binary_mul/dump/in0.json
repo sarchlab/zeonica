@@ -1,0 +1,1 @@
+{"name":"in0","words":1048576,"format":"bf16","layout":"tile_pages","tiles":2048,"op":"MUL"}

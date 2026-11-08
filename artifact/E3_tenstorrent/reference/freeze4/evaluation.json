@@ -1,0 +1,46 @@
+{
+ "heldout": {
+  "eir": {
+   "n": 10,
+   "mape": 3.2802335632491433,
+   "max": 9.153708389004178
+  },
+  "previous": {
+   "n": 10,
+   "mape": 4.054716619487738,
+   "max": 13.972701149425287
+  }
+ },
+ "calibration_kernels": {
+  "eir": {
+   "n": 18,
+   "mape": 0.9794401284382256,
+   "max": 9.834834834834835
+  }
+ },
+ "caseb_validation": {
+  "eir": {
+   "passed": 21,
+   "n": 22,
+   "program_mape": 0.7797333538633717,
+   "program_max": 6.250605678844849,
+   "sig_delta_mean_err": 4.917238472293672,
+   "sig_delta_max_err": 17.76061776061776,
+   "failed": [
+    "a8_b8_out16_reader128"
+   ]
+  },
+  "previous": {
+   "passed": 22,
+   "program_mape": 0.10817344404780352
+  }
+ },
+ "caseb_calibration": {
+  "eir_program_mape": 0.05961251602751724
+ },
+ "data": {
+  "all_passed": true,
+  "runs": 57,
+  "bit_exact_runs": 53
+ }
+}

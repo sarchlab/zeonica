@@ -1,0 +1,1 @@
+{"name":"in0","words":8192,"format":"bf16","layout":"tile_nfaces_block_transposed","M":4,"K":4,"N":4,"in0_block_w":2,"out_subblock_h":4,"out_subblock_w":4}
