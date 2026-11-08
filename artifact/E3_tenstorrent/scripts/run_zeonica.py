@@ -54,7 +54,9 @@ def snapshot(rev, src):
         shutil.rmtree(src)
     src.mkdir(parents=True)
     commit = sh(["git", "-C", str(REPO), "rev-parse", rev + "^{commit}"])
-    dirty = sh(["git", "-C", str(REPO), "status", "--porcelain", "--untracked-files=no"]) != ""
+    # artifact/ is excluded from the snapshot (and a rerun rewrites its results).
+    dirty = sh(["git", "-C", str(REPO), "status", "--porcelain", "--untracked-files=no",
+                "--", ".", ":(exclude)artifact"]) != ""
     data = subprocess.run(["git", "-C", str(REPO), "archive", "--format=tar", commit,
                            "--", ".", ":(exclude)artifact"], check=True, capture_output=True).stdout
     kw = {"filter": "data"} if hasattr(tarfile, "data_filter") else {}
