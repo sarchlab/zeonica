@@ -57,8 +57,10 @@ def git_info(repo: Path) -> dict:
     return {
         "path": str(repo),
         "commit": sh(["git", "-C", str(repo), "rev-parse", "HEAD"]).strip(),
+        # artifact/ holds this experiment's own results, which a rerun rewrites;
+        # it is not part of the snapshot, so it does not count as dirty.
         "dirty": bool(sh(["git", "-C", str(repo), "status", "--porcelain",
-                          "--untracked-files=no"]).strip()),
+                          "--untracked-files=no", "--", ".", ":(exclude)artifact"]).strip()),
     }
 
 
