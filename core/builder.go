@@ -201,6 +201,7 @@ func (b Builder) Build(name string) *Core {
 		RecvBufQueue:           make([][][]cgra.Data, 4),
 		SendBufQueue:           make([][][]cgra.Data, 4),
 		HostDrainDirections:    make(map[int]bool),
+		TT:                     &ttRunState{WaitSince: -1},
 		RecvQueueCapacity:      incomingBufCap,
 		SendQueueCapacity:      outgoingBufCap,
 		EnableFIFOModel:        b.enableFIFOModel,

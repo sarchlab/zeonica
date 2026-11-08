@@ -4,6 +4,8 @@ package api
 import (
 	"fmt"
 	"log/slog"
+	"os"
+	"strconv"
 
 	"github.com/sarchlab/akita/v4/sim"
 	"github.com/sarchlab/akita/v4/sim/directconnection"
@@ -69,6 +71,8 @@ type driverImpl struct {
 	collectTasks     [4][]*collectTask //Four Directions
 	dataFeedTasks    []*dataFeedTask
 	dataCollectTasks []*dataCollectTask
+	lastCollect      sim.VTimeInSec
+	collectTimeout   *float64
 }
 
 // PerPEKernels maps each PE coordinate to a kernel/program payload.
@@ -563,15 +567,37 @@ func (d *driverImpl) doDataCollect() bool {
 		}
 		tile := d.device.GetTile(task.core[0], task.core[1])
 		data, ok := tile.DrainData(task.side, task.color)
-		if !ok {
+		if !ok || data.LaneCount() == 0 {
+			// Poll again: a core filling a host-drained queue does not wake the driver.
+			d.checkCollectTimeout()
+			d.TickLater()
 			continue
 		}
+		d.lastCollect = d.Engine.CurrentTime()
+		// Draining frees the send queue: wake the core in case it is output-blocked.
+		d.Engine.Schedule(sim.MakeTickEvent(tile.GetTickingComponent(), d.Engine.CurrentTime()))
 		task.data[task.next] = data.Clone()
 		task.next++
 		madeProgress = true
 	}
 	d.removeFinishedDataCollectTasks()
 	return madeProgress
+}
+
+// checkCollectTimeout panics when ZEONICA_DATA_COLLECT_TIMEOUT_CYCLES cycles
+// pass without a collected item (a deadlocked program would poll forever).
+func (d *driverImpl) checkCollectTimeout() {
+	if d.collectTimeout == nil {
+		limit, _ := strconv.ParseFloat(os.Getenv("ZEONICA_DATA_COLLECT_TIMEOUT_CYCLES"), 64)
+		d.collectTimeout = &limit
+	}
+	limit := *d.collectTimeout
+	if limit <= 0 {
+		return
+	}
+	if float64(d.Engine.CurrentTime()-d.lastCollect)*float64(d.Freq) > limit {
+		panic(fmt.Sprintf("data collect stalled for %.0f cycles at t=%.0f", limit, float64(d.Engine.CurrentTime())*float64(d.Freq)))
+	}
 }
 
 func (d *driverImpl) removeFinishedDataCollectTasks() {

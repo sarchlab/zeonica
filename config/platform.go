@@ -196,3 +196,13 @@ func (d *device) GetSidePorts(
 
 	return ports
 }
+
+// CoreOf returns the core of a device tile (nil if the tile is not a core tile).
+func CoreOf(t cgra.Tile) *core.Core {
+	if tt, ok := t.(*tile); ok {
+		if c, ok := tt.Core.(*core.Core); ok {
+			return c
+		}
+	}
+	return nil
+}

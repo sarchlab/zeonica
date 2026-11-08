@@ -121,6 +121,9 @@ type coreState struct {
 	RecvBufQueue           [][][]cgra.Data // [Color][Direction]FIFO
 	SendBufQueue           [][][]cgra.Data // [Color][Direction]FIFO
 	RecvQueueCapacity      int
+	RecvQueueCaps          map[int]int // per (color, direction) override, e.g. circular buffers
+	ProgressCreditPorts    [][2]int    // progress-credit receive queues (color, direction), see tt_cb.go
+	TT                     *ttRunState // TT CB wait/resume state, shared with evaluation clones (tt_cb.go)
 	SendQueueCapacity      int
 	HostDrainDirections    map[int]bool
 	EnableFIFOModel        bool
@@ -237,7 +240,10 @@ func (s *coreState) sendFIFOEnabled() bool {
 		len(s.SendBufQueue[0]) > int(cgra.Router)
 }
 
-func (s *coreState) recvQueueCap() int {
+func (s *coreState) recvQueueCap(color, direction int) int {
+	if c, ok := s.RecvQueueCaps[recvCapKey(color, direction)]; ok {
+		return c
+	}
 	if s.RecvQueueCapacity > 0 {
 		return s.RecvQueueCapacity
 	}
@@ -308,14 +314,14 @@ func (s *coreState) sendQueueLen(color, direction int) int {
 
 func (s *coreState) recvQueueIsFull(color, direction int) bool {
 	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction {
-		return len(s.RecvBufQueue[color][direction]) >= s.recvQueueCap()
+		return len(s.RecvBufQueue[color][direction]) >= s.recvQueueCap(color, direction)
 	}
 	return s.RecvBufHeadReady[color][direction]
 }
 
 func (s *coreState) recvQueuePush(color, direction int, data cgra.Data) bool {
 	if s.recvFIFOEnabled() && len(s.RecvBufQueue[color]) > direction {
-		if len(s.RecvBufQueue[color][direction]) >= s.recvQueueCap() {
+		if len(s.RecvBufQueue[color][direction]) >= s.recvQueueCap(color, direction) {
 			return false
 		}
 		s.RecvBufQueue[color][direction] = append(s.RecvBufQueue[color][direction], data)
@@ -650,7 +656,7 @@ func (s *coreState) observeWatchedQueues(timeValue float64) {
 		switch watch.Kind {
 		case "recv":
 			occupancy = s.recvQueueLen(watch.ColorIdx, watch.DirectionIdx)
-			capacity = s.recvQueueCap()
+			capacity = s.recvQueueCap(watch.ColorIdx, watch.DirectionIdx)
 		case "send":
 			occupancy = s.sendQueueLen(watch.ColorIdx, watch.DirectionIdx)
 			capacity = s.sendQueueCap(watch.ColorIdx, watch.DirectionIdx)
@@ -1842,6 +1848,9 @@ func (i instEmulator) normalizeDirection(s string) string {
 }
 
 func (i instEmulator) checkIssueReadinessDetails(inst Operation, state *coreState) issueReadiness {
+	if handled, r := i.cbReadiness(inst, state); handled {
+		return r
+	}
 	readiness := issueReadiness{
 		OperandsReady:        true,
 		PredicateReadyOrTrue: true,
@@ -1980,6 +1989,14 @@ func (i instEmulator) RunOperation(inst Operation, state *coreState, time float6
 }
 
 func (i instEmulator) readOperand(operand Operand, state *coreState) (value cgra.Data) {
+	if dir, idx, ok := i.parseIndexedPort(operand.Impl, state); ok {
+		// CB read: tile idx of the receive queue, left in place.
+		v, ok := state.recvQueueAt(i.getColorIndex(operand.Color), i.getDirecIndex(dir), idx)
+		if !ok {
+			panic(fmt.Sprintf("indexed read %s beyond queue at (%d,%d)", operand.Impl, state.TileX, state.TileY))
+		}
+		return v
+	}
 	if strings.HasPrefix(operand.Impl, "$") {
 		registerIndex, err := strconv.Atoi(strings.TrimPrefix(operand.Impl, "$"))
 		if err != nil {

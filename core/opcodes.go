@@ -76,7 +76,7 @@ func (i instEmulator) scalarOpcodeFuncs() map[string]opcodeFunc {
 }
 
 func (i instEmulator) vectorOpcodeFuncs() map[string]opcodeFunc {
-	return map[string]opcodeFunc{
+	m := map[string]opcodeFunc{
 		"VBROADCAST":         i.runVBroadcast,
 		"VADD":               i.runVAdd,
 		"VMUL":               i.runVMul,
@@ -86,6 +86,10 @@ func (i instEmulator) vectorOpcodeFuncs() map[string]opcodeFunc {
 		"VSTORE_CONTIG":      i.runVStoreContig,
 		"TT_MATMUL_TILE_U32": i.runTTMatmulTileU32,
 	}
+	for name, fn := range i.ttTileOpcodeFuncs() {
+		m[name] = fn
+	}
+	return m
 }
 
 func (i instEmulator) returnOpcodeFuncs() map[string]returnOpcodeFunc {
