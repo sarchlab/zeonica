@@ -15,6 +15,7 @@ func (i instEmulator) scalarOpcodeFuncs() map[string]opcodeFunc {
 		"MUL":        i.runMul,    // MULI
 		"MUL_ADD":    i.runMulAdd, // dst = src0 * src1 + src2
 		"DIV":        i.runDiv,
+		"REM":        i.runRem,
 		"OR":         i.runOR,
 		"XOR":        i.runXOR, // XOR XORI
 		"AND":        i.runAND,

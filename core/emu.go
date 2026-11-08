@@ -2901,6 +2901,31 @@ func (i instEmulator) runDiv(inst Operation, state *coreState) map[Operand]cgra.
 	return results
 }
 
+func (i instEmulator) runRem(inst Operation, state *coreState) map[Operand]cgra.Data {
+	src1 := inst.SrcOperands.Operands[0]
+	src2 := inst.SrcOperands.Operands[1]
+
+	src1Struct := i.readOperand(src1, state)
+	src2Struct := i.readOperand(src2, state)
+	src1Val := src1Struct.First()
+	src2Val := src2Struct.First()
+
+	src1Signed := int32(src1Val)
+	src2Signed := int32(src2Val)
+	if src2Signed == 0 {
+		panic("Remainder by zero at " + strconv.Itoa(int(state.PCInBlock)) + "@(" + strconv.Itoa(int(state.TileX)) + "," + strconv.Itoa(int(state.TileY)) + ")")
+	}
+
+	dstVal := uint32(src1Signed % src2Signed)
+	finalPred := src1Struct.Pred && src2Struct.Pred
+	results := make(map[Operand]cgra.Data)
+	for _, dst := range inst.DstOperands.Operands {
+		results[dst] = cgra.NewScalarWithPred(dstVal, finalPred)
+	}
+	Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Pred", finalPred)
+	return results
+}
+
 func (i instEmulator) runSHL(inst Operation, state *coreState) map[Operand]cgra.Data {
 	src := inst.SrcOperands.Operands[0]
 	shiftStr := inst.SrcOperands.Operands[1]
