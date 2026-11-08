@@ -225,6 +225,27 @@ issues:
         - funlen
         - lll
 
+    # Frozen TT/Wormhole model (HPCA'27 artifact, freeze 4). These files must
+    # stay byte-identical to the freeze-4 hash record checked by
+    # artifact/E3_tenstorrent/scripts/check_freeze.py, so lint issues in them
+    # are excluded instead of fixed.
+    - path: (core/tt_[a-z_]+\.go|experiments/tt_eir/)
+      linters:
+        - copyloopvar
+        - errcheck
+        - funlen
+        - gocyclo
+        - lll
+        - misspell
+        - prealloc
+        - stylecheck
+        - unconvert
+        - unused
+    - path: api/driver\.go
+      source: "data collect stalled for"
+      linters:
+        - lll
+
     # Exclude known linters from partially hard-vendored code,
     # which is impossible to exclude via "nolint" comments.
     - path: internal/hmac/
