@@ -1,0 +1,1 @@
+kernel=bcast_w_mul pes=5 instructions=18 eir_cycles=971 zeonica_cycles=5208.00 bit_exact=49152/49152 passed=true wall=0.0s

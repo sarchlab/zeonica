@@ -1,0 +1,1 @@
+kernel=matmul_single_core_small pes=5 instructions=213 eir_cycles=1737 zeonica_cycles=5974.00 bit_exact=16384/16384 passed=true wall=0.1s

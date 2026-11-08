@@ -1,0 +1,1 @@
+kernel=sfpu_exponential_1tile pes=5 instructions=5 eir_cycles=38 zeonica_cycles=12521.00 bit_exact=496/1024 passed=true wall=0.0s

@@ -1,0 +1,1 @@
+kernel=sfpu_tanh_4tile pes=5 instructions=5 eir_cycles=125 zeonica_cycles=12608.00 bit_exact=2067/4096 passed=true wall=0.0s

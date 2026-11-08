@@ -1,0 +1,38 @@
+Running main() from gmock_main.cc
+Note: Google Test filter = MeshDispatchFixture.TensixMatmulSingleCoreSmall
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from MeshDispatchFixture
+2026-10-04 10:49:54.462 | info     |           Metal | Disabling multi-erisc mode with simulator/mock target device (rtoptions.cpp:345)
+2026-10-04 10:49:54.463 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:228)
+2026-10-04 10:49:54.464 | info     |             UMD | Cluster constructor started. (cluster.cpp:335)
+2026-10-04 10:49:54.464 | warning  |             UMD | Chip 0 has inconsistent Tensix harvesting information between harvest mask and number of harvested. Board n150 expects 1 units, but harvest mask indicates 0 units. (cluster_descriptor.cpp:1288)
+2026-10-04 10:49:54.465 | info     |             UMD | Creating Simulation device (cluster.cpp:223)
+2026-10-04 10:49:54.468 | info     | EmulationDriver | TTSimTTDevice chip_id=0 PCI vendor_id=0x1e52 device_id=0x401e (tt_sim_tt_device.cpp:101)
+2026-10-04 10:49:54.468 | info     |             UMD | Cluster constructor completed. (cluster.cpp:507)
+2026-10-04 10:49:54.469 | info     |             UMD | Starting devices in cluster (cluster.cpp:999)
+2026-10-04 10:49:54.469 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1007)
+2026-10-04 10:49:54.481 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:362)
+2026-10-04 10:49:54.481 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:424)
+[ RUN      ] MeshDispatchFixture.TensixMatmulSingleCoreSmall
+2026-10-04 10:49:54.513 | info     |            Test | Running test using Slow Dispatch (mesh_dispatch_fixture.hpp:178)
+2026-10-04 10:49:54.514 | info     |            Test | M = 4, N = 4, K = 4 (test_matmul_single_core.cpp:68)
+2026-10-04 10:49:54.514 | info     |            Test | Activation = 128x128 (test_matmul_single_core.cpp:69)
+2026-10-04 10:49:54.514 | info     |            Test | Weights = 128x128 (test_matmul_single_core.cpp:70)
+2026-10-04 10:49:54.514 | info     |            Test | Activation block = 4x2, #blocks = 2, #sub-blocks = 1 (test_matmul_single_core.cpp:71)
+2026-10-04 10:49:54.514 | info     |            Test | Weights block = 4x2, #blocks = 2, #sub-blocks = 1 (test_matmul_single_core.cpp:78)
+[       OK ] MeshDispatchFixture.TensixMatmulSingleCoreSmall (38 ms)
+[----------] 1 test from MeshDispatchFixture (38 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (90 ms total)
+[  PASSED  ] 1 test.
+2026-10-04 10:49:54.552 | info     |    BuildKernels | JIT cache stats: 13/13 hits (100.0%) [13 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-04 10:49:54.552 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-04 10:49:54.553 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:512)
+2026-10-04 10:49:54.553 | info     |             UMD | Closing devices in cluster (cluster.cpp:1012)
+2026-10-04 10:49:54.553 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1021)
+2026-10-04 10:49:54.553 | info     |             UMD | Cluster destructor started. (cluster.cpp:729)
+2026-10-04 10:49:54.553 | info     |             UMD | Cluster destructor completed. (cluster.cpp:732)
+2026-10-04 10:49:54.553 | info     | EmulationDriver | Sending exit signal to remote... (tt_sim_communicator.cpp:190)
+[5568] 0.3 seconds (21.4 KHz)

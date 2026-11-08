@@ -1,0 +1,1 @@
+kernel=eltwise_binary_mul pes=5 instructions=7 eir_cycles=423946 zeonica_cycles=428183.00 bit_exact=2097152/2097152 passed=true wall=1.9s

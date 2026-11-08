@@ -1,0 +1,1 @@
+kernel=matmul_multicore_multi_dram_small_3x3 pes=45 instructions=3600 eir_cycles=1676 zeonica_cycles=38397.00 bit_exact=147456/147456 passed=true wall=1.3s

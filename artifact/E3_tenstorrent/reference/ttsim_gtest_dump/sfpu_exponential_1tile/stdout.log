@@ -1,0 +1,33 @@
+Running main() from gmock_main.cc
+Note: Google Test filter = SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/1
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture
+[ RUN      ] SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/1
+2026-10-04 10:50:25.819 | info     |           Metal | Disabling multi-erisc mode with simulator/mock target device (rtoptions.cpp:345)
+2026-10-04 10:50:25.820 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:228)
+2026-10-04 10:50:25.820 | info     |             UMD | Cluster constructor started. (cluster.cpp:335)
+2026-10-04 10:50:25.821 | warning  |             UMD | Chip 0 has inconsistent Tensix harvesting information between harvest mask and number of harvested. Board n150 expects 1 units, but harvest mask indicates 0 units. (cluster_descriptor.cpp:1288)
+2026-10-04 10:50:25.822 | info     |             UMD | Creating Simulation device (cluster.cpp:223)
+2026-10-04 10:50:25.825 | info     | EmulationDriver | TTSimTTDevice chip_id=0 PCI vendor_id=0x1e52 device_id=0x401e (tt_sim_tt_device.cpp:101)
+2026-10-04 10:50:25.825 | info     |             UMD | Cluster constructor completed. (cluster.cpp:507)
+2026-10-04 10:50:25.826 | info     |             UMD | Starting devices in cluster (cluster.cpp:999)
+2026-10-04 10:50:25.826 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1007)
+2026-10-04 10:50:25.840 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:362)
+2026-10-04 10:50:25.840 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:424)
+2026-10-04 10:50:25.885 | info     |            Test | Testing SFPU_OP=exponential num_tiles=1 (test_sfpu_compute.cpp:288)
+[       OK ] SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture.TensixSfpuCompute/1 (122 ms)
+[----------] 1 test from SingleCoreSfpuCompute/SingleCoreSingleCardSfpuParameterizedFixture (122 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (122 ms total)
+[  PASSED  ] 1 test.
+2026-10-04 10:50:25.941 | info     |    BuildKernels | JIT cache stats: 19/19 hits (100.0%) [19 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-04 10:50:25.941 | info     |    BuildKernels | JIT telemetry: 3 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-04 10:50:25.942 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:512)
+2026-10-04 10:50:25.942 | info     |             UMD | Closing devices in cluster (cluster.cpp:1012)
+2026-10-04 10:50:25.942 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1021)
+2026-10-04 10:50:25.942 | info     |             UMD | Cluster destructor started. (cluster.cpp:729)
+2026-10-04 10:50:25.942 | info     |             UMD | Cluster destructor completed. (cluster.cpp:732)
+2026-10-04 10:50:25.942 | info     | EmulationDriver | Sending exit signal to remote... (tt_sim_communicator.cpp:190)
+[12525] 0.3 seconds (36.7 KHz)

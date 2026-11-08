@@ -1,0 +1,1 @@
+kernel=matmul_single_tile_bfp8b pes=5 instructions=24 eir_cycles=174 zeonica_cycles=4411.00 bit_exact=1088/1088 passed=true wall=0.0s

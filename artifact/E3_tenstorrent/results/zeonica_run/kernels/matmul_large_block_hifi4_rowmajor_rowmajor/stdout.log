@@ -1,0 +1,1 @@
+kernel=matmul_large_block_hifi4_rowmajor_rowmajor pes=5 instructions=146 eir_cycles=2304 zeonica_cycles=15027.00 bit_exact=8192/8192 passed=true wall=0.0s
