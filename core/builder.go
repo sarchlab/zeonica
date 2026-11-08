@@ -29,6 +29,7 @@ type Builder struct {
 	vectorLanes           int
 	blockingMemoryOps     bool
 	sharedMemoryBase      uint32
+	gepStride             uint32
 }
 
 // WithEngine sets the engine.
@@ -132,6 +133,13 @@ func (b Builder) WithBlockingMemoryOps(enabled bool) Builder {
 	return b
 }
 
+// WithGepStride sets the row stride used by three-operand (2D) GEP
+// operations: result = base + index0*stride + index1.
+func (b Builder) WithGepStride(stride int) Builder {
+	b.gepStride = uint32(stride)
+	return b
+}
+
 func readyHeldTraceEnabledFromEnv() bool {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv("ZEONICA_TRACE_READY_HELD")))
 	return value == "1" || value == "true" || value == "yes" || value == "on"
@@ -213,6 +221,7 @@ func (b Builder) Build(name string) *Core {
 		SharedMemoryBase:       b.sharedMemoryBase,
 		IsToWriteMemory:        false,
 		BlockingMemoryOps:      b.blockingMemoryOps,
+		GepStride:              b.gepStride,
 		States:                 make(map[string]interface{}),
 		Mode:                   SyncOp,
 		CurrentCycle:           0,

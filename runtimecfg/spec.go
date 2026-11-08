@@ -99,6 +99,7 @@ type DeviceComponent struct {
 	SharedMemoryBanks       int                `yaml:"shared_memory_banks"`
 	SharedMemoryBaseLatency int                `yaml:"shared_memory_base_latency"`
 	SharedMemoryInterleave  int                `yaml:"shared_memory_bank_interleave_bytes"`
+	GepStride               int                `yaml:"gep_stride"`
 	PortIncomingBufferDepth *int               `yaml:"port_incoming_buffer_depth"`
 	PortOutgoingBufferDepth *int               `yaml:"port_outgoing_buffer_depth"`
 	Extra                   map[string]any     `yaml:",inline"`

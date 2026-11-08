@@ -86,6 +86,7 @@ type ResolvedConfig struct {
 	SharedMemoryBanks             int
 	SharedMemoryBaseLatency       int
 	SharedMemoryBankInterleave    int
+	GepStride                     int
 	LinkLatency                   int
 	LinkBandwidth                 int
 	LinkTimingModel               string
@@ -337,6 +338,13 @@ func ResolveWithSpecPath(spec ArchSpec, specPath, testName string) (ResolvedConf
 	if err != nil {
 		return ResolvedConfig{}, err
 	}
+	if spec.Simulator.Device.GepStride < 0 {
+		return ResolvedConfig{}, fmt.Errorf(
+			"simulator.device.gep_stride must be >= 0, got %d",
+			spec.Simulator.Device.GepStride,
+		)
+	}
+	resolved.GepStride = spec.Simulator.Device.GepStride
 	resolved.SharedMemoryBankInterleave, err = resolvePositive(
 		spec.Simulator.Device.SharedMemoryInterleave,
 		defaultSharedMemoryBankInterleave,
@@ -419,6 +427,7 @@ func BuildRuntime(cfg ResolvedConfig, overrides *BuildOverrides) (*Runtime, erro
 		WithRegisterCount(cfg.NumRegisters).
 		WithLocalMemoryWords(cfg.LocalMemoryWords).
 		WithVectorConfig(cfg.EnableVectorPE, cfg.VectorLanes).
+		WithGepStride(cfg.GepStride).
 		Build(cfg.DeviceName)
 
 	if cfg.LinkTimingModel == linkTimingModelParseOnly {

@@ -39,6 +39,7 @@ type DeviceBuilder struct {
 	localMemoryWords       int
 	enableVectorPE         bool
 	vectorLanes            int
+	gepStride              int
 }
 
 // type portFactory interface {
@@ -159,6 +160,12 @@ func (d DeviceBuilder) WithRegisterCount(num int) DeviceBuilder {
 // WithLocalMemoryWords sets local memory size (in words) per core.
 func (d DeviceBuilder) WithLocalMemoryWords(words int) DeviceBuilder {
 	d.localMemoryWords = words
+	return d
+}
+
+// WithGepStride sets the row stride used by three-operand (2D) GEP operations.
+func (d DeviceBuilder) WithGepStride(stride int) DeviceBuilder {
+	d.gepStride = stride
 	return d
 }
 
@@ -315,6 +322,7 @@ func (d DeviceBuilder) createTiles(
 				WithVectorConfig(d.enableVectorPE, d.vectorLanes).
 				WithBlockingMemoryOps(d.memoryMode == "shared").
 				WithSharedMemoryBase(d.sharedMemoryBase[[2]int{x, y}]).
+				WithGepStride(d.gepStride).
 				Build(coreName)
 
 			if d.monitor != nil {

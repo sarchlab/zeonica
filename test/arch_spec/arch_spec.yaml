@@ -66,6 +66,9 @@ simulator:
     frequency: "1GHz"
     bind_to_architecture: true
     memory_mode: "local"
+    # Row stride for three-operand (2D) GEP: base + index0*stride + index1.
+    # Only gemm.yaml uses 2D GEPs (4x4 matrices).
+    gep_stride: 4
     port_incoming_buffer_depth: 8
     port_outgoing_buffer_depth: 8
     memory_share:

@@ -16,20 +16,25 @@ import (
 //
 // Kernel: C[i][j] += sum_k(A[i][k] * B[k][j]) for i,j,k in [0,4).
 //
-// Memory layout (from compiled YAML):
+// Memory layout (from compiled YAML; the GEP bases match the VectorCGRA
+// gemm test so both simulators run the same program):
 //   - Tile (2,0): matrix A at base 0 with row stride 4.
-//     A[i][k] at address 0 + i*4 + k.
-//   - Tile (0,2): matrix B at base 0 with row stride 4.
-//     B[k][j] at address 0 + k*4 + j.
-//   - Tile (2,0): matrix C at base 16 with row stride 4.
-//     C[i][j] at address 16 + i*4 + j.
+//     A[i][k] at address 0 + i*4 + k.   (GEP id=96,  base #0)
+//   - Tile (0,2): matrix B at base 16 with row stride 4.
+//     B[k][j] at address 16 + k*4 + j.  (GEP id=120, base #16)
+//   - Tile (2,0): matrix C at base 32 with row stride 4.
+//     C[i][j] at address 32 + i*4 + j.  (GEP id=119, base #32)
+//
+// The GEPs are three-operand (2D): base + index0*stride + index1, so the
+// arch spec must set simulator.device.gep_stride to 4.
 //
 // Arg bindings (YAML immediates):
 //
-//	#0  = 0   (A base in tile (2,0), B base in tile (0,2))
+//	#0  = 0   (A base, loop lower bound)
 //	#1  = 1   (loop increment)
 //	#4  = 4   (loop bound NI=NJ=NK)
-//	#16 = 16  (C base in tile (2,0), after A)
+//	#16 = 16  (B base in tile (0,2))
+//	#32 = 32  (C base in tile (2,0))
 //
 //nolint:gocyclo,funlen
 func Gemm(rt *runtimecfg.Runtime) int {
@@ -62,8 +67,8 @@ func Gemm(rt *runtimecfg.Runtime) int {
 	const (
 		N     = 4  // matrix dimension (NI=NJ=NK)
 		BaseA = 0  // A base address in tile (2,0)
-		BaseB = 0  // B base address in tile (0,2)
-		BaseC = 16 // C base address in tile (2,0), after A
+		BaseB = 16 // B base address in tile (0,2)
+		BaseC = 32 // C base address in tile (2,0)
 	)
 
 	// Initialize matrices per PolyBench gemm_int.c init_array.

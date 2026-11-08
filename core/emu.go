@@ -135,6 +135,7 @@ type coreState struct {
 	SharedSRAMAccessor     SharedSRAMAccessor
 	IsToWriteMemory        bool
 	BlockingMemoryOps      bool
+	GepStride              uint32 // row stride for three-operand (2D) GEP
 	PendingMemoryOp        *pendingMemoryOp
 
 	routingRules          []*routingRule
@@ -2380,6 +2381,22 @@ func (i instEmulator) runGep(inst Operation, state *coreState) map[Operand]cgra.
 		src2Val := src2Struct.First()
 		dstVal = src1Val + src2Val
 		finalPred = src1Struct.Pred && src2Struct.Pred
+
+		// Three-operand (2D) GEP: base + index0*stride + index1, matching
+		// VectorCGRA OPT_GEP_2D. The stride comes from
+		// simulator.device.gep_stride.
+		if len(inst.SrcOperands.Operands) > 2 {
+			if state.GepStride == 0 {
+				panic(fmt.Sprintf(
+					"GEP id=%d at (%d,%d) has three operands but simulator.device.gep_stride is not set",
+					inst.ID, state.TileX, state.TileY,
+				))
+			}
+			src3Struct := i.readOperand(inst.SrcOperands.Operands[2], state)
+			src3Val := src3Struct.First()
+			dstVal = src1Val + src2Val*state.GepStride + src3Val
+			finalPred = finalPred && src3Struct.Pred
+		}
 
 		Trace("Inst", "Time", state.CurrentTime, "OpCode", inst.OpCode, "ID", inst.ID, "X", state.TileX, "Y", state.TileY, "Src1", fmt.Sprintf("%d(%t)", src1Val, src1Struct.Pred), "Src2", fmt.Sprintf("%d(%t)", src2Val, src2Struct.Pred), "Result", fmt.Sprintf("%d(%t)", dstVal, finalPred))
 	}
