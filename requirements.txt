@@ -24,7 +24,7 @@ numpy==1.26.4
 packaging==25.0
 pandas==2.3.3
 pillow==11.3.0
-protobuf==6.33.2
+protobuf==6.33.5
 pyarrow==21.0.0
 pydeck==0.9.1
 pyparsing==3.2.5
